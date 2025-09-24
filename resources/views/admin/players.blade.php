@@ -60,11 +60,28 @@
             </div>
         </form>
 
+        <!-- Bulk Actions -->
+        <div id="bulk-actions" class="mb-3" style="display: none;">
+            <form id="bulk-delete-form" method="POST" action="{{ route('admin.players.bulk-destroy') }}" onsubmit="return confirmBulkDelete()">
+                @csrf
+                @method('DELETE')
+                <div class="d-flex align-items-center">
+                    <span class="me-3"><span id="selected-count">0</span> player(s) selected</span>
+                    <button type="submit" class="btn btn-danger btn-sm">
+                        <i class="fas fa-trash"></i> Delete Selected
+                    </button>
+                </div>
+            </form>
+        </div>
+
         <!-- Table -->
         <div class="table-responsive">
             <table class="table">
                 <thead>
                     <tr>
+                        <th>
+                            <input type="checkbox" id="select-all" class="form-check-input">
+                        </th>
                         <th>Name</th>
                         <th>Email</th>
                         <th>Phone</th>
@@ -76,6 +93,11 @@
                 <tbody>
                     @forelse($players as $player)
                     <tr>
+                        <td>
+                            @if(!$player->is_admin)
+                            <input type="checkbox" name="player_ids[]" value="{{ $player->id }}" class="form-check-input player-checkbox">
+                            @endif
+                        </td>
                         <td><strong>{{ $player->name }}</strong></td>
                         <td>{{ $player->email }}</td>
                         <td>{{ $player->phone ?? 'N/A' }}</td>
@@ -100,7 +122,7 @@
                     </tr>
                     @empty
                     <tr>
-                        <td colspan="6" class="text-center py-4">
+                        <td colspan="7" class="text-center py-4">
                             <i class="fas fa-users fa-3x text-muted mb-3"></i>
                             <p class="text-muted">No players found</p>
                         </td>
@@ -118,4 +140,83 @@
         @endif
     </div>
 </div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const selectAllCheckbox = document.getElementById('select-all');
+    const playerCheckboxes = document.querySelectorAll('.player-checkbox');
+    const bulkActions = document.getElementById('bulk-actions');
+    const selectedCountSpan = document.getElementById('selected-count');
+    const bulkDeleteForm = document.getElementById('bulk-delete-form');
+
+    // Select all functionality
+    selectAllCheckbox.addEventListener('change', function() {
+        playerCheckboxes.forEach(checkbox => {
+            checkbox.checked = this.checked;
+        });
+        updateBulkActions();
+    });
+
+    // Individual checkbox functionality
+    playerCheckboxes.forEach(checkbox => {
+        checkbox.addEventListener('change', function() {
+            updateSelectAllState();
+            updateBulkActions();
+        });
+    });
+
+    function updateSelectAllState() {
+        const checkedBoxes = document.querySelectorAll('.player-checkbox:checked');
+        const totalBoxes = playerCheckboxes.length;
+        
+        if (checkedBoxes.length === 0) {
+            selectAllCheckbox.indeterminate = false;
+            selectAllCheckbox.checked = false;
+        } else if (checkedBoxes.length === totalBoxes) {
+            selectAllCheckbox.indeterminate = false;
+            selectAllCheckbox.checked = true;
+        } else {
+            selectAllCheckbox.indeterminate = true;
+            selectAllCheckbox.checked = false;
+        }
+    }
+
+    function updateBulkActions() {
+        const checkedBoxes = document.querySelectorAll('.player-checkbox:checked');
+        const count = checkedBoxes.length;
+        
+        if (count > 0) {
+            bulkActions.style.display = 'block';
+            selectedCountSpan.textContent = count;
+            
+            // Add selected checkboxes to the bulk delete form
+            const existingInputs = bulkDeleteForm.querySelectorAll('input[name="player_ids[]"]');
+            existingInputs.forEach(input => input.remove());
+            
+            checkedBoxes.forEach(checkbox => {
+                const hiddenInput = document.createElement('input');
+                hiddenInput.type = 'hidden';
+                hiddenInput.name = 'player_ids[]';
+                hiddenInput.value = checkbox.value;
+                bulkDeleteForm.appendChild(hiddenInput);
+            });
+        } else {
+            bulkActions.style.display = 'none';
+        }
+    }
+});
+
+function confirmBulkDelete() {
+    const checkedBoxes = document.querySelectorAll('.player-checkbox:checked');
+    const count = checkedBoxes.length;
+    
+    if (count === 0) {
+        alert('Please select at least one player to delete.');
+        return false;
+    }
+    
+    return confirm(`Are you sure you want to delete ${count} selected player(s)? This action cannot be undone.`);
+}
+</script>
+
 @endsection

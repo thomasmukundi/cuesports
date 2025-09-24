@@ -1426,4 +1426,45 @@ class AdminController extends Controller
         }
     }
 
+    public function bulkDeletePlayers(Request $request)
+    {
+        // Check admin privileges
+        if (!auth()->user() || !auth()->user()->is_admin) {
+            return redirect()->route('admin.login');
+        }
+
+        $request->validate([
+            'player_ids' => 'required|array|min:1',
+            'player_ids.*' => 'exists:users,id'
+        ]);
+
+        try {
+            $playerIds = $request->player_ids;
+            
+            // Get players to delete (exclude admin users)
+            $playersToDelete = User::whereIn('id', $playerIds)
+                ->where('is_admin', false)
+                ->get();
+
+            if ($playersToDelete->isEmpty()) {
+                return redirect()->route('admin.players')->withErrors(['error' => 'No valid players selected for deletion.']);
+            }
+
+            $deletedCount = $playersToDelete->count();
+            $adminCount = count($playerIds) - $deletedCount;
+
+            // Delete the players
+            User::whereIn('id', $playersToDelete->pluck('id'))->delete();
+
+            $message = "Successfully deleted {$deletedCount} player(s).";
+            if ($adminCount > 0) {
+                $message .= " {$adminCount} admin user(s) were skipped.";
+            }
+
+            return redirect()->route('admin.players')->with('success', $message);
+        } catch (\Exception $e) {
+            return redirect()->route('admin.players')->withErrors(['error' => 'Failed to delete selected players. Please try again.']);
+        }
+    }
+
 }

@@ -70,6 +70,7 @@ Route::prefix('admin')->middleware(['auth'])->group(function () {
     Route::get('/players', [AdminController::class, 'players'])->name('admin.players');
     Route::get('/players/{player}', [AdminController::class, 'viewPlayer'])->name('admin.players.view');
     Route::delete('/players/{player}', [AdminController::class, 'deletePlayer'])->name('admin.players.destroy');
+    Route::delete('/players', [AdminController::class, 'bulkDeletePlayers'])->name('admin.players.bulk-destroy');
     
     Route::get('/messages', [AdminController::class, 'messages'])->name('admin.messages');
     
