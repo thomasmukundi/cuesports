@@ -1,0 +1,6 @@
+Testing direct tournament initialization route...
+HTTP Code: 401
+Content-Type: application/json
+Response: {"message":"Unauthenticated."}
+
+❌ Direct initialization failed with code 401

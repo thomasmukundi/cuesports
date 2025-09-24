@@ -1,0 +1,6 @@
+Testing tournament initialization without auth middleware...
+HTTP Code: 401
+Content-Type: application/json
+Response: {"message":"Unauthenticated."}
+
+❌ Still failing with code 401
