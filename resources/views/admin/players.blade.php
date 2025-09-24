@@ -83,9 +83,18 @@
                         <td>{{ $player->created_at->format('M d, Y') }}</td>
                         <td>
                             <div class="btn-group" role="group">
-                                <a href="{{ route('admin.players.view', $player) }}" class="btn btn-sm btn-outline-primary">
+                                <a href="{{ route('admin.players.view', $player) }}" class="btn btn-sm btn-outline-primary" title="View Player">
                                     <i class="fas fa-eye"></i>
                                 </a>
+                                @if(!$player->is_admin)
+                                <form method="POST" action="{{ route('admin.players.destroy', $player) }}" class="d-inline" onsubmit="return confirm('Are you sure you want to delete this player? This action cannot be undone.')">
+                                    @csrf
+                                    @method('DELETE')
+                                    <button type="submit" class="btn btn-sm btn-outline-danger" title="Delete Player">
+                                        <i class="fas fa-trash"></i>
+                                    </button>
+                                </form>
+                                @endif
                             </div>
                         </td>
                     </tr>

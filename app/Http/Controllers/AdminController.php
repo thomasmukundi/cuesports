@@ -1404,4 +1404,26 @@ class AdminController extends Controller
         }
     }
 
+    public function deletePlayer(User $player)
+    {
+        // Check admin privileges
+        if (!auth()->user() || !auth()->user()->is_admin) {
+            return redirect()->route('admin.login');
+        }
+
+        try {
+            // Check if player is an admin to prevent deletion
+            if ($player->is_admin) {
+                return redirect()->route('admin.players')->withErrors(['error' => 'Cannot delete admin users.']);
+            }
+
+            $playerName = $player->name;
+            $player->delete();
+            
+            return redirect()->route('admin.players')->with('success', "Player '{$playerName}' has been deleted successfully.");
+        } catch (\Exception $e) {
+            return redirect()->route('admin.players')->withErrors(['error' => 'Failed to delete player. Please try again.']);
+        }
+    }
+
 }
