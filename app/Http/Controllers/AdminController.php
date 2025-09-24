@@ -1433,32 +1433,86 @@ class AdminController extends Controller
             return redirect()->route('admin.login');
         }
 
-        $request->validate([
-            'player_ids' => 'required|array|min:1',
-            'player_ids.*' => 'exists:users,id'
-        ]);
+        // Handle "select all" functionality
+        if ($request->has('select_all_pages') && $request->select_all_pages == 'true') {
+            $request->validate([
+                'select_all_pages' => 'required|in:true'
+            ]);
+        } else {
+            $request->validate([
+                'player_ids' => 'required|array|min:1',
+                'player_ids.*' => 'exists:users,id'
+            ]);
+        }
 
         try {
-            $playerIds = $request->player_ids;
-            
-            // Get players to delete (exclude admin users)
-            $playersToDelete = User::whereIn('id', $playerIds)
-                ->where('is_admin', false)
-                ->get();
+            if ($request->has('select_all_pages') && $request->select_all_pages == 'true') {
+                // Delete all non-admin users with applied filters
+                $query = User::where('is_admin', false);
+                
+                // Apply the same filters as in the players() method
+                if ($request->filled('search')) {
+                    $query->where('name', 'like', '%' . $request->search . '%')
+                          ->orWhere('email', 'like', '%' . $request->search . '%')
+                          ->orWhere('phone', 'like', '%' . $request->search . '%');
+                }
 
-            if ($playersToDelete->isEmpty()) {
-                return redirect()->route('admin.players')->withErrors(['error' => 'No valid players selected for deletion.']);
-            }
+                if ($request->filled('region')) {
+                    $query->whereHas('community', function($q) use ($request) {
+                        $q->where('region_id', $request->region);
+                    });
+                }
 
-            $deletedCount = $playersToDelete->count();
-            $adminCount = count($playerIds) - $deletedCount;
+                if ($request->filled('county')) {
+                    $query->whereHas('community', function($q) use ($request) {
+                        $q->where('county_id', $request->county);
+                    });
+                }
 
-            // Delete the players
-            User::whereIn('id', $playersToDelete->pluck('id'))->delete();
+                if ($request->filled('community')) {
+                    $query->where('community_id', $request->community);
+                }
 
-            $message = "Successfully deleted {$deletedCount} player(s).";
-            if ($adminCount > 0) {
-                $message .= " {$adminCount} admin user(s) were skipped.";
+                if ($request->filled('status')) {
+                    if ($request->status == 'active') {
+                        $query->whereNotNull('email_verified_at');
+                    } elseif ($request->status == 'inactive') {
+                        $query->whereNull('email_verified_at');
+                    }
+                }
+
+                $deletedCount = $query->count();
+                
+                if ($deletedCount === 0) {
+                    return redirect()->route('admin.players')->withErrors(['error' => 'No players found matching the current filters.']);
+                }
+
+                $query->delete();
+                $message = "Successfully deleted all {$deletedCount} player(s) matching the current filters.";
+                
+            } else {
+                // Handle specific player IDs selection
+                $playerIds = $request->player_ids;
+                
+                // Get players to delete (exclude admin users)
+                $playersToDelete = User::whereIn('id', $playerIds)
+                    ->where('is_admin', false)
+                    ->get();
+
+                if ($playersToDelete->isEmpty()) {
+                    return redirect()->route('admin.players')->withErrors(['error' => 'No valid players selected for deletion.']);
+                }
+
+                $deletedCount = $playersToDelete->count();
+                $adminCount = count($playerIds) - $deletedCount;
+
+                // Delete the players
+                User::whereIn('id', $playersToDelete->pluck('id'))->delete();
+
+                $message = "Successfully deleted {$deletedCount} player(s).";
+                if ($adminCount > 0) {
+                    $message .= " {$adminCount} admin user(s) were skipped.";
+                }
             }
 
             return redirect()->route('admin.players')->with('success', $message);

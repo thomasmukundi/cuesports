@@ -62,16 +62,35 @@
 
         <!-- Bulk Actions -->
         <div id="bulk-actions" class="mb-3" style="display: none;">
-            <form id="bulk-delete-form" method="POST" action="{{ route('admin.players.bulk-destroy') }}" onsubmit="return confirmBulkDelete()">
-                @csrf
-                @method('DELETE')
+            <div class="d-flex align-items-center justify-content-between">
                 <div class="d-flex align-items-center">
-                    <span class="me-3"><span id="selected-count">0</span> player(s) selected</span>
-                    <button type="submit" class="btn btn-danger btn-sm">
-                        <i class="fas fa-trash"></i> Delete Selected
-                    </button>
+                    <span class="me-3">
+                        <span id="selected-count">0</span> player(s) selected on this page
+                        <span id="all-pages-indicator" style="display: none;" class="text-info">
+                            (All {{ $players->total() - DB::table('users')->where('is_admin', true)->count() }} non-admin players across all pages)
+                        </span>
+                    </span>
                 </div>
-            </form>
+                <div class="d-flex gap-2">
+                    <button type="button" id="select-all-pages-btn" class="btn btn-outline-info btn-sm" onclick="selectAllPages()">
+                        <i class="fas fa-check-double"></i> Select All Pages
+                    </button>
+                    <form id="bulk-delete-form" method="POST" action="{{ route('admin.players.bulk-destroy') }}" onsubmit="return confirmBulkDelete()" class="d-inline">
+                        @csrf
+                        @method('DELETE')
+                        <!-- Hidden inputs for current filters -->
+                        <input type="hidden" name="search" value="{{ request('search') }}">
+                        <input type="hidden" name="region" value="{{ request('region') }}">
+                        <input type="hidden" name="county" value="{{ request('county') }}">
+                        <input type="hidden" name="community" value="{{ request('community') }}">
+                        <input type="hidden" name="status" value="{{ request('status') }}">
+                        <input type="hidden" id="select-all-pages-input" name="select_all_pages" value="false">
+                        <button type="submit" class="btn btn-danger btn-sm">
+                            <i class="fas fa-trash"></i> Delete Selected
+                        </button>
+                    </form>
+                </div>
+            </div>
         </div>
 
         <!-- Table -->
@@ -148,9 +167,18 @@ document.addEventListener('DOMContentLoaded', function() {
     const bulkActions = document.getElementById('bulk-actions');
     const selectedCountSpan = document.getElementById('selected-count');
     const bulkDeleteForm = document.getElementById('bulk-delete-form');
+    const allPagesIndicator = document.getElementById('all-pages-indicator');
+    const selectAllPagesBtn = document.getElementById('select-all-pages-btn');
+    const selectAllPagesInput = document.getElementById('select-all-pages-input');
+    
+    let isAllPagesSelected = false;
 
-    // Select all functionality
+    // Select all functionality (current page)
     selectAllCheckbox.addEventListener('change', function() {
+        if (isAllPagesSelected) {
+            resetAllPagesSelection();
+        }
+        
         playerCheckboxes.forEach(checkbox => {
             checkbox.checked = this.checked;
         });
@@ -160,6 +188,9 @@ document.addEventListener('DOMContentLoaded', function() {
     // Individual checkbox functionality
     playerCheckboxes.forEach(checkbox => {
         checkbox.addEventListener('change', function() {
+            if (isAllPagesSelected) {
+                resetAllPagesSelection();
+            }
             updateSelectAllState();
             updateBulkActions();
         });
@@ -185,37 +216,91 @@ document.addEventListener('DOMContentLoaded', function() {
         const checkedBoxes = document.querySelectorAll('.player-checkbox:checked');
         const count = checkedBoxes.length;
         
-        if (count > 0) {
+        if (count > 0 || isAllPagesSelected) {
             bulkActions.style.display = 'block';
-            selectedCountSpan.textContent = count;
             
-            // Add selected checkboxes to the bulk delete form
-            const existingInputs = bulkDeleteForm.querySelectorAll('input[name="player_ids[]"]');
-            existingInputs.forEach(input => input.remove());
+            if (isAllPagesSelected) {
+                selectedCountSpan.textContent = 'All';
+                allPagesIndicator.style.display = 'inline';
+                selectAllPagesBtn.style.display = 'none';
+            } else {
+                selectedCountSpan.textContent = count;
+                allPagesIndicator.style.display = 'none';
+                selectAllPagesBtn.style.display = 'inline-block';
+            }
             
-            checkedBoxes.forEach(checkbox => {
-                const hiddenInput = document.createElement('input');
-                hiddenInput.type = 'hidden';
-                hiddenInput.name = 'player_ids[]';
-                hiddenInput.value = checkbox.value;
-                bulkDeleteForm.appendChild(hiddenInput);
-            });
+            // Add selected checkboxes to the bulk delete form (only if not all pages selected)
+            if (!isAllPagesSelected) {
+                const existingInputs = bulkDeleteForm.querySelectorAll('input[name="player_ids[]"]');
+                existingInputs.forEach(input => input.remove());
+                
+                checkedBoxes.forEach(checkbox => {
+                    const hiddenInput = document.createElement('input');
+                    hiddenInput.type = 'hidden';
+                    hiddenInput.name = 'player_ids[]';
+                    hiddenInput.value = checkbox.value;
+                    bulkDeleteForm.appendChild(hiddenInput);
+                });
+            }
         } else {
             bulkActions.style.display = 'none';
+            selectAllPagesBtn.style.display = 'inline-block';
         }
     }
+
+    function resetAllPagesSelection() {
+        isAllPagesSelected = false;
+        selectAllPagesInput.value = 'false';
+        allPagesIndicator.style.display = 'none';
+        selectAllPagesBtn.style.display = 'inline-block';
+        selectAllPagesBtn.innerHTML = '<i class="fas fa-check-double"></i> Select All Pages';
+        selectAllPagesBtn.className = 'btn btn-outline-info btn-sm';
+    }
+
+    // Global function for select all pages
+    window.selectAllPages = function() {
+        if (!isAllPagesSelected) {
+            // Select all pages
+            isAllPagesSelected = true;
+            selectAllPagesInput.value = 'true';
+            
+            // Update UI
+            selectAllPagesBtn.innerHTML = '<i class="fas fa-times"></i> Cancel All Pages';
+            selectAllPagesBtn.className = 'btn btn-outline-warning btn-sm';
+            
+            // Clear individual selections
+            playerCheckboxes.forEach(checkbox => {
+                checkbox.checked = false;
+            });
+            selectAllCheckbox.checked = false;
+            selectAllCheckbox.indeterminate = false;
+            
+            updateBulkActions();
+        } else {
+            // Cancel all pages selection
+            resetAllPagesSelection();
+            updateBulkActions();
+        }
+    };
 });
 
 function confirmBulkDelete() {
-    const checkedBoxes = document.querySelectorAll('.player-checkbox:checked');
-    const count = checkedBoxes.length;
+    const isAllPages = document.getElementById('select-all-pages-input').value === 'true';
     
-    if (count === 0) {
-        alert('Please select at least one player to delete.');
-        return false;
+    if (isAllPages) {
+        const totalCount = {{ $players->total() - DB::table('users')->where('is_admin', true)->count() }};
+        return confirm(`Are you sure you want to delete ALL ${totalCount} non-admin players across all pages? This action cannot be undone and will delete players matching the current filters.`);
+    } else {
+        const checkedBoxes = document.querySelectorAll('.player-checkbox:checked');
+        const count = checkedBoxes.length;
+        
+        if (count === 0) {
+            alert('Please select at least one player to delete.');
+            return false;
+        }
+        
+        return confirm(`Are you sure you want to delete ${count} selected player(s) on this page? This action cannot be undone.`);
     }
-    
-    return confirm(`Are you sure you want to delete ${count} selected player(s)? This action cannot be undone.`);
 }
 </script>
 
