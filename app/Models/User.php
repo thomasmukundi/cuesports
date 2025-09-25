@@ -172,12 +172,22 @@ class User extends Authenticatable implements JWTSubject
             return null;
         }
 
-        // If it's already a full URL, return as-is
+        // Already an absolute URL
         if (str_starts_with($this->profile_image, 'http')) {
             return $this->profile_image;
         }
 
-        // Convert relative path to full URL
-        return config('app.url') . $this->profile_image;
+        // If legacy '/storage/...' path is stored, keep existing behavior for backward compatibility
+        if (str_starts_with($this->profile_image, '/storage/')) {
+            return rtrim(config('app.url'), '/') . $this->profile_image;
+        }
+
+        // Otherwise treat as a disk-relative key and use Storage URL (works for s3-compatible or local)
+        try {
+            return \Storage::url($this->profile_image);
+        } catch (\Throwable $e) {
+            // Fallback to app URL if Storage::url fails for any reason
+            return rtrim(config('app.url'), '/') . '/storage/' . ltrim($this->profile_image, '/');
+        }
     }
 }

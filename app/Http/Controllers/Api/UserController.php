@@ -334,37 +334,60 @@ class UserController extends Controller
 
         try {
             $user = auth()->user();
-            
+
             if ($request->hasFile('profile_image')) {
                 $image = $request->file('profile_image');
-                
+
                 // Create unique filename
                 $filename = 'profile_' . $user->id . '_' . time() . '.' . $image->getClientOriginalExtension();
-                
-                // Store in public/storage/profile_images directory
-                $path = $image->storeAs('profile_images', $filename, 'public');
-                
-                // Delete old profile image if exists
-                if ($user->profile_image) {
-                    $oldImagePath = str_replace('/storage/', '', $user->profile_image);
-                    if (\Storage::disk('public')->exists($oldImagePath)) {
-                        \Storage::disk('public')->delete($oldImagePath);
+
+                $defaultDisk = config('filesystems.default', 'public');
+
+                if ($defaultDisk === 'public') {
+                    // Local/public storage: keep legacy behavior
+                    $path = $image->storeAs('profile_images', $filename, 'public');
+
+                    // Delete old file if it exists (handles legacy '/storage/' prefix)
+                    if ($user->profile_image) {
+                        $oldPublicPath = ltrim(str_replace('/storage/', '', $user->profile_image), '/');
+                        if (\Storage::disk('public')->exists($oldPublicPath)) {
+                            \Storage::disk('public')->delete($oldPublicPath);
+                        }
                     }
+
+                    // Store with '/storage/' prefix in DB for backward compatibility
+                    $storedValue = '/storage/' . $path;
+                } else {
+                    // Cloud/object storage (e.g., s3-compatible on Laravel Cloud)
+                    $path = $image->storeAs('profile_images', $filename, $defaultDisk);
+                    // Ensure public visibility where supported
+                    try { \Storage::disk($defaultDisk)->setVisibility($path, 'public'); } catch (\Throwable $e) { /* ignore if not supported */ }
+
+                    // Delete old file on current disk if a relative key was stored previously
+                    if ($user->profile_image) {
+                        if (!str_starts_with($user->profile_image, 'http') && !str_starts_with($user->profile_image, '/storage/')) {
+                            $oldKey = ltrim($user->profile_image, '/');
+                            if (\Storage::disk($defaultDisk)->exists($oldKey)) {
+                                \Storage::disk($defaultDisk)->delete($oldKey);
+                            }
+                        }
+                    }
+
+                    // Store only the relative key in DB; URL will be resolved by accessor via Storage::url()
+                    $storedValue = $path;
                 }
-                
-                // Update user's profile_image field
-                $profileImageUrl = '/storage/' . $path;
-                \Log::info('Updating profile image for user ' . $user->id . ' with path: ' . $profileImageUrl);
-                
+
+                \Log::info('Updating profile image for user ' . $user->id . ' with value: ' . $storedValue);
+
                 $updateResult = $user->update([
-                    'profile_image' => $profileImageUrl
+                    'profile_image' => $storedValue
                 ]);
-                
+
                 \Log::info('Update result: ' . ($updateResult ? 'success' : 'failed'));
-                
+
                 // Refresh user instance to get updated data
                 $user->refresh();
-                
+
                 \Log::info('User profile_image after update: ' . ($user->profile_image ?? 'null'));
 
                 return response()->json([
