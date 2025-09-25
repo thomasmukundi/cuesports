@@ -407,9 +407,27 @@ class TournamentRegistrationController extends Controller
                     'tournament_id' => $tournament->id
                 ]);
 
+                // Early exit if already approved/paid (idempotency guard)
+                $existing = $tournament->registeredUsers()->where('player_id', $user->id)->first();
+                if ($existing && $existing->pivot && $existing->pivot->payment_status === 'paid' && $existing->pivot->status === 'approved') {
+                    Log::info('Registration already approved/paid, skipping duplicate actions', [
+                        'user_id' => $user->id,
+                        'tournament_id' => $tournament->id
+                    ]);
+                    return response()->json([
+                        'success' => true,
+                        'is_complete' => true,
+                        'is_successful' => true,
+                        'message' => 'Payment already confirmed. No further action taken.',
+                        'tournament' => $tournament,
+                        'already_confirmed' => true
+                    ]);
+                }
+
                 DB::beginTransaction();
                 try {
-                    $registrationExists = $tournament->registeredUsers()->where('player_id', $user->id)->exists();
+                    $registrationExists = (bool) $existing;
+                    $stateChanged = false;
                     
                     Log::info('Registration status', [
                         'user_id' => $user->id,
@@ -425,54 +443,63 @@ class TournamentRegistrationController extends Controller
                             'created_at' => now(),
                             'updated_at' => now()
                         ]);
+                        $stateChanged = true;
                         
                         Log::info('New registration created', [
                             'user_id' => $user->id,
                             'tournament_id' => $tournament->id
                         ]);
                     } else {
-                        // Update existing registration
-                        $updated = $tournament->registeredUsers()->updateExistingPivot($user->id, [
-                            'status' => 'approved',
-                            'payment_status' => 'paid',
-                            'updated_at' => now()
-                        ]);
+                        // Update existing registration only if values differ
+                        $needsUpdate = !($existing->pivot->status === 'approved' && $existing->pivot->payment_status === 'paid');
+                        if ($needsUpdate) {
+                            $updated = $tournament->registeredUsers()->updateExistingPivot($user->id, [
+                                'status' => 'approved',
+                                'payment_status' => 'paid',
+                                'updated_at' => now()
+                            ]);
+                            $stateChanged = (bool) $updated;
+                        }
                         
-                        Log::info('Registration updated', [
+                        Log::info('Registration update evaluated', [
                             'user_id' => $user->id,
                             'tournament_id' => $tournament->id,
-                            'update_result' => $updated
+                            'needs_update' => $needsUpdate ?? false,
+                            'state_changed' => $stateChanged
                         ]);
                     }
 
-                    // Explicitly commit the transaction BEFORE sending notifications
+                    // Commit BEFORE notifications
                     DB::commit();
                     Log::info('Database transaction committed successfully (before notification)', [
                         'user_id' => $user->id,
                         'tournament_id' => $tournament->id
                     ]);
 
-                    // Send confirmation notification (non-blocking for DB persistence)
-                    try {
-                        $notification = Notification::create([
-                            'player_id' => $user->id,
-                            'type' => 'admin_message',
-                            'message' => "Payment confirmed. Successfully registered for {$tournament->name}",
-                            'data' => ['tournament_id' => $tournamentId]
-                        ]);
+                    // Only send notification if state actually changed
+                    if ($stateChanged) {
+                        try {
+                            $notification = Notification::create([
+                                'player_id' => $user->id,
+                                'type' => 'admin_message',
+                                'message' => "Payment confirmed. Successfully registered for {$tournament->name}",
+                                'data' => ['tournament_id' => $tournamentId]
+                            ]);
 
-                        Log::info('Notification created', [
-                            'user_id' => $user->id,
-                            'tournament_id' => $tournament->id,
-                            'notification_id' => $notification->id
-                        ]);
-                    } catch (\Exception $notifyEx) {
-                        Log::error('Notification creation failed post-commit', [
-                            'user_id' => $user->id,
-                            'tournament_id' => $tournament->id,
-                            'error' => $notifyEx->getMessage()
-                        ]);
-                        // Do not rethrow; DB changes are already committed
+                            Log::info('Notification created', [
+                                'user_id' => $user->id,
+                                'tournament_id' => $tournament->id,
+                                'notification_id' => $notification->id
+                            ]);
+                        } catch (\Exception $notifyEx) {
+                            Log::error('Notification creation failed post-commit', [
+                                'user_id' => $user->id,
+                                'tournament_id' => $tournament->id,
+                                'error' => $notifyEx->getMessage()
+                            ]);
+                        }
+                    } else {
+                        Log::info('No notification sent (no state change)');
                     }
 
                     // Verify the registration was saved
@@ -490,9 +517,10 @@ class TournamentRegistrationController extends Controller
                         'success' => true,
                         'is_complete' => true,
                         'is_successful' => true,
-                        'message' => 'Payment successful! Registration complete.',
+                        'message' => $stateChanged ? 'Payment successful! Registration complete.' : 'Payment already confirmed. No changes made.',
                         'tournament' => $tournament,
-                        'registration_verified' => $finalRegistration ? true : false
+                        'registration_verified' => (bool) $finalRegistration,
+                        'already_confirmed' => !$stateChanged
                     ]);
                 } catch (\Exception $e) {
                     DB::rollBack();
