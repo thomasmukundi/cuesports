@@ -116,7 +116,7 @@ class TournamentRegistrationController extends Controller
                 // Send confirmation notification
                 Notification::create([
                     'player_id' => $user->id,
-                    'type' => 'registration',
+                    'type' => 'admin_message',
                     'message' => "Successfully registered for {$tournament->name}",
                     'data' => ['tournament_id' => $tournamentId]
                 ]);
@@ -157,29 +157,28 @@ class TournamentRegistrationController extends Controller
             ->first();
         
         if (!$registration) {
-            return response()->json(['error' => 'Registration not found'], 404);
         }
         
         // Verify payment with Stripe
         try {
             $paymentIntent = \Stripe\PaymentIntent::retrieve($validated['payment_intent_id']);
-            
-            if ($paymentIntent->status === 'succeeded') {
-                // Update registration
-                $tournament->registeredUsers()->updateExistingPivot($user->id, [
-                    'status' => 'approved',
-                    'payment_status' => 'paid'
-                ]);
+                        if ($paymentIntent->status === 'succeeded') {
+                    // Update registration
+                    $tournament->registeredUsers()->updateExistingPivot($user->id, [
+                        'status' => 'approved',
+                        'payment_status' => 'paid'
+                    ]);
                 
                 // Send confirmation notification
                 Notification::create([
                     'player_id' => $user->id,
-                    'type' => 'registration',
+                    'type' => 'admin_message',
                     'message' => "Payment confirmed. Successfully registered for {$tournament->name}",
                     'data' => ['tournament_id' => $tournamentId]
                 ]);
                 
                 return response()->json([
+{{ ... }}
                     'message' => 'Payment confirmed. Registration complete.',
                     'tournament' => $tournament
                 ]);
@@ -457,7 +456,7 @@ class TournamentRegistrationController extends Controller
                     try {
                         $notification = Notification::create([
                             'player_id' => $user->id,
-                            'type' => 'registration',
+                            'type' => 'admin_message',
                             'message' => "Payment confirmed. Successfully registered for {$tournament->name}",
                             'data' => ['tournament_id' => $tournamentId]
                         ]);

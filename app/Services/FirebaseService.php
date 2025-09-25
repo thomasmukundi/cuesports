@@ -16,9 +16,33 @@ class FirebaseService
     public function __construct()
     {
         try {
-            $factory = (new Factory)
-                ->withServiceAccount(config('services.firebase.credentials.file'));
-            
+            $credentialsEnv = config('services.firebase.credentials.file');
+            $factory = new Factory();
+
+            if (!$credentialsEnv) {
+                Log::warning('Firebase credentials not configured (FIREBASE_CREDENTIALS env is empty)');
+                throw new \RuntimeException('Firebase credentials missing');
+            }
+
+            // Detect if FIREBASE_CREDENTIALS is raw JSON or a file path
+            $trimmed = ltrim($credentialsEnv);
+            if (str_starts_with($trimmed, '{')) {
+                $decoded = json_decode($credentialsEnv, true);
+                if (json_last_error() !== JSON_ERROR_NONE) {
+                    throw new \RuntimeException('Invalid JSON in FIREBASE_CREDENTIALS env: ' . json_last_error_msg());
+                }
+                Log::info('Initializing Firebase with JSON credentials from env');
+                $factory = $factory->withServiceAccount($decoded);
+            } else {
+                // Treat as file path
+                if (!is_file($credentialsEnv)) {
+                    Log::error('Firebase credentials file not found', ['path' => $credentialsEnv]);
+                    throw new \RuntimeException('Firebase credentials file not found at path: ' . $credentialsEnv);
+                }
+                Log::info('Initializing Firebase with credentials file', ['path' => $credentialsEnv]);
+                $factory = $factory->withServiceAccount($credentialsEnv);
+            }
+
             $this->messaging = $factory->createMessaging();
         } catch (\Exception $e) {
             Log::error('Firebase initialization failed: ' . $e->getMessage());
