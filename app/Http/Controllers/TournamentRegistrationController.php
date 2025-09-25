@@ -10,6 +10,7 @@ use App\Services\TinyPesaService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Laravel\Cashier\Exceptions\IncompletePayment;
 
 class TournamentRegistrationController extends Controller
@@ -384,56 +385,138 @@ class TournamentRegistrationController extends Controller
         $tournament = Tournament::findOrFail($tournamentId);
         $user = Auth::user();
 
+        Log::info('Checking payment status', [
+            'user_id' => $user->id,
+            'tournament_id' => $tournament->id,
+            'tournament_name' => $tournament->name
+        ]);
+
         $tinyPesaService = new TinyPesaService();
         $result = $tinyPesaService->checkTransactionStatus($user->id, $tournament->id);
+
+        Log::info('Payment status check result', [
+            'user_id' => $user->id,
+            'tournament_id' => $tournament->id,
+            'result' => $result
+        ]);
 
         if ($result['success'] && $result['is_complete']) {
             if ($result['is_successful']) {
                 // Payment successful - complete registration
+                Log::info('Payment successful, processing registration', [
+                    'user_id' => $user->id,
+                    'tournament_id' => $tournament->id
+                ]);
+
                 DB::beginTransaction();
                 try {
-                    // Create registration if not exists
-                    if (!$tournament->registeredUsers()->where('player_id', $user->id)->exists()) {
+                    $registrationExists = $tournament->registeredUsers()->where('player_id', $user->id)->exists();
+                    
+                    Log::info('Registration status', [
+                        'user_id' => $user->id,
+                        'tournament_id' => $tournament->id,
+                        'registration_exists' => $registrationExists
+                    ]);
+
+                    if (!$registrationExists) {
+                        // Create new registration
                         $tournament->registeredUsers()->attach($user->id, [
                             'status' => 'approved',
                             'payment_status' => 'paid',
                             'created_at' => now(),
                             'updated_at' => now()
                         ]);
+                        
+                        Log::info('New registration created', [
+                            'user_id' => $user->id,
+                            'tournament_id' => $tournament->id
+                        ]);
                     } else {
                         // Update existing registration
-                        $tournament->registeredUsers()->updateExistingPivot($user->id, [
+                        $updated = $tournament->registeredUsers()->updateExistingPivot($user->id, [
                             'status' => 'approved',
-                            'payment_status' => 'paid'
+                            'payment_status' => 'paid',
+                            'updated_at' => now()
+                        ]);
+                        
+                        Log::info('Registration updated', [
+                            'user_id' => $user->id,
+                            'tournament_id' => $tournament->id,
+                            'update_result' => $updated
                         ]);
                     }
 
-                    // Send confirmation notification
-                    Notification::create([
-                        'player_id' => $user->id,
-                        'type' => 'registration',
-                        'message' => "Payment confirmed. Successfully registered for {$tournament->name}",
-                        'data' => ['tournament_id' => $tournamentId]
+                    // Explicitly commit the transaction BEFORE sending notifications
+                    DB::commit();
+                    Log::info('Database transaction committed successfully (before notification)', [
+                        'user_id' => $user->id,
+                        'tournament_id' => $tournament->id
                     ]);
 
-                    DB::commit();
+                    // Send confirmation notification (non-blocking for DB persistence)
+                    try {
+                        $notification = Notification::create([
+                            'player_id' => $user->id,
+                            'type' => 'registration',
+                            'message' => "Payment confirmed. Successfully registered for {$tournament->name}",
+                            'data' => ['tournament_id' => $tournamentId]
+                        ]);
+
+                        Log::info('Notification created', [
+                            'user_id' => $user->id,
+                            'tournament_id' => $tournament->id,
+                            'notification_id' => $notification->id
+                        ]);
+                    } catch (\Exception $notifyEx) {
+                        Log::error('Notification creation failed post-commit', [
+                            'user_id' => $user->id,
+                            'tournament_id' => $tournament->id,
+                            'error' => $notifyEx->getMessage()
+                        ]);
+                        // Do not rethrow; DB changes are already committed
+                    }
+
+                    // Verify the registration was saved
+                    $finalRegistration = $tournament->registeredUsers()->where('player_id', $user->id)->first();
+                    
+                    Log::info('Final registration verification', [
+                        'user_id' => $user->id,
+                        'tournament_id' => $tournament->id,
+                        'registration_found' => $finalRegistration ? 'yes' : 'no',
+                        'payment_status' => $finalRegistration ? $finalRegistration->pivot->payment_status : 'N/A',
+                        'status' => $finalRegistration ? $finalRegistration->pivot->status : 'N/A'
+                    ]);
 
                     return response()->json([
                         'success' => true,
                         'is_complete' => true,
                         'is_successful' => true,
                         'message' => 'Payment successful! Registration complete.',
-                        'tournament' => $tournament
+                        'tournament' => $tournament,
+                        'registration_verified' => $finalRegistration ? true : false
                     ]);
                 } catch (\Exception $e) {
                     DB::rollBack();
+                    
+                    Log::error('Registration failed after payment', [
+                        'user_id' => $user->id,
+                        'tournament_id' => $tournament->id,
+                        'error' => $e->getMessage(),
+                        'trace' => $e->getTraceAsString()
+                    ]);
+                    
                     return response()->json([
                         'success' => false,
-                        'message' => 'Registration failed after payment'
+                        'message' => 'Registration failed after payment: ' . $e->getMessage()
                     ], 500);
                 }
             } else {
                 // Payment failed
+                Log::info('Payment failed', [
+                    'user_id' => $user->id,
+                    'tournament_id' => $tournament->id
+                ]);
+                
                 return response()->json([
                     'success' => true,
                     'is_complete' => true,
@@ -442,6 +525,12 @@ class TournamentRegistrationController extends Controller
                 ]);
             }
         }
+
+        Log::info('Payment not complete or unsuccessful', [
+            'user_id' => $user->id,
+            'tournament_id' => $tournament->id,
+            'result' => $result
+        ]);
 
         return response()->json($result);
     }

@@ -157,17 +157,87 @@ class TinyPesaService
      */
     private function updateLocalTransaction(array $transactionData): void
     {
-        $transaction = Transaction::where('request_id', $transactionData['request_id'])->first();
+        try {
+            Log::info('Updating local transaction', [
+                'request_id' => $transactionData['request_id'] ?? 'N/A',
+                'status' => $transactionData['status'] ?? 'N/A',
+                'tiny_pesa_id' => $transactionData['tiny_pesa_id'] ?? 'N/A'
+            ]);
 
-        if ($transaction) {
-            $transaction->update([
+            $transaction = Transaction::where('request_id', $transactionData['request_id'])->first();
+
+            if ($transaction) {
+                $updateData = [
+                    'status' => $transactionData['status'] ?? $transaction->status,
+                    'merchant_request_id' => $transactionData['merchant_request_id'] ?? $transaction->merchant_request_id,
+                    'checkout_request_id' => $transactionData['checkout_request_id'] ?? $transaction->checkout_request_id,
+                    'mpesa_receipt_number' => $transactionData['mpesa_receipt_number'] ?? $transaction->mpesa_receipt_number,
+                    'transaction_date' => $transactionData['transaction_date'] ?? $transaction->transaction_date,
+                    'tiny_pesa_id' => $transactionData['tiny_pesa_id'] ?? $transaction->tiny_pesa_id,
+                    'account_no' => $transactionData['account_no'] ?? $transaction->account_no,
+                ];
+
+                $updated = $transaction->update($updateData);
+                
+                if ($updated) {
+                    Log::info('Transaction updated successfully', [
+                        'transaction_id' => $transaction->id,
+                        'request_id' => $transactionData['request_id'],
+                        'new_status' => $transactionData['status']
+                    ]);
+                } else {
+                    Log::error('Failed to update transaction', [
+                        'transaction_id' => $transaction->id,
+                        'request_id' => $transactionData['request_id']
+                    ]);
+                }
+            } else {
+                Log::warning('Transaction not found for update', [
+                    'request_id' => $transactionData['request_id']
+                ]);
+                
+                // Try to create a new transaction if it doesn't exist
+                $this->createMissingTransaction($transactionData);
+            }
+        } catch (\Exception $e) {
+            Log::error('Error updating local transaction', [
+                'request_id' => $transactionData['request_id'] ?? 'N/A',
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+            throw $e;
+        }
+    }
+
+    /**
+     * Create missing transaction record
+     */
+    private function createMissingTransaction(array $transactionData): void
+    {
+        try {
+            $transaction = Transaction::create([
+                'user_id' => $transactionData['user_id'] ?? null,
+                'service_id' => $transactionData['service_id'] ?? null,
+                'amount' => $transactionData['amount'] ?? 0,
+                'phone_number' => $transactionData['phone_number'] ?? null,
+                'request_id' => $transactionData['request_id'],
                 'status' => $transactionData['status'],
-                'merchant_request_id' => $transactionData['merchant_request_id'],
-                'checkout_request_id' => $transactionData['checkout_request_id'],
-                'mpesa_receipt_number' => $transactionData['mpesa_receipt_number'],
-                'transaction_date' => $transactionData['transaction_date'],
-                'tiny_pesa_id' => $transactionData['tiny_pesa_id'],
-                'account_no' => $transactionData['account_no'],
+                'merchant_request_id' => $transactionData['merchant_request_id'] ?? null,
+                'checkout_request_id' => $transactionData['checkout_request_id'] ?? null,
+                'mpesa_receipt_number' => $transactionData['mpesa_receipt_number'] ?? null,
+                'transaction_date' => $transactionData['transaction_date'] ?? null,
+                'tiny_pesa_id' => $transactionData['tiny_pesa_id'] ?? null,
+                'account_no' => $transactionData['account_no'] ?? null,
+            ]);
+
+            Log::info('Missing transaction created', [
+                'transaction_id' => $transaction->id,
+                'request_id' => $transactionData['request_id']
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Failed to create missing transaction', [
+                'request_id' => $transactionData['request_id'],
+                'error' => $e->getMessage()
             ]);
         }
     }
