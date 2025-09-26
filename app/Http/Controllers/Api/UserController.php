@@ -346,8 +346,15 @@ class UserController extends Controller
                 \Log::info('Profile image upload - disk config', [
                     'default_disk' => $defaultDisk,
                     'filesystem_disk_env' => env('FILESYSTEM_DISK'),
+                    'config_filesystems_default' => config('filesystems.default'),
                     'user_id' => $user->id
                 ]);
+                
+                // Force use private disk if FILESYSTEM_DISK=private
+                if (env('FILESYSTEM_DISK') === 'private') {
+                    $defaultDisk = 'private';
+                    \Log::info('Forcing private disk usage');
+                }
 
                 if ($defaultDisk === 'public') {
                     // Local/public storage: keep legacy behavior
