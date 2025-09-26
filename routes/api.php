@@ -45,6 +45,16 @@ Route::prefix('verification')->group(function () {
 // Password reset route (public)
 Route::post('/reset-password', [App\Http\Controllers\VerificationController::class, 'resetPassword']);
 
+// Public debug endpoint for storage configuration
+Route::get('/debug/config', function() {
+    return response()->json([
+        'filesystem_default' => config('filesystems.default'),
+        'filesystem_disk_env' => env('FILESYSTEM_DISK'),
+        'app_env' => env('APP_ENV'),
+        'timestamp' => now()->toISOString(),
+    ]);
+});
+
 // Complete registration after email verification (public)
 Route::post('/complete-registration', [App\Http\Controllers\CompleteRegistrationController::class, 'completeRegistration']);
 

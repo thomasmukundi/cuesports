@@ -342,6 +342,12 @@ class UserController extends Controller
                 $filename = 'profile_' . $user->id . '_' . time() . '.' . $image->getClientOriginalExtension();
 
                 $defaultDisk = config('filesystems.default', 'public');
+                
+                \Log::info('Profile image upload - disk config', [
+                    'default_disk' => $defaultDisk,
+                    'filesystem_disk_env' => env('FILESYSTEM_DISK'),
+                    'user_id' => $user->id
+                ]);
 
                 if ($defaultDisk === 'public') {
                     // Local/public storage: keep legacy behavior
