@@ -377,8 +377,14 @@ class UserController extends Controller
                 } else {
                     // Cloud/object storage (e.g., s3-compatible on Laravel Cloud)
                     $path = $image->storeAs('profile_images', $filename, $defaultDisk);
+                    
                     // Ensure public visibility where supported
-                    try { \Storage::disk($defaultDisk)->setVisibility($path, 'public'); } catch (\Throwable $e) { /* ignore if not supported */ }
+                    try { 
+                        \Storage::disk($defaultDisk)->setVisibility($path, 'public');
+                        \Log::info('Set file visibility to public for: ' . $path);
+                    } catch (\Throwable $e) { 
+                        \Log::warning('Could not set file visibility to public: ' . $e->getMessage());
+                    }
 
                     // Delete old file on current disk if a relative key was stored previously
                     if ($user->profile_image) {
