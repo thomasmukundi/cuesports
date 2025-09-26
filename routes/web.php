@@ -13,14 +13,23 @@ Route::get('/', function () {
 // redirect /storage/* requests to the corresponding filesystem URL.
 // This allows existing frontends that build app_url + /storage/path to keep working.
 Route::get('/storage/{path}', function (string $path) {
+    \Log::info('Storage route hit', ['path' => $path, 'default_disk' => config('filesystems.default')]);
+    
     $default = config('filesystems.default', 'public');
     if ($default !== 'public') {
-        // Redirect to the object storage public URL
-        $url = Storage::disk($default)->url($path);
-        return redirect()->away($url, 302);
+        try {
+            // Redirect to the object storage public URL
+            $url = Storage::disk($default)->url($path);
+            \Log::info('Redirecting to S3', ['path' => $path, 'url' => $url]);
+            return redirect()->away($url, 302);
+        } catch (\Exception $e) {
+            \Log::error('Storage redirect failed', ['path' => $path, 'error' => $e->getMessage()]);
+            abort(500, 'Storage configuration error');
+        }
     }
     // On local/public, fall back to the normal public/storage symlink path
     // Let the web server/static files handle it
+    \Log::info('Storage route: aborting 404 for public disk', ['path' => $path]);
     abort(404);
 })->where('path', '.*')
 ->name('storage.fallback');

@@ -274,4 +274,8 @@ Route::middleware('auth:api')->group(function () {
     // Test endpoints for push notifications
     Route::post('/test/push-notification', [TestController::class, 'testPushNotification']);
     Route::get('/test/fcm-token-status', [TestController::class, 'getFcmTokenStatus']);
+    
+    // Debug endpoints for storage issues
+    Route::get('/debug/storage', [App\Http\Controllers\Api\DebugController::class, 'debugStorage']);
+    Route::get('/debug/storage-redirect', [App\Http\Controllers\Api\DebugController::class, 'testStorageRedirect']);
 });
