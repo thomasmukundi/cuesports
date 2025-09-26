@@ -177,8 +177,20 @@ class User extends Authenticatable implements JWTSubject
             return $this->profile_image;
         }
 
-        // If legacy '/storage/...' path is stored, keep existing behavior for backward compatibility
+        // If legacy '/storage/...' path is stored
         if (str_starts_with($this->profile_image, '/storage/')) {
+            $defaultDisk = config('filesystems.default', 'public');
+            $relative = ltrim(str_replace('/storage/', '', $this->profile_image), '/');
+            if ($defaultDisk !== 'public') {
+                // On cloud/object storage, resolve to bucket URL
+                try {
+                    return \Storage::disk($defaultDisk)->url($relative);
+                } catch (\Throwable $e) {
+                    // Fallback to app URL if resolution fails
+                    return rtrim(config('app.url'), '/') . $this->profile_image;
+                }
+            }
+            // On local/public, keep existing behavior
             return rtrim(config('app.url'), '/') . $this->profile_image;
         }
 

@@ -6,13 +6,29 @@ use App\Http\Controllers\AdminController;
 
 Route::get('/', function () {
     return view('welcome');
-})->name('home');
+});
+
+// Legacy storage path compatibility: when running on non-public disk (e.g., S3),
+// redirect /storage/* requests to the corresponding filesystem URL.
+// This allows existing frontends that build app_url + /storage/path to keep working.
+Route::get('/storage/{path}', function (string $path) {
+    $default = config('filesystems.default', 'public');
+    if ($default !== 'public') {
+        // Redirect to the object storage public URL
+        $url = Storage::disk($default)->url($path);
+        return redirect()->away($url, 302);
+    }
+    // On local/public, fall back to the normal public/storage symlink path
+    // Let the web server/static files handle it
+    abort(404);
+})->where('path', '.*')
+->name('storage.fallback');
 
 Route::get('/blog', function () {
     return view('blog');
 })->name('blog');
 
-Route::get('/features', function () {
+{{ ... }}
     return view('features');
 })->name('features');
 
