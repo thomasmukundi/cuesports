@@ -395,6 +395,18 @@ class UserController extends Controller
                 $user->refresh();
 
                 \Log::info('User profile_image after update: ' . ($user->profile_image ?? 'null'));
+                
+                // Log the full URL that will be returned by the accessor
+                $fullImageUrl = $user->profile_image_url;
+                \Log::info('Full profile image URL (via accessor): ' . ($fullImageUrl ?? 'null'));
+                
+                // Also log what Storage::url() returns for this path
+                try {
+                    $storageUrl = \Storage::disk($defaultDisk)->url($user->profile_image);
+                    \Log::info('Direct Storage::url() result: ' . $storageUrl);
+                } catch (\Exception $e) {
+                    \Log::error('Storage::url() failed: ' . $e->getMessage());
+                }
 
                 return response()->json([
                     'success' => true,
