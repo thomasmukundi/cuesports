@@ -217,15 +217,18 @@ class VerificationController extends Controller
             'new_password' => 'required|string|min:8|confirmed',
         ]);
 
+        // Normalize email to avoid case/whitespace mismatches
+        $email = trim(mb_strtolower($validated['email']));
+
         // Debug: Log the verification attempt
         Log::info('Password reset verification attempt', [
-            'email' => $validated['email'],
+            'email' => $email,
             'code' => $validated['code'],
             'type' => 'reset_password'
         ]);
 
         // Check if any verification exists for this email
-        $allVerifications = Verification::where('email', $validated['email'])
+        $allVerifications = Verification::where('email', $email)
             ->where('verification_type', 'reset_password')
             ->orderBy('created_at', 'desc')
             ->get();
@@ -245,7 +248,7 @@ class VerificationController extends Controller
 
         // For password reset, we need to check for codes that might have been used in verifyCode
         // but are still valid for password reset (within expiration time)
-        $verification = Verification::where('email', $validated['email'])
+        $verification = Verification::where('email', $email)
             ->where('code', $validated['code'])
             ->where('verification_type', 'reset_password')
             ->where('expires_at', '>', Carbon::now())
@@ -265,31 +268,60 @@ class VerificationController extends Controller
         }
 
         Log::info('Verification successful', [
-            'email' => $validated['email'],
+            'email' => $email,
             'verification_id' => $verification->id
         ]);
 
-        // Find user by email
-        $user = User::where('email', $validated['email'])->first();
-        if (!$user) {
+        // Use transaction for atomicity
+        \DB::beginTransaction();
+        try {
+            // Find user by normalized email
+            $user = User::whereRaw('LOWER(email) = ?', [$email])->first();
+            if (!$user) {
+                \DB::rollBack();
+                return response()->json([
+                    'success' => false,
+                    'message' => 'User not found'
+                ], 404);
+            }
+
+            $newHashed = \Illuminate\Support\Facades\Hash::make($validated['new_password']);
+            $updated = $user->update(['password' => $newHashed]);
+
+            Log::info('Password update result', [
+                'user_id' => $user->id,
+                'email' => $user->email,
+                'updated' => (bool) $updated
+            ]);
+
+            if (!$updated) {
+                \DB::rollBack();
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Failed to update password'
+                ], 500);
+            }
+
+            // Mark verification as used only after successful password update
+            $verification->markAsUsed();
+
+            \DB::commit();
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Password reset successfully'
+            ]);
+        } catch (\Exception $e) {
+            \DB::rollBack();
+            Log::error('Password reset failed', [
+                'email' => $email,
+                'error' => $e->getMessage()
+            ]);
             return response()->json([
                 'success' => false,
-                'message' => 'User not found'
-            ], 404);
+                'message' => 'Password reset failed. Please try again.'
+            ], 500);
         }
-
-        // Update password
-        $user->update([
-            'password' => bcrypt($validated['new_password'])
-        ]);
-
-        // Mark verification as used only after successful password update
-        $verification->markAsUsed();
-
-        return response()->json([
-            'success' => true,
-            'message' => 'Password reset successfully'
-        ]);
     }
 
     /**
