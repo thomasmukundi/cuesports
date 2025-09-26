@@ -341,12 +341,21 @@ class UserController extends Controller
                 // Create unique filename
                 $filename = 'profile_' . $user->id . '_' . time() . '.' . $image->getClientOriginalExtension();
 
-                // Hardcode to use private disk for Laravel Cloud
-                $defaultDisk = 'private';
+                // Use the configured default disk from environment
+                $defaultDisk = config('filesystems.default', 'public');
+                
+                // Temporary override for Laravel Cloud
+                if (env('FILESYSTEM_DISK') === 's3') {
+                    $defaultDisk = 's3';
+                }
+                
+                // Check available disks for debugging
+                $availableDisks = array_keys(config('filesystems.disks', []));
                 
                 \Log::info('Profile image upload - disk config', [
-                    'forced_disk' => $defaultDisk,
-                    'original_config_default' => config('filesystems.default', 'public'),
+                    'selected_disk' => $defaultDisk,
+                    'available_disks' => $availableDisks,
+                    'config_filesystems_default' => config('filesystems.default'),
                     'filesystem_disk_env' => env('FILESYSTEM_DISK'),
                     'user_id' => $user->id
                 ]);
