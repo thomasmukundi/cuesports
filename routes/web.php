@@ -3,6 +3,7 @@
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 use App\Http\Controllers\AdminController;
+use Illuminate\Support\Facades\Storage;
 
 Route::get('/', function () {
     return view('welcome');
@@ -28,7 +29,7 @@ Route::get('/blog', function () {
     return view('blog');
 })->name('blog');
 
-{{ ... }}
+Route::get('/features', function () {
     return view('features');
 })->name('features');
 
