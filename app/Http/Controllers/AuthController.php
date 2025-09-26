@@ -7,6 +7,8 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\Rules\Password;
+use Tymon\JWTAuth\Facades\JWTAuth;
+use Tymon\JWTAuth\Exceptions\JWTException;
 
 class AuthController extends Controller
 {
@@ -104,25 +106,51 @@ class AuthController extends Controller
             'new_password' => ['required', 'confirmed', Password::defaults()],
         ]);
 
-        $user = Auth::user();
+        try {
+            // Authenticate via JWT (auth:api)
+            $user = JWTAuth::parseToken()->authenticate();
+            if (!$user) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'User not authenticated'
+                ], 401);
+            }
 
-        // Check if current password is correct
-        if (!Hash::check($validated['current_password'], $user->password)) {
+            // Verify current password
+            if (!Hash::check($validated['current_password'], $user->password)) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Current password is incorrect'
+                ], 400);
+            }
+
+            // Update password
+            $updated = $user->update([
+                'password' => Hash::make($validated['new_password'])
+            ]);
+
+            if (!$updated) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Failed to update password'
+                ], 500);
+            }
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Password changed successfully'
+            ]);
+        } catch (JWTException $e) {
             return response()->json([
                 'success' => false,
-                'message' => 'Current password is incorrect'
-            ], 400);
+                'message' => 'Invalid token'
+            ], 401);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to change password'
+            ], 500);
         }
-
-        // Update password
-        $user->update([
-            'password' => Hash::make($validated['new_password'])
-        ]);
-
-        return response()->json([
-            'success' => true,
-            'message' => 'Password changed successfully'
-        ]);
     }
 
     /**
