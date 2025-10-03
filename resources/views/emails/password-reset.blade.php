@@ -3,7 +3,7 @@
 @section('title', 'Password Reset Code')
 
 @section('content')
-    <h2>Hello {{ $name }}!</h2>
+    <h2>Hello</h2>
     
     <p>We received a request to reset your password for your {{ $app_name }} account. Use the code below to reset your password:</p>
     
