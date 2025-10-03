@@ -132,12 +132,32 @@ class PlayerController extends Controller
             $topPlayers->push($playerData);
         }
 
-        // Sort by leaderboard points, then wins, then tournament wins
-        $topPlayers = $topPlayers->sortByDesc(function($player) {
-            return [$player->leaderboard_points, $player->wins, $player->tournament_wins];
-        })->take(10);
+        // Sort by leaderboard points (descending), then wins (descending), then tournament wins (descending)
+        $topPlayers = $topPlayers->sort(function($a, $b) {
+            // First compare by leaderboard points (higher is better)
+            if ($a->leaderboard_points != $b->leaderboard_points) {
+                return $b->leaderboard_points - $a->leaderboard_points;
+            }
             
-        \Log::info('Top players query result:', ['count' => $topPlayers->count(), 'data' => $topPlayers->toArray()]);
+            // Then by wins (higher is better)
+            if ($a->wins != $b->wins) {
+                return $b->wins - $a->wins;
+            }
+            
+            // Finally by tournament wins (higher is better)
+            return $b->tournament_wins - $a->tournament_wins;
+        })->values();
+        
+        \Log::info('Players after sorting:', $topPlayers->map(function($p) {
+            return [
+                'id' => $p->id,
+                'name' => $p->name,
+                'wins' => $p->wins,
+                'leaderboard_points' => $p->leaderboard_points
+            ];
+        })->toArray());
+            
+        \Log::info('Top players query result:', ['count' => $topPlayers->count()]);
         
         $topPlayersFormatted = $topPlayers->map(function($player, $index) {
             $winRate = $player->total_matches > 0 ? 
@@ -161,41 +181,53 @@ class PlayerController extends Controller
             ];
         });
 
-        // If no players have points, get random players as fallback
-        if ($topPlayersFormatted->isEmpty() || $topPlayersFormatted->every(fn($p) => $p['leaderboard_points'] == 0)) {
-            \Log::info('No players with points found, getting random users...');
+        // Ensure we always have exactly 4 players for top shooters
+        $playersWithMatches = $topPlayersFormatted->take(4);
+        $playersNeeded = 4 - $playersWithMatches->count();
+        
+        if ($playersNeeded > 0) {
+            \Log::info("Need {$playersNeeded} more players to reach 4 total");
+            
+            // Get existing player IDs to exclude them from random selection
+            $existingPlayerIds = $playersWithMatches->pluck('id')->toArray();
             
             $randomPlayers = DB::table('users')
-                ->select('id', 'username', 'name', 'profile_image')
+                ->select('id', 'username', 'name', 'profile_image', 'created_at')
+                ->whereNotIn('id', $existingPlayerIds)
                 ->inRandomOrder()
-                ->limit(4)
+                ->limit($playersNeeded)
                 ->get();
                 
-            \Log::info('Random players query result:', ['count' => $randomPlayers->count(), 'data' => $randomPlayers->toArray()]);
+            \Log::info('Random players to fill gaps:', ['count' => $randomPlayers->count(), 'data' => $randomPlayers->toArray()]);
             
-            $randomPlayersFormatted = $randomPlayers->map(function($player, $index) {
+            $randomPlayersFormatted = $randomPlayers->map(function($player, $index) use ($playersWithMatches) {
                 return [
-                    'rank' => $index + 1,
+                    'rank' => $playersWithMatches->count() + $index + 1,
                     'id' => $player->id,
                     'name' => $player->name ?: $player->username,
                     'wins' => 0,
-                    'points' => 0,
-                    'profile_image' => $player->profile_image
+                    'total_matches' => 0,
+                    'win_rate' => 0,
+                    'tournament_wins' => 0,
+                    'tournaments_participated' => 0,
+                    'total_prize_money' => 0,
+                    'avg_points_per_match' => 0,
+                    'leaderboard_points' => 0,
+                    'profile_image' => $player->profile_image,
+                    'member_since' => $player->created_at ? date('Y-m-d', strtotime($player->created_at)) : null,
+                    'performance_rating' => 0
                 ];
             });
             
-            $response = [
-                'success' => true,
-                'data' => $randomPlayersFormatted->values()->toArray()
-            ];
-            
-            \Log::info('Returning random players response:', $response);
-            return response()->json($response);
+            // Combine players with matches and random players
+            $allPlayers = $playersWithMatches->concat($randomPlayersFormatted);
+        } else {
+            $allPlayers = $playersWithMatches;
         }
 
         $response = [
             'success' => true,
-            'data' => $topPlayersFormatted->values()->toArray()
+            'data' => $allPlayers->values()->toArray()
         ];
         
         \Log::info('Returning top players response:', $response);
