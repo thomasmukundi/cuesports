@@ -48,33 +48,67 @@ class PlayerController extends Controller
         // Log the query for debugging
         \Log::info('Leaderboard query starting...');
         
-        // Get top players by points/wins
+        // Get comprehensive player statistics
         $topPlayers = DB::table('users')
-            ->leftJoin('matches', 'users.id', '=', 'matches.winner_id')
-            ->select('users.id', 'users.username', 'users.name', 'users.profile_image', 
-                    DB::raw('COUNT(matches.winner_id) as wins'),
-                    DB::raw('COUNT(matches.winner_id) * 10 as points'))
-            ->groupBy('users.id', 'users.username', 'users.name', 'users.profile_image')
-            ->orderBy('points', 'desc')
+            ->leftJoin('pool_matches as matches', 'users.id', '=', 'matches.winner_id')
+            ->leftJoin('pool_matches as all_matches', function($join) {
+                $join->on('users.id', '=', 'all_matches.player_1_id')
+                     ->orOn('users.id', '=', 'all_matches.player_2_id');
+            })
+            ->leftJoin('winners', 'users.id', '=', 'winners.player_id')
+            ->leftJoin('tournaments', 'winners.tournament_id', '=', 'tournaments.id')
+            ->select(
+                'users.id', 
+                'users.username', 
+                'users.name', 
+                'users.profile_image',
+                'users.community_id',
+                'users.created_at',
+                DB::raw('COUNT(DISTINCT matches.id) as wins'),
+                DB::raw('COUNT(DISTINCT all_matches.id) as total_matches'),
+                DB::raw('COUNT(DISTINCT CASE WHEN winners.position = 1 THEN winners.id END) as tournament_wins'),
+                DB::raw('COUNT(DISTINCT winners.tournament_id) as tournaments_participated'),
+                DB::raw('SUM(DISTINCT winners.prize_amount) as total_prize_money'),
+                DB::raw('AVG(CASE 
+                    WHEN all_matches.player_1_id = users.id THEN all_matches.player_1_points 
+                    WHEN all_matches.player_2_id = users.id THEN all_matches.player_2_points 
+                    END) as avg_points_per_match'),
+                DB::raw('COUNT(DISTINCT matches.id) * 10 as leaderboard_points')
+            )
+            ->where('all_matches.status', 'completed')
+            ->groupBy('users.id', 'users.username', 'users.name', 'users.profile_image', 'users.community_id', 'users.created_at')
+            ->orderBy('leaderboard_points', 'desc')
             ->orderBy('wins', 'desc')
+            ->orderBy('tournament_wins', 'desc')
             ->limit(10)
             ->get();
             
         \Log::info('Top players query result:', ['count' => $topPlayers->count(), 'data' => $topPlayers->toArray()]);
         
         $topPlayersFormatted = $topPlayers->map(function($player, $index) {
+            $winRate = $player->total_matches > 0 ? 
+                round(($player->wins / $player->total_matches) * 100, 1) : 0;
+                
             return [
                 'rank' => $index + 1,
                 'id' => $player->id,
                 'name' => $player->name ?: $player->username,
-                'wins' => $player->wins,
-                'points' => $player->points,
-                'profile_image' => $player->profile_image
+                'wins' => (int) $player->wins,
+                'total_matches' => (int) $player->total_matches,
+                'win_rate' => $winRate,
+                'tournament_wins' => (int) $player->tournament_wins,
+                'tournaments_participated' => (int) $player->tournaments_participated,
+                'total_prize_money' => (float) ($player->total_prize_money ?? 0),
+                'avg_points_per_match' => round((float) ($player->avg_points_per_match ?? 0), 1),
+                'leaderboard_points' => (int) $player->leaderboard_points,
+                'profile_image' => $player->profile_image,
+                'member_since' => $player->created_at ? date('Y-m-d', strtotime($player->created_at)) : null,
+                'performance_rating' => $this->calculatePerformanceRating($player)
             ];
         });
 
         // If no players have points, get random players as fallback
-        if ($topPlayersFormatted->isEmpty() || $topPlayersFormatted->every(fn($p) => $p['points'] == 0)) {
+        if ($topPlayersFormatted->isEmpty() || $topPlayersFormatted->every(fn($p) => $p['leaderboard_points'] == 0)) {
             \Log::info('No players with points found, getting random users...');
             
             $randomPlayers = DB::table('users')
@@ -534,5 +568,176 @@ class PlayerController extends Controller
                 'national' => $nationalRank
             ]
         ];
+    }
+
+    /**
+     * Calculate performance rating based on multiple factors
+     */
+    private function calculatePerformanceRating($player)
+    {
+        $rating = 0;
+        
+        // Base points from wins (40% weight)
+        $rating += ($player->wins ?? 0) * 4;
+        
+        // Win rate bonus (30% weight)
+        if ($player->total_matches > 0) {
+            $winRate = ($player->wins / $player->total_matches) * 100;
+            $rating += $winRate * 0.3;
+        }
+        
+        // Tournament success bonus (20% weight)
+        $rating += ($player->tournament_wins ?? 0) * 20;
+        
+        // Activity bonus (10% weight)
+        $rating += min(($player->tournaments_participated ?? 0) * 2, 20);
+        
+        // Average points per match bonus
+        $rating += ($player->avg_points_per_match ?? 0) * 5;
+        
+        return round($rating, 1);
+    }
+
+    /**
+     * Get enhanced top shooters data with filtering options
+     */
+    public function topShootersDetailed(Request $request)
+    {
+        $limit = $request->get('limit', 20);
+        $timeframe = $request->get('timeframe', 'all'); // all, month, week
+        $level = $request->get('level'); // community, county, regional, national
+        $location = $request->get('location'); // community_id, county_id, etc.
+
+        $query = DB::table('users')
+            ->leftJoin('pool_matches as matches', 'users.id', '=', 'matches.winner_id')
+            ->leftJoin('pool_matches as all_matches', function($join) {
+                $join->on('users.id', '=', 'all_matches.player_1_id')
+                     ->orOn('users.id', '=', 'all_matches.player_2_id');
+            })
+            ->leftJoin('winners', 'users.id', '=', 'winners.player_id')
+            ->leftJoin('communities', 'users.community_id', '=', 'communities.id')
+            ->leftJoin('counties', 'communities.county_id', '=', 'counties.id')
+            ->leftJoin('regions', 'counties.region_id', '=', 'regions.id');
+
+        // Apply timeframe filter
+        if ($timeframe === 'month') {
+            $query->where('all_matches.created_at', '>=', now()->subMonth());
+        } elseif ($timeframe === 'week') {
+            $query->where('all_matches.created_at', '>=', now()->subWeek());
+        }
+
+        // Apply level filter
+        if ($level) {
+            $query->where('winners.level', $level);
+        }
+
+        // Apply location filter
+        if ($location) {
+            $query->where('users.community_id', $location);
+        }
+
+        $topPlayers = $query
+            ->select(
+                'users.id',
+                'users.username',
+                'users.name',
+                'users.profile_image',
+                'users.created_at',
+                'communities.name as community_name',
+                'counties.name as county_name',
+                'regions.name as region_name',
+                DB::raw('COUNT(DISTINCT matches.id) as wins'),
+                DB::raw('COUNT(DISTINCT all_matches.id) as total_matches'),
+                DB::raw('COUNT(DISTINCT CASE WHEN winners.position = 1 THEN winners.id END) as tournament_wins'),
+                DB::raw('COUNT(DISTINCT winners.tournament_id) as tournaments_participated'),
+                DB::raw('SUM(DISTINCT winners.prize_amount) as total_prize_money'),
+                DB::raw('AVG(CASE 
+                    WHEN all_matches.player_1_id = users.id THEN all_matches.player_1_points 
+                    WHEN all_matches.player_2_id = users.id THEN all_matches.player_2_points 
+                    END) as avg_points_per_match'),
+                DB::raw('COUNT(DISTINCT matches.id) * 10 as leaderboard_points')
+            )
+            ->where('all_matches.status', 'completed')
+            ->groupBy('users.id', 'users.username', 'users.name', 'users.profile_image', 'users.created_at', 'communities.name', 'counties.name', 'regions.name')
+            ->orderBy('leaderboard_points', 'desc')
+            ->orderBy('wins', 'desc')
+            ->limit($limit)
+            ->get();
+
+        $formattedPlayers = $topPlayers->map(function($player, $index) {
+            $winRate = $player->total_matches > 0 ? 
+                round(($player->wins / $player->total_matches) * 100, 1) : 0;
+
+            return [
+                'rank' => $index + 1,
+                'id' => $player->id,
+                'name' => $player->name ?: $player->username,
+                'wins' => (int) $player->wins,
+                'total_matches' => (int) $player->total_matches,
+                'win_rate' => $winRate,
+                'tournament_wins' => (int) $player->tournament_wins,
+                'tournaments_participated' => (int) $player->tournaments_participated,
+                'total_prize_money' => (float) ($player->total_prize_money ?? 0),
+                'avg_points_per_match' => round((float) ($player->avg_points_per_match ?? 0), 1),
+                'leaderboard_points' => (int) $player->leaderboard_points,
+                'performance_rating' => $this->calculatePerformanceRating($player),
+                'profile_image' => $player->profile_image,
+                'member_since' => $player->created_at ? date('Y-m-d', strtotime($player->created_at)) : null,
+                'location' => [
+                    'community' => $player->community_name,
+                    'county' => $player->county_name,
+                    'region' => $player->region_name
+                ],
+                'achievements' => $this->getPlayerAchievements($player)
+            ];
+        });
+
+        return response()->json([
+            'success' => true,
+            'data' => $formattedPlayers,
+            'filters_applied' => [
+                'timeframe' => $timeframe,
+                'level' => $level,
+                'location' => $location,
+                'limit' => $limit
+            ]
+        ]);
+    }
+
+    /**
+     * Get player achievements/badges
+     */
+    private function getPlayerAchievements($player)
+    {
+        $achievements = [];
+
+        // Win-based achievements
+        if ($player->wins >= 50) {
+            $achievements[] = ['name' => 'Master Shooter', 'icon' => '🏆', 'description' => '50+ match wins'];
+        } elseif ($player->wins >= 25) {
+            $achievements[] = ['name' => 'Expert Player', 'icon' => '🥇', 'description' => '25+ match wins'];
+        } elseif ($player->wins >= 10) {
+            $achievements[] = ['name' => 'Rising Star', 'icon' => '⭐', 'description' => '10+ match wins'];
+        }
+
+        // Tournament achievements
+        if ($player->tournament_wins >= 5) {
+            $achievements[] = ['name' => 'Tournament Legend', 'icon' => '👑', 'description' => '5+ tournament wins'];
+        } elseif ($player->tournament_wins >= 1) {
+            $achievements[] = ['name' => 'Champion', 'icon' => '🏅', 'description' => 'Tournament winner'];
+        }
+
+        // Win rate achievements
+        $winRate = $player->total_matches > 0 ? ($player->wins / $player->total_matches) * 100 : 0;
+        if ($winRate >= 80 && $player->total_matches >= 10) {
+            $achievements[] = ['name' => 'Precision Shooter', 'icon' => '🎯', 'description' => '80%+ win rate'];
+        }
+
+        // Activity achievements
+        if ($player->tournaments_participated >= 10) {
+            $achievements[] = ['name' => 'Tournament Regular', 'icon' => '📅', 'description' => '10+ tournaments'];
+        }
+
+        return $achievements;
     }
 }
