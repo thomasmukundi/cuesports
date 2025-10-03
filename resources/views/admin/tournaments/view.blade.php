@@ -56,6 +56,16 @@
         border-color: #28a745 !important;
     }
     
+    /* Delete button styling */
+    .btn-delete-matches {
+        transition: all 0.2s ease-in-out;
+    }
+    
+    .btn-delete-matches:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 4px 8px rgba(220, 53, 69, 0.3);
+    }
+    
     /* Responsive adjustments */
     @media (max-width: 768px) {
         .btn-group {
@@ -74,6 +84,15 @@
         
         .table-responsive {
             font-size: 0.875rem;
+        }
+        
+        .card-header {
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+        
+        .card-header .btn {
+            width: 100%;
         }
     }
 </style>
@@ -336,8 +355,19 @@
 
 <!-- Matches Section -->
 <div class="card">
-    <div class="card-header">
+    <div class="card-header d-flex justify-content-between align-items-center">
         <h5 class="card-title mb-0">Tournament Matches</h5>
+        @if($tournament->matches()->count() > 0)
+        <form method="POST" action="{{ route('admin.tournaments.delete-matches', $tournament) }}" class="d-inline" 
+              onsubmit="return confirmDeleteAllMatches({{ $tournament->matches()->count() }}, '{{ $tournament->name }}')">
+            @csrf
+            @method('DELETE')
+            <button type="submit" class="btn btn-danger btn-sm btn-delete-matches" 
+                    title="Delete all matches for this tournament">
+                <i class="fas fa-trash"></i> Delete All Matches ({{ $tournament->matches()->count() }})
+            </button>
+        </form>
+        @endif
     </div>
     <div class="card-body">
         <!-- Filters -->
@@ -541,6 +571,21 @@
 
 @push('scripts')
 <script>
+// Enhanced confirmation for deleting all matches
+function confirmDeleteAllMatches(matchCount, tournamentName) {
+    const message = `⚠️ DANGER: Delete All Matches\n\n` +
+                   `You are about to delete ALL ${matchCount} matches from "${tournamentName}".\n\n` +
+                   `This will:\n` +
+                   `• Remove all match data permanently\n` +
+                   `• Delete all match results and scores\n` +
+                   `• Reset tournament progress\n` +
+                   `• Cannot be undone\n\n` +
+                   `Type "DELETE" to confirm:`;
+    
+    const userInput = prompt(message);
+    return userInput === 'DELETE';
+}
+
 document.addEventListener('DOMContentLoaded', function() {
     // Handle cascading dropdowns for tournament view
     const regionSelect = document.querySelector('select[name="region"]');

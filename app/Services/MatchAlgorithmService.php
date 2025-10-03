@@ -1966,22 +1966,38 @@ class MatchAlgorithmService
             // Propose available days for the match
             $this->proposeMatchDays($match);
             
+            // Check if pairing notification already exists for player 1
             if ($match->player1) {
-                Notification::create([
-                    'player_id' => $match->player1->id,
-                    'type' => 'pairing',
-                    'message' => "You have been paired for a match in {$tournament->name}. Please select your available days.",
-                    'data' => ['match_id' => $match->id]
-                ]);
+                $existingNotification1 = Notification::where('player_id', $match->player1->id)
+                    ->where('type', 'pairing')
+                    ->whereJsonContains('data->match_id', $match->id)
+                    ->exists();
+                    
+                if (!$existingNotification1) {
+                    Notification::create([
+                        'player_id' => $match->player1->id,
+                        'type' => 'pairing',
+                        'message' => "You have been paired for a match in {$tournament->name}. Please select your available days.",
+                        'data' => ['match_id' => $match->id]
+                    ]);
+                }
             }
             
+            // Check if pairing notification already exists for player 2
             if ($match->player2) {
-                Notification::create([
-                    'player_id' => $match->player2->id,
-                    'type' => 'pairing',
-                    'message' => "You have been paired for a match in {$tournament->name}. Please select your available days.",
-                    'data' => ['match_id' => $match->id]
-                ]);
+                $existingNotification2 = Notification::where('player_id', $match->player2->id)
+                    ->where('type', 'pairing')
+                    ->whereJsonContains('data->match_id', $match->id)
+                    ->exists();
+                    
+                if (!$existingNotification2) {
+                    Notification::create([
+                        'player_id' => $match->player2->id,
+                        'type' => 'pairing',
+                        'message' => "You have been paired for a match in {$tournament->name}. Please select your available days.",
+                        'data' => ['match_id' => $match->id]
+                    ]);
+                }
             }
             
             // Fire event for real-time notifications

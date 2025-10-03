@@ -1521,4 +1521,67 @@ class AdminController extends Controller
         }
     }
 
+    /**
+     * Delete all matches for a tournament
+     */
+    public function deleteAllMatches(Tournament $tournament)
+    {
+        // Check admin privileges
+        if (!auth()->user() || !auth()->user()->is_admin) {
+            return redirect()->route('admin.tournaments.view', $tournament)->withErrors(['error' => 'Access denied.']);
+        }
+
+        try {
+            $matchCount = $tournament->matches()->count();
+            
+            if ($matchCount === 0) {
+                return redirect()->route('admin.tournaments.view', $tournament)->withErrors(['error' => 'No matches found to delete.']);
+            }
+
+            // Log the action for audit purposes
+            \Log::info('Admin deleting all matches', [
+                'admin_id' => auth()->id(),
+                'admin_email' => auth()->user()->email,
+                'tournament_id' => $tournament->id,
+                'tournament_name' => $tournament->name,
+                'match_count' => $matchCount,
+                'timestamp' => now()
+            ]);
+
+            // Use database transaction for safety
+            DB::beginTransaction();
+            
+            try {
+                // Delete all matches for this tournament
+                // This will also cascade delete related data if foreign keys are set up properly
+                $tournament->matches()->delete();
+                
+                // Also delete any winners for this tournament to reset progress
+                $tournament->winners()->delete();
+                
+                DB::commit();
+                
+                \Log::info('Successfully deleted all matches', [
+                    'tournament_id' => $tournament->id,
+                    'deleted_matches' => $matchCount
+                ]);
+
+                return redirect()->route('admin.tournaments.view', $tournament)->with('success', "Successfully deleted all {$matchCount} matches and reset tournament progress for '{$tournament->name}'.");
+                
+            } catch (\Exception $e) {
+                DB::rollBack();
+                throw $e;
+            }
+
+        } catch (\Exception $e) {
+            \Log::error('Failed to delete tournament matches', [
+                'tournament_id' => $tournament->id,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+            
+            return redirect()->route('admin.tournaments.view', $tournament)->withErrors(['error' => 'Failed to delete matches. Please try again.']);
+        }
+    }
+
 }
