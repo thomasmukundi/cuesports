@@ -1102,14 +1102,13 @@ class MatchAlgorithmService
     {
         foreach ($players as $player) {
             Notification::create([
-                'user_id' => $player->id,
-                'title' => "Next Level Tournament Started!",
+                'player_id' => $player->id,
+                'type' => 'tournament_started',
                 'message' => "You have qualified for the {$level} level tournament. Check your matches to see your opponents.",
-                'type' => 'tournament_level_start',
-                'data' => json_encode([
+                'data' => [
                     'tournament_id' => $tournament->id,
                     'level' => $level
-                ])
+                ]
             ]);
         }
     }
@@ -1956,11 +1955,26 @@ class MatchAlgorithmService
      */
     private function sendPairingNotifications(Tournament $tournament, string $level)
     {
+        Log::info('sendPairingNotifications called', [
+            'tournament_id' => $tournament->id,
+            'level' => $level,
+            'timestamp' => now()
+        ]);
+        
         $matches = PoolMatch::where('tournament_id', $tournament->id)
             ->where('level', $level)
             ->where('status', 'pending')
             ->with(['player1', 'player2'])
             ->get();
+            
+        Log::info('Found matches for pairing notifications', [
+            'tournament_id' => $tournament->id,
+            'level' => $level,
+            'match_count' => $matches->count()
+        ]);
+        
+        // Track notifications already sent to avoid duplicates
+        $notificationsSent = [];
         
         foreach ($matches as $match) {
             // Propose available days for the match
@@ -1968,34 +1982,84 @@ class MatchAlgorithmService
             
             // Check if pairing notification already exists for player 1
             if ($match->player1) {
-                $existingNotification1 = Notification::where('player_id', $match->player1->id)
-                    ->where('type', 'pairing')
-                    ->whereJsonContains('data->match_id', $match->id)
-                    ->exists();
-                    
-                if (!$existingNotification1) {
-                    Notification::create([
+                $notificationKey1 = "pairing_{$match->player1->id}_{$match->id}";
+                
+                if (!isset($notificationsSent[$notificationKey1])) {
+                    // Check database for existing notification
+                    $existingNotification1 = Notification::where('player_id', $match->player1->id)
+                        ->where('type', 'pairing')
+                        ->where('data->match_id', $match->id)
+                        ->exists();
+                        
+                    if (!$existingNotification1) {
+                        Log::info('Creating pairing notification for player 1', [
+                            'player_id' => $match->player1->id,
+                            'match_id' => $match->id,
+                            'tournament_id' => $tournament->id
+                        ]);
+                        
+                        Notification::create([
+                            'player_id' => $match->player1->id,
+                            'type' => 'pairing',
+                            'message' => "You have been paired for a match in {$tournament->name}. Please select your available days.",
+                            'data' => ['match_id' => $match->id]
+                        ]);
+                        
+                        $notificationsSent[$notificationKey1] = true;
+                    } else {
+                        Log::info('Skipping duplicate pairing notification for player 1 (exists in DB)', [
+                            'player_id' => $match->player1->id,
+                            'match_id' => $match->id,
+                            'tournament_id' => $tournament->id
+                        ]);
+                    }
+                } else {
+                    Log::info('Skipping duplicate pairing notification for player 1 (already sent in this batch)', [
                         'player_id' => $match->player1->id,
-                        'type' => 'pairing',
-                        'message' => "You have been paired for a match in {$tournament->name}. Please select your available days.",
-                        'data' => ['match_id' => $match->id]
+                        'match_id' => $match->id,
+                        'tournament_id' => $tournament->id
                     ]);
                 }
             }
             
             // Check if pairing notification already exists for player 2
             if ($match->player2) {
-                $existingNotification2 = Notification::where('player_id', $match->player2->id)
-                    ->where('type', 'pairing')
-                    ->whereJsonContains('data->match_id', $match->id)
-                    ->exists();
-                    
-                if (!$existingNotification2) {
-                    Notification::create([
+                $notificationKey2 = "pairing_{$match->player2->id}_{$match->id}";
+                
+                if (!isset($notificationsSent[$notificationKey2])) {
+                    // Check database for existing notification
+                    $existingNotification2 = Notification::where('player_id', $match->player2->id)
+                        ->where('type', 'pairing')
+                        ->where('data->match_id', $match->id)
+                        ->exists();
+                        
+                    if (!$existingNotification2) {
+                        Log::info('Creating pairing notification for player 2', [
+                            'player_id' => $match->player2->id,
+                            'match_id' => $match->id,
+                            'tournament_id' => $tournament->id
+                        ]);
+                        
+                        Notification::create([
+                            'player_id' => $match->player2->id,
+                            'type' => 'pairing',
+                            'message' => "You have been paired for a match in {$tournament->name}. Please select your available days.",
+                            'data' => ['match_id' => $match->id]
+                        ]);
+                        
+                        $notificationsSent[$notificationKey2] = true;
+                    } else {
+                        Log::info('Skipping duplicate pairing notification for player 2 (exists in DB)', [
+                            'player_id' => $match->player2->id,
+                            'match_id' => $match->id,
+                            'tournament_id' => $tournament->id
+                        ]);
+                    }
+                } else {
+                    Log::info('Skipping duplicate pairing notification for player 2 (already sent in this batch)', [
                         'player_id' => $match->player2->id,
-                        'type' => 'pairing',
-                        'message' => "You have been paired for a match in {$tournament->name}. Please select your available days.",
-                        'data' => ['match_id' => $match->id]
+                        'match_id' => $match->id,
+                        'tournament_id' => $tournament->id
                     ]);
                 }
             }
