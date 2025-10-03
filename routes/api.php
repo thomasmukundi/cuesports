@@ -173,6 +173,8 @@ Route::middleware('auth:api')->group(function () {
     
     // Player Stats and Leaderboard
     Route::get('/players/leaderboard', [App\Http\Controllers\PlayerController::class, 'leaderboard']);
+    Route::get('/players/debug-leaderboard', [App\Http\Controllers\PlayerController::class, 'debugLeaderboard']);
+    Route::get('/players/simple-leaderboard', [App\Http\Controllers\PlayerController::class, 'simpleLeaderboard']);
     Route::get('/players/top-shooters-detailed', [App\Http\Controllers\PlayerController::class, 'topShootersDetailed']);
     Route::get('/players/personal-leaderboard', [App\Http\Controllers\PlayerController::class, 'personalLeaderboard']);
     Route::get('/players/awards', [App\Http\Controllers\PlayerController::class, 'awards']);

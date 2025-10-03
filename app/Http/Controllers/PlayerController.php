@@ -48,40 +48,94 @@ class PlayerController extends Controller
         // Log the query for debugging
         \Log::info('Leaderboard query starting...');
         
-        // Get comprehensive player statistics
-        $topPlayers = DB::table('users')
-            ->leftJoin('pool_matches as matches', 'users.id', '=', 'matches.winner_id')
-            ->leftJoin('pool_matches as all_matches', function($join) {
-                $join->on('users.id', '=', 'all_matches.player_1_id')
-                     ->orOn('users.id', '=', 'all_matches.player_2_id');
+        // Use a more reliable approach to avoid JOIN issues
+        $topPlayers = collect();
+        
+        // Get all users who have participated in completed matches
+        $users = DB::table('users')
+            ->whereExists(function ($query) {
+                $query->select(DB::raw(1))
+                    ->from('pool_matches')
+                    ->where('status', 'completed')
+                    ->where(function($q) {
+                        $q->whereColumn('pool_matches.player_1_id', 'users.id')
+                          ->orWhereColumn('pool_matches.player_2_id', 'users.id');
+                    });
             })
-            ->leftJoin('winners', 'users.id', '=', 'winners.player_id')
-            ->leftJoin('tournaments', 'winners.tournament_id', '=', 'tournaments.id')
-            ->select(
-                'users.id', 
-                'users.username', 
-                'users.name', 
-                'users.profile_image',
-                'users.community_id',
-                'users.created_at',
-                DB::raw('COUNT(DISTINCT matches.id) as wins'),
-                DB::raw('COUNT(DISTINCT all_matches.id) as total_matches'),
-                DB::raw('COUNT(DISTINCT CASE WHEN winners.position = 1 THEN winners.id END) as tournament_wins'),
-                DB::raw('COUNT(DISTINCT winners.tournament_id) as tournaments_participated'),
-                DB::raw('SUM(DISTINCT winners.prize_amount) as total_prize_money'),
-                DB::raw('AVG(CASE 
-                    WHEN all_matches.player_1_id = users.id THEN all_matches.player_1_points 
-                    WHEN all_matches.player_2_id = users.id THEN all_matches.player_2_points 
-                    END) as avg_points_per_match'),
-                DB::raw('COUNT(DISTINCT matches.id) * 10 as leaderboard_points')
-            )
-            ->where('all_matches.status', 'completed')
-            ->groupBy('users.id', 'users.username', 'users.name', 'users.profile_image', 'users.community_id', 'users.created_at')
-            ->orderBy('leaderboard_points', 'desc')
-            ->orderBy('wins', 'desc')
-            ->orderBy('tournament_wins', 'desc')
-            ->limit(10)
+            ->select('id', 'username', 'name', 'profile_image', 'community_id', 'created_at')
             ->get();
+
+        foreach ($users as $user) {
+            // Count wins - matches where this user is the winner
+            $wins = DB::table('pool_matches')
+                ->where('winner_id', $user->id)
+                ->where('status', 'completed')
+                ->count();
+
+            // Count total matches - matches where this user participated
+            $totalMatches = DB::table('pool_matches')
+                ->where('status', 'completed')
+                ->where(function($query) use ($user) {
+                    $query->where('player_1_id', $user->id)
+                          ->orWhere('player_2_id', $user->id);
+                })
+                ->count();
+
+            // Count tournament wins
+            $tournamentWins = DB::table('winners')
+                ->where('player_id', $user->id)
+                ->where('position', 1)
+                ->count();
+
+            // Count tournaments participated
+            $tournamentsParticipated = DB::table('winners')
+                ->where('player_id', $user->id)
+                ->distinct('tournament_id')
+                ->count();
+
+            // Calculate total prize money
+            $totalPrizeMoney = DB::table('winners')
+                ->where('player_id', $user->id)
+                ->sum('prize_amount') ?? 0;
+
+            // Calculate average points per match
+            $avgPointsQuery = DB::table('pool_matches')
+                ->where('status', 'completed')
+                ->where(function($query) use ($user) {
+                    $query->where('player_1_id', $user->id)
+                          ->orWhere('player_2_id', $user->id);
+                })
+                ->selectRaw('AVG(CASE 
+                    WHEN player_1_id = ? THEN player_1_points 
+                    WHEN player_2_id = ? THEN player_2_points 
+                    END) as avg_points', [$user->id, $user->id])
+                ->first();
+            
+            $avgPointsPerMatch = $avgPointsQuery->avg_points ?? 0;
+
+            $playerData = (object) [
+                'id' => $user->id,
+                'username' => $user->username,
+                'name' => $user->name,
+                'profile_image' => $user->profile_image,
+                'community_id' => $user->community_id,
+                'created_at' => $user->created_at,
+                'wins' => $wins,
+                'total_matches' => $totalMatches,
+                'tournament_wins' => $tournamentWins,
+                'tournaments_participated' => $tournamentsParticipated,
+                'total_prize_money' => $totalPrizeMoney,
+                'avg_points_per_match' => $avgPointsPerMatch,
+                'leaderboard_points' => $wins * 10
+            ];
+
+            $topPlayers->push($playerData);
+        }
+
+        // Sort by leaderboard points, then wins, then tournament wins
+        $topPlayers = $topPlayers->sortByDesc(function($player) {
+            return [$player->leaderboard_points, $player->wins, $player->tournament_wins];
+        })->take(10);
             
         \Log::info('Top players query result:', ['count' => $topPlayers->count(), 'data' => $topPlayers->toArray()]);
         
@@ -739,5 +793,212 @@ class PlayerController extends Controller
         }
 
         return $achievements;
+    }
+
+    /**
+     * Debug leaderboard data to understand the issue
+     */
+    public function debugLeaderboard(Request $request)
+    {
+        \Log::info('=== LEADERBOARD DEBUG START ===');
+        
+        // First, let's check what matches exist
+        $matches = DB::table('pool_matches')
+            ->select('id', 'player_1_id', 'player_2_id', 'winner_id', 'status', 'player_1_points', 'player_2_points')
+            ->where('status', 'completed')
+            ->whereNotNull('winner_id')
+            ->get();
+            
+        \Log::info('Completed matches with winners:', $matches->toArray());
+        
+        // Check users and their match participation
+        $userStats = DB::table('users')
+            ->leftJoin('pool_matches as won_matches', 'users.id', '=', 'won_matches.winner_id')
+            ->leftJoin('pool_matches as all_matches', function($join) {
+                $join->on('users.id', '=', 'all_matches.player_1_id')
+                     ->orOn('users.id', '=', 'all_matches.player_2_id');
+            })
+            ->select(
+                'users.id',
+                'users.name',
+                DB::raw('COUNT(DISTINCT won_matches.id) as wins'),
+                DB::raw('COUNT(DISTINCT all_matches.id) as total_matches'),
+                DB::raw('GROUP_CONCAT(DISTINCT won_matches.id) as won_match_ids'),
+                DB::raw('GROUP_CONCAT(DISTINCT all_matches.id) as all_match_ids')
+            )
+            ->where('all_matches.status', 'completed')
+            ->groupBy('users.id', 'users.name')
+            ->get();
+                    \Log::info('User statistics:', $userStats->toArray());
+            
+        // Check for potential data issues
+        $potentialIssues = [];
+        
+        // Check for matches with no winner but marked as completed
+        $matchesWithoutWinner = DB::table('pool_matches')
+            ->where('status', 'completed')
+            ->whereNull('winner_id')
+            ->count();
+        if ($matchesWithoutWinner > 0) {
+            $potentialIssues[] = "Found {$matchesWithoutWinner} completed matches without winner_id";
+        }
+        
+        // Check for matches with winner_id but no points
+        $matchesWithWinnerNoPoints = DB::table('pool_matches')
+            ->where('status', 'completed')
+            ->whereNotNull('winner_id')
+            ->where(function($query) {
+                $query->whereNull('player_1_points')
+                      ->orWhereNull('player_2_points');
+            })
+            ->count();
+        if ($matchesWithWinnerNoPoints > 0) {
+            $potentialIssues[] = "Found {$matchesWithWinnerNoPoints} matches with winner but no points";
+        }
+        
+        // Check for inconsistent winner_id (winner_id not matching the player with higher points)
+        $inconsistentWinners = DB::table('pool_matches')
+            ->where('status', 'completed')
+            ->whereNotNull('winner_id')
+            ->whereNotNull('player_1_points')
+            ->whereNotNull('player_2_points')
+            ->where(function($query) {
+                $query->where(function($q) {
+                    // Player 1 has more points but player 2 is marked as winner
+                    $q->whereColumn('player_1_points', '>', 'player_2_points')
+                      ->whereColumn('winner_id', '=', 'player_2_id');
+                })->orWhere(function($q) {
+                    // Player 2 has more points but player 1 is marked as winner
+                    $q->whereColumn('player_2_points', '>', 'player_1_points')
+                      ->whereColumn('winner_id', '=', 'player_1_id');
+                });
+            })
+            ->get();
+        if ($inconsistentWinners->count() > 0) {
+            $potentialIssues[] = "Found {$inconsistentWinners->count()} matches with inconsistent winner_id";
+            \Log::warning('Inconsistent winners found:', $inconsistentWinners->toArray());
+        }
+        
+        \Log::info('Potential data issues:', $potentialIssues);
+        
+        // Check for specific match details
+        $detailedMatches = DB::table('pool_matches')
+            ->join('users as p1', 'pool_matches.player_1_id', '=', 'p1.id')
+            ->join('users as p2', 'pool_matches.player_2_id', '=', 'p2.id')
+            ->leftJoin('users as winner', 'pool_matches.winner_id', '=', 'winner.id')
+            ->select(
+                'pool_matches.id',
+                'p1.name as player_1_name',
+                'p2.name as player_2_name',
+                'winner.name as winner_name',
+                'pool_matches.player_1_points',
+                'pool_matches.player_2_points',
+                'pool_matches.status'
+            )
+            ->where('pool_matches.status', 'completed')
+            ->get();
+            
+        \Log::info('Detailed match information:', $detailedMatches->toArray());
+        
+        return response()->json([
+            'success' => true,
+            'debug_data' => [
+                'completed_matches' => $matches,
+                'user_statistics' => $userStats,
+                'detailed_matches' => $detailedMatches,
+                'potential_issues' => $potentialIssues,
+                'data_quality_summary' => [
+                    'total_completed_matches' => $matches->count(),
+                    'matches_without_winner' => $matchesWithoutWinner,
+                    'matches_with_winner_no_points' => $matchesWithWinnerNoPoints,
+                    'inconsistent_winners' => $inconsistentWinners->count()
+                ]
+            ]
+        ]);
+    }
+
+    /**
+     * Simple leaderboard calculation to test the logic
+     */
+    public function simpleLeaderboard(Request $request)
+    {
+        \Log::info('=== SIMPLE LEADERBOARD START ===');
+        
+        // Get all users who have played matches
+        $users = DB::table('users')
+            ->whereExists(function ($query) {
+                $query->select(DB::raw(1))
+                    ->from('pool_matches')
+                    ->where('status', 'completed')
+                    ->where(function($q) {
+                        $q->whereColumn('pool_matches.player_1_id', 'users.id')
+                          ->orWhereColumn('pool_matches.player_2_id', 'users.id');
+                    });
+            })
+            ->select('id', 'name', 'username', 'profile_image')
+            ->get();
+
+        $leaderboardData = [];
+
+        foreach ($users as $user) {
+            // Count wins (matches where this user is the winner)
+            $wins = DB::table('pool_matches')
+                ->where('winner_id', $user->id)
+                ->where('status', 'completed')
+                ->count();
+
+            // Count total matches (matches where this user participated)
+            $totalMatches = DB::table('pool_matches')
+                ->where('status', 'completed')
+                ->where(function($query) use ($user) {
+                    $query->where('player_1_id', $user->id)
+                          ->orWhere('player_2_id', $user->id);
+                })
+                ->count();
+
+            // Get specific match details for this user
+            $userMatches = DB::table('pool_matches')
+                ->where('status', 'completed')
+                ->where(function($query) use ($user) {
+                    $query->where('player_1_id', $user->id)
+                          ->orWhere('player_2_id', $user->id);
+                })
+                ->select('id', 'player_1_id', 'player_2_id', 'winner_id', 'player_1_points', 'player_2_points')
+                ->get();
+
+            $winRate = $totalMatches > 0 ? round(($wins / $totalMatches) * 100, 1) : 0;
+
+            $leaderboardData[] = [
+                'user_id' => $user->id,
+                'name' => $user->name ?: $user->username,
+                'wins' => $wins,
+                'total_matches' => $totalMatches,
+                'win_rate' => $winRate,
+                'leaderboard_points' => $wins * 10,
+                'profile_image' => $user->profile_image,
+                'match_details' => $userMatches->toArray()
+            ];
+        }
+
+        // Sort by wins descending
+        usort($leaderboardData, function($a, $b) {
+            if ($a['wins'] == $b['wins']) {
+                return $b['total_matches'] - $a['total_matches'];
+            }
+            return $b['wins'] - $a['wins'];
+        });
+
+        // Add ranks
+        foreach ($leaderboardData as $index => &$player) {
+            $player['rank'] = $index + 1;
+        }
+
+        \Log::info('Simple leaderboard calculation:', $leaderboardData);
+
+        return response()->json([
+            'success' => true,
+            'data' => array_slice($leaderboardData, 0, 10), // Top 10
+            'total_players' => count($leaderboardData)
+        ]);
     }
 }
