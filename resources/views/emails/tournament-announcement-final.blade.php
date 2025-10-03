@@ -94,7 +94,7 @@
     <div style="background-color: #ecfdf5; padding: 20px; border-radius: 8px; margin: 25px 0; border-left: 4px solid #10b981;">
         <h4 style="margin-top: 0; color: #065f46;">📱 How to Register:</h4>
         <ol style="color: #047857; line-height: 1.8; margin-bottom: 0;">
-            <li>Open your CueSports Kenya mobile app</li>
+            <li>Open your CueSports Africa mobile app</li>
             <li>Navigate to the "Tournaments" section</li>
             <li>Find "{{ $tournament_title }}" and tap "Register"</li>
             <li>Complete your registration and payment (if applicable)</li>
@@ -113,7 +113,7 @@
     
     <p style="margin-top: 30px;">
         Best of luck,<br>
-        <strong>The CueSports Kenya Tournament Team</strong><br>
-        <small style="color: #64748b;">Kenya's Premier Pool Tournament Platform</small>
+        <strong>The CueSports Africa Tournament Team</strong><br>
+        <small style="color: #64748b;">Africa's Premier Pool Tournament Platform</small>
     </p>
 @endsection

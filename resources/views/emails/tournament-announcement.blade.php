@@ -1,6 +1,6 @@
 @extends('emails.layout')
 
-@section('title', 'New Tournament Available - ' . ($tournament_name ?? 'CueSports Kenya'))
+@section('title', 'New Tournament Available - ' . ($tournament_name ?? 'CueSports Africa'))
 
 @section('content')
     <h2>Hello {{ $name }}!</h2>
@@ -70,7 +70,7 @@
     <div style="background-color: #f0f9ff; padding: 20px; border-radius: 8px; margin: 20px 0;">
         <h4 style="margin-top: 0; color: #0ea5e9;">📱 How to Register:</h4>
         <ol style="margin: 10px 0; padding-left: 20px; line-height: 1.8;">
-            <li>Open your CueSports Kenya mobile app</li>
+            <li>Open your CueSports Africa mobile app</li>
             <li>Go to the "Tournaments" section</li>
             <li>Find "{{ $tournament_name }}" in the list</li>
             <li>Tap "Register" and complete the payment</li>
@@ -78,7 +78,7 @@
         </ol>
     </div>
     
-    <p>This is your chance to compete against the best players in Kenya and climb the leaderboards. Show your skills and aim for the top prize!</p>
+    <p>This is your chance to compete against the best players in Africa and climb the leaderboards. Show your skills and aim for the top prize!</p>
     
     <div style="background-color: #fef3c7; padding: 15px; border-radius: 6px; margin: 20px 0; border-left: 4px solid #f59e0b;">
         <strong>💡 Pro Tip:</strong> Make sure your profile and location information are up to date in the app for the best tournament experience.

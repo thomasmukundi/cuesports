@@ -1,6 +1,6 @@
 @extends('emails.layout')
 
-@section('title', 'Welcome to CueSports Kenya')
+@section('title', 'Welcome to CueSports Africa')
 
 @section('content')
     <h2>Welcome {{ $name }}!</h2>
@@ -9,7 +9,7 @@
         <strong>Congratulations!</strong> Your account has been successfully created and verified.
     </div>
     
-    <p>You're now part of Kenya's premier pool tournament community! Here's what you can do:</p>
+    <p>You're now part of Africa's premier pool tournament community! Here's what you can do:</p>
     
     <ul style="line-height: 1.8; margin: 20px 0;">
         <li><strong>Join Tournaments:</strong> Participate in community, county, regional, and national tournaments</li>
