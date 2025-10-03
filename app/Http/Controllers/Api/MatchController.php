@@ -1163,8 +1163,8 @@ class MatchController extends Controller
 
     /**
      * Check if match has no matching dates
-{{ ... }}
-    private function hasNoMatchingDates(PoolMatch $match)
+     */
+    private function hasNoMatchingDates($match)
     {
         // If both players have selected dates but no proposed dates exist
         $proposedDates = $match->proposed_dates;
