@@ -75,11 +75,19 @@ class Notification extends Model
             // Initialize Firebase service
             $firebaseService = new FirebaseService();
             
+            // Ensure data is an array (defensive programming)
+            $notificationData = $this->data;
+            if (is_string($notificationData)) {
+                $notificationData = json_decode($notificationData, true) ?? [];
+            } elseif (!is_array($notificationData)) {
+                $notificationData = [];
+            }
+            
             // Send push notification
             $success = $firebaseService->sendNotificationByType(
                 $user->fcm_token,
                 $this->type,
-                array_merge($this->data ?? [], [
+                array_merge($notificationData, [
                     'message' => $this->message,
                     'notification_id' => $this->id
                 ])

@@ -917,16 +917,15 @@ class TournamentProgressionController extends Controller
             
             \App\Models\Notification::create([
                 'player_id' => $playerId,
-                'title' => "Tournament Position Achieved!",
                 'message' => "Congratulations! You finished in {$positionText} in the {$levelName} {$level} tournament.{$nextLevelText}",
                 'type' => 'tournament_position',
-                'data' => json_encode([
+                'data' => [
                     'tournament_id' => $tournament->id,
                     'level' => $level,
                     'level_name' => $levelName,
                     'position' => $position,
                     'next_level' => $nextLevel
-                ])
+                ]
             ]);
         }
     }

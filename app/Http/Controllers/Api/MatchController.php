@@ -578,12 +578,12 @@ class MatchController extends Controller
                 'player_id' => $opponent->id,
                 'type' => 'result_confirmation',
                 'message' => "{$user->name} has submitted match results. Please confirm or dispute.",
-                'data' => json_encode([
+                'data' => [
                     'match_id' => $match->id,
                     'submitter_name' => $user->name,
                     'player_1_points' => $match->player_1_points,
                     'player_2_points' => $match->player_2_points,
-                ])
+                ]
             ]);
 
             DB::commit();

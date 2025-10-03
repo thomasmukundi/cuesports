@@ -514,7 +514,7 @@ Route::middleware(['auth:sanctum'])->group(function () {
                             'player_id' => $user->id,
                             'type' => 'admin_message',
                             'message' => $message->title . ': ' . $message->message,
-                            'data' => json_encode(['admin_message_id' => $message->id])
+                            'data' => ['admin_message_id' => $message->id]
                         ]);
                     }
                 }
@@ -527,7 +527,7 @@ Route::middleware(['auth:sanctum'])->group(function () {
                         'player_id' => $user->id,
                         'type' => 'admin_message',
                         'message' => $message->title . ': ' . $message->message,
-                        'data' => json_encode(['admin_message_id' => $message->id])
+                        'data' => ['admin_message_id' => $message->id]
                     ]);
                 }
             }
