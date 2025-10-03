@@ -72,10 +72,8 @@ class AdminController extends Controller
                 'completed_matches' => PoolMatch::where('status', 'completed')->count() ?? 0,
             ];
 
-            $userGrowth = [
-                'labels' => ['6 days ago', '5 days ago', '4 days ago', '3 days ago', '2 days ago', 'Yesterday', 'Today'],
-                'data' => [0, 1, 2, 1, 3, 2, 1] // Sample data
-            ];
+            // Generate real user growth data for the last 7 days
+            $userGrowth = $this->getUserGrowthData();
 
             return view('admin.dashboard', compact('stats', 'userGrowth'));
         } catch (\Exception $e) {
@@ -90,6 +88,7 @@ class AdminController extends Controller
                 'pending_tournaments' => 0,
             ];
 
+            // Fallback user growth data
             $userGrowth = [
                 'labels' => ['6 days ago', '5 days ago', '4 days ago', '3 days ago', '2 days ago', 'Yesterday', 'Today'],
                 'data' => [0, 0, 0, 0, 0, 0, 0]
@@ -97,6 +96,53 @@ class AdminController extends Controller
 
             return view('admin.dashboard', compact('stats', 'userGrowth'));
         }
+    }
+
+    /**
+     * Get user growth data for the last 7 days
+     */
+    private function getUserGrowthData($days = 7)
+    {
+        $labels = [];
+        $data = [];
+        
+        // Generate data for the specified number of days
+        for ($i = $days - 1; $i >= 0; $i--) {
+            $date = now()->subDays($i);
+            
+            // Create label
+            if ($i === 0) {
+                $labels[] = 'Today';
+            } elseif ($i === 1) {
+                $labels[] = 'Yesterday';
+            } else {
+                $labels[] = $date->format('M j'); // e.g., "Oct 1"
+            }
+            
+            // Count users created on this date
+            $userCount = User::whereDate('created_at', $date->format('Y-m-d'))->count();
+            $data[] = $userCount;
+            
+            // Log for debugging
+            \Log::info('User growth data point', [
+                'date' => $date->format('Y-m-d'),
+                'label' => end($labels),
+                'user_count' => $userCount
+            ]);
+        }
+        
+        // Log summary
+        \Log::info('User growth data generated', [
+            'total_days' => count($labels),
+            'labels' => $labels,
+            'data' => $data,
+            'total_new_users' => array_sum($data)
+        ]);
+        
+        return [
+            'labels' => $labels,
+            'data' => $data
+        ];
     }
 
     public function tournaments(Request $request)

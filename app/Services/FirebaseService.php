@@ -64,11 +64,7 @@ class FirebaseService
 
             $this->messaging->send($message);
             
-            Log::info('Push notification sent successfully', [
-                'token' => substr($fcmToken, 0, 20) . '...',
-                'title' => $title
-            ]);
-            
+            // Logging is handled by the Notification model to avoid duplicates
             return true;
         } catch (MessagingException $e) {
             // Check if it's an SSL certificate error
