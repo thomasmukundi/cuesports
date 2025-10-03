@@ -1202,13 +1202,23 @@ class AdminController extends Controller
             ->where('level', 'community')
             ->where('status', 'completed')
             ->count();
-        $communityWinners = Winner::where('tournament_id', $tournament->id)
+        
+        // Check if ALL communities with matches have winners
+        $communitiesWithMatches = PoolMatch::where('tournament_id', $tournament->id)
             ->where('level', 'community')
-            ->exists();
+            ->distinct()
+            ->pluck('group_id');
+        $communitiesWithWinners = Winner::where('tournament_id', $tournament->id)
+            ->where('level', 'community')
+            ->distinct()
+            ->pluck('level_id');
+        
+        $allCommunitiesHaveWinners = $communitiesWithMatches->count() > 0 && 
+            $communitiesWithMatches->diff($communitiesWithWinners)->isEmpty();
             
         $progress['community']['has_matches'] = $communityMatches > 0;
         $progress['community']['all_matches_completed'] = $communityMatches > 0 && $communityMatches === $communityCompletedMatches;
-        $progress['community']['completed'] = $communityWinners;
+        $progress['community']['completed'] = $allCommunitiesHaveWinners;
         $progress['community']['can_initialize'] = $canStart && !$progress['community']['has_matches'];
         
         // County level
@@ -1219,14 +1229,24 @@ class AdminController extends Controller
             ->where('level', 'county')
             ->where('status', 'completed')
             ->count();
-        $countyWinners = Winner::where('tournament_id', $tournament->id)
+        
+        // Check if ALL counties with matches have winners
+        $countiesWithMatches = PoolMatch::where('tournament_id', $tournament->id)
             ->where('level', 'county')
-            ->exists();
+            ->distinct()
+            ->pluck('group_id');
+        $countiesWithWinners = Winner::where('tournament_id', $tournament->id)
+            ->where('level', 'county')
+            ->distinct()
+            ->pluck('level_id');
+        
+        $allCountiesHaveWinners = $countiesWithMatches->count() > 0 && 
+            $countiesWithMatches->diff($countiesWithWinners)->isEmpty();
             
         $progress['county']['has_matches'] = $countyMatches > 0;
         $progress['county']['all_matches_completed'] = $countyMatches > 0 && $countyMatches === $countyCompletedMatches;
-        $progress['county']['completed'] = $countyWinners;
-        $progress['county']['can_initialize'] = $communityWinners && !$progress['county']['has_matches'];
+        $progress['county']['completed'] = $allCountiesHaveWinners;
+        $progress['county']['can_initialize'] = $allCommunitiesHaveWinners && !$progress['county']['has_matches'];
         
         // Regional level
         $regionalMatches = PoolMatch::where('tournament_id', $tournament->id)
@@ -1236,14 +1256,24 @@ class AdminController extends Controller
             ->where('level', 'regional')
             ->where('status', 'completed')
             ->count();
-        $regionalWinners = Winner::where('tournament_id', $tournament->id)
+        
+        // Check if ALL regions with matches have winners
+        $regionsWithMatches = PoolMatch::where('tournament_id', $tournament->id)
             ->where('level', 'regional')
-            ->exists();
+            ->distinct()
+            ->pluck('group_id');
+        $regionsWithWinners = Winner::where('tournament_id', $tournament->id)
+            ->where('level', 'regional')
+            ->distinct()
+            ->pluck('level_id');
+        
+        $allRegionsHaveWinners = $regionsWithMatches->count() > 0 && 
+            $regionsWithMatches->diff($regionsWithWinners)->isEmpty();
             
         $progress['regional']['has_matches'] = $regionalMatches > 0;
         $progress['regional']['all_matches_completed'] = $regionalMatches > 0 && $regionalMatches === $regionalCompletedMatches;
-        $progress['regional']['completed'] = $regionalWinners;
-        $progress['regional']['can_initialize'] = $countyWinners && !$progress['regional']['has_matches'];
+        $progress['regional']['completed'] = $allRegionsHaveWinners;
+        $progress['regional']['can_initialize'] = $allCountiesHaveWinners && !$progress['regional']['has_matches'];
         
         // National level
         $nationalMatches = PoolMatch::where('tournament_id', $tournament->id)
@@ -1260,7 +1290,7 @@ class AdminController extends Controller
         $progress['national']['has_matches'] = $nationalMatches > 0;
         $progress['national']['all_matches_completed'] = $nationalMatches > 0 && $nationalMatches === $nationalCompletedMatches;
         $progress['national']['completed'] = $nationalWinners;
-        $progress['national']['can_initialize'] = $regionalWinners && !$progress['national']['has_matches'];
+        $progress['national']['can_initialize'] = $allRegionsHaveWinners && !$progress['national']['has_matches'];
         
         return $progress;
     }
