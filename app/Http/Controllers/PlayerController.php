@@ -51,7 +51,7 @@ class PlayerController extends Controller
         // Use a more reliable approach to avoid JOIN issues
         $topPlayers = collect();
         
-        // Get all users who have participated in completed matches
+        // Get all users who have participated in completed matches (excluding admin)
         $users = DB::table('users')
             ->whereExists(function ($query) {
                 $query->select(DB::raw(1))
@@ -62,6 +62,7 @@ class PlayerController extends Controller
                           ->orWhereColumn('matches.player_2_id', 'users.id');
                     });
             })
+            ->where('email', '!=', 'admin@cuesports.com')
             ->select('id', 'username', 'name', 'profile_image', 'community_id', 'created_at')
             ->get();
 
@@ -194,6 +195,7 @@ class PlayerController extends Controller
             $randomPlayers = DB::table('users')
                 ->select('id', 'username', 'name', 'profile_image', 'created_at')
                 ->whereNotIn('id', $existingPlayerIds)
+                ->where('email', '!=', 'admin@cuesports.com')
                 ->inRandomOrder()
                 ->limit($playersNeeded)
                 ->get();
@@ -715,7 +717,8 @@ class PlayerController extends Controller
             ->leftJoin('winners', 'users.id', '=', 'winners.player_id')
             ->leftJoin('communities', 'users.community_id', '=', 'communities.id')
             ->leftJoin('counties', 'communities.county_id', '=', 'counties.id')
-            ->leftJoin('regions', 'counties.region_id', '=', 'regions.id');
+            ->leftJoin('regions', 'counties.region_id', '=', 'regions.id')
+            ->where('users.email', '!=', 'admin@cuesports.com');
 
         // Apply timeframe filter
         if ($timeframe === 'month') {
@@ -968,7 +971,7 @@ class PlayerController extends Controller
     {
         \Log::info('=== SIMPLE LEADERBOARD START ===');
         
-        // Get all users who have played matches
+        // Get all users who have played matches (excluding admin)
         $users = DB::table('users')
             ->whereExists(function ($query) {
                 $query->select(DB::raw(1))
@@ -979,6 +982,7 @@ class PlayerController extends Controller
                           ->orWhereColumn('matches.player_2_id', 'users.id');
                     });
             })
+            ->where('email', '!=', 'admin@cuesports.com')
             ->select('id', 'name', 'username', 'profile_image')
             ->get();
 
