@@ -225,12 +225,24 @@ class PlayerController extends Controller
             $allPlayers = $playersWithMatches;
         }
 
+        // Sort final array by rank to ensure correct order (rank 1 first, rank 2 second, etc.)
+        $allPlayers = $allPlayers->sortBy('rank')->values();
+
+        \Log::info('Final player order check:', $allPlayers->map(function($p) {
+            return [
+                'rank' => $p['rank'],
+                'name' => $p['name'],
+                'wins' => $p['wins'],
+                'leaderboard_points' => $p['leaderboard_points']
+            ];
+        })->toArray());
+
         $response = [
             'success' => true,
-            'data' => $allPlayers->values()->toArray()
+            'data' => $allPlayers->toArray()
         ];
         
-        \Log::info('Returning top players response:', $response);
+        \Log::info('Returning top players response count:', ['count' => count($response['data'])]);
         return response()->json($response);
     }
 
