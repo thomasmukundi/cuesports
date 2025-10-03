@@ -206,13 +206,13 @@ class MatchController extends Controller
         Notification::create([
             'player_id' => $opponent->id,
             'type' => 'match_scheduled',
-            'data' => json_encode([
+            'message' => "{$user->name} has scheduled your match for {$request->scheduled_date}",
+            'data' => [
                 'match_id' => $match->id,
                 'tournament_name' => $match->tournament->name,
                 'scheduled_date' => $request->scheduled_date,
                 'opponent_name' => $user->name
-            ]),
-            'is_read' => false
+            ]
         ]);
         
         return response()->json([
@@ -573,6 +573,16 @@ class MatchController extends Controller
 
             // Send notification to opponent
             $opponent = $user->id == $match->player_1_id ? $match->player2 : $match->player1;
+            
+            \Log::info("Sending result confirmation notification", [
+                'submitter_id' => $user->id,
+                'submitter_name' => $user->name,
+                'opponent_id' => $opponent->id,
+                'opponent_name' => $opponent->name,
+                'match_id' => $match->id,
+                'player_1_id' => $match->player_1_id,
+                'player_2_id' => $match->player_2_id
+            ]);
             
             Notification::create([
                 'player_id' => $opponent->id,
@@ -1143,17 +1153,17 @@ class MatchController extends Controller
                 'player_id' => $playerId,
                 'type' => 'other',
                 'message' => "Round robin matches have been generated for {$tournament->name} at {$level} level. Check your matches and schedule them!",
-                'data' => json_encode([
+                'data' => [
                     'tournament_id' => $tournament->id,
                     'level' => $level,
-                ])
+                ]
             ]);
         }
     }
 
     /**
      * Check if match has no matching dates
-     */
+{{ ... }}
     private function hasNoMatchingDates(PoolMatch $match)
     {
         // If both players have selected dates but no proposed dates exist
