@@ -55,11 +55,11 @@ class PlayerController extends Controller
         $users = DB::table('users')
             ->whereExists(function ($query) {
                 $query->select(DB::raw(1))
-                    ->from('pool_matches')
+                    ->from('matches')
                     ->where('status', 'completed')
                     ->where(function($q) {
-                        $q->whereColumn('pool_matches.player_1_id', 'users.id')
-                          ->orWhereColumn('pool_matches.player_2_id', 'users.id');
+                        $q->whereColumn('matches.player_1_id', 'users.id')
+                          ->orWhereColumn('matches.player_2_id', 'users.id');
                     });
             })
             ->select('id', 'username', 'name', 'profile_image', 'community_id', 'created_at')
@@ -67,13 +67,13 @@ class PlayerController extends Controller
 
         foreach ($users as $user) {
             // Count wins - matches where this user is the winner
-            $wins = DB::table('pool_matches')
+            $wins = DB::table('matches')
                 ->where('winner_id', $user->id)
                 ->where('status', 'completed')
                 ->count();
 
             // Count total matches - matches where this user participated
-            $totalMatches = DB::table('pool_matches')
+            $totalMatches = DB::table('matches')
                 ->where('status', 'completed')
                 ->where(function($query) use ($user) {
                     $query->where('player_1_id', $user->id)
@@ -99,7 +99,7 @@ class PlayerController extends Controller
                 ->sum('prize_amount') ?? 0;
 
             // Calculate average points per match
-            $avgPointsQuery = DB::table('pool_matches')
+            $avgPointsQuery = DB::table('matches')
                 ->where('status', 'completed')
                 ->where(function($query) use ($user) {
                     $query->where('player_1_id', $user->id)
@@ -663,8 +663,8 @@ class PlayerController extends Controller
         $location = $request->get('location'); // community_id, county_id, etc.
 
         $query = DB::table('users')
-            ->leftJoin('pool_matches as matches', 'users.id', '=', 'matches.winner_id')
-            ->leftJoin('pool_matches as all_matches', function($join) {
+            ->leftJoin('matches as matches', 'users.id', '=', 'matches.winner_id')
+            ->leftJoin('matches as all_matches', function($join) {
                 $join->on('users.id', '=', 'all_matches.player_1_id')
                      ->orOn('users.id', '=', 'all_matches.player_2_id');
             })
@@ -803,7 +803,7 @@ class PlayerController extends Controller
         \Log::info('=== LEADERBOARD DEBUG START ===');
         
         // First, let's check what matches exist
-        $matches = DB::table('pool_matches')
+        $matches = DB::table('matches')
             ->select('id', 'player_1_id', 'player_2_id', 'winner_id', 'status', 'player_1_points', 'player_2_points')
             ->where('status', 'completed')
             ->whereNotNull('winner_id')
@@ -813,8 +813,8 @@ class PlayerController extends Controller
         
         // Check users and their match participation
         $userStats = DB::table('users')
-            ->leftJoin('pool_matches as won_matches', 'users.id', '=', 'won_matches.winner_id')
-            ->leftJoin('pool_matches as all_matches', function($join) {
+            ->leftJoin('matches as won_matches', 'users.id', '=', 'won_matches.winner_id')
+            ->leftJoin('matches as all_matches', function($join) {
                 $join->on('users.id', '=', 'all_matches.player_1_id')
                      ->orOn('users.id', '=', 'all_matches.player_2_id');
             })
@@ -835,7 +835,7 @@ class PlayerController extends Controller
         $potentialIssues = [];
         
         // Check for matches with no winner but marked as completed
-        $matchesWithoutWinner = DB::table('pool_matches')
+        $matchesWithoutWinner = DB::table('matches')
             ->where('status', 'completed')
             ->whereNull('winner_id')
             ->count();
@@ -844,7 +844,7 @@ class PlayerController extends Controller
         }
         
         // Check for matches with winner_id but no points
-        $matchesWithWinnerNoPoints = DB::table('pool_matches')
+        $matchesWithWinnerNoPoints = DB::table('matches')
             ->where('status', 'completed')
             ->whereNotNull('winner_id')
             ->where(function($query) {
@@ -857,7 +857,7 @@ class PlayerController extends Controller
         }
         
         // Check for inconsistent winner_id (winner_id not matching the player with higher points)
-        $inconsistentWinners = DB::table('pool_matches')
+        $inconsistentWinners = DB::table('matches')
             ->where('status', 'completed')
             ->whereNotNull('winner_id')
             ->whereNotNull('player_1_points')
@@ -882,20 +882,20 @@ class PlayerController extends Controller
         \Log::info('Potential data issues:', $potentialIssues);
         
         // Check for specific match details
-        $detailedMatches = DB::table('pool_matches')
-            ->join('users as p1', 'pool_matches.player_1_id', '=', 'p1.id')
-            ->join('users as p2', 'pool_matches.player_2_id', '=', 'p2.id')
-            ->leftJoin('users as winner', 'pool_matches.winner_id', '=', 'winner.id')
+        $detailedMatches = DB::table('matches')
+            ->join('users as p1', 'matches.player_1_id', '=', 'p1.id')
+            ->join('users as p2', 'matches.player_2_id', '=', 'p2.id')
+            ->leftJoin('users as winner', 'matches.winner_id', '=', 'winner.id')
             ->select(
-                'pool_matches.id',
+                'matches.id',
                 'p1.name as player_1_name',
                 'p2.name as player_2_name',
                 'winner.name as winner_name',
-                'pool_matches.player_1_points',
-                'pool_matches.player_2_points',
-                'pool_matches.status'
+                'matches.player_1_points',
+                'matches.player_2_points',
+                'matches.status'
             )
-            ->where('pool_matches.status', 'completed')
+            ->where('matches.status', 'completed')
             ->get();
             
         \Log::info('Detailed match information:', $detailedMatches->toArray());
@@ -928,11 +928,11 @@ class PlayerController extends Controller
         $users = DB::table('users')
             ->whereExists(function ($query) {
                 $query->select(DB::raw(1))
-                    ->from('pool_matches')
+                    ->from('matches')
                     ->where('status', 'completed')
                     ->where(function($q) {
-                        $q->whereColumn('pool_matches.player_1_id', 'users.id')
-                          ->orWhereColumn('pool_matches.player_2_id', 'users.id');
+                        $q->whereColumn('matches.player_1_id', 'users.id')
+                          ->orWhereColumn('matches.player_2_id', 'users.id');
                     });
             })
             ->select('id', 'name', 'username', 'profile_image')
@@ -942,13 +942,13 @@ class PlayerController extends Controller
 
         foreach ($users as $user) {
             // Count wins (matches where this user is the winner)
-            $wins = DB::table('pool_matches')
+            $wins = DB::table('matches')
                 ->where('winner_id', $user->id)
                 ->where('status', 'completed')
                 ->count();
 
             // Count total matches (matches where this user participated)
-            $totalMatches = DB::table('pool_matches')
+            $totalMatches = DB::table('matches')
                 ->where('status', 'completed')
                 ->where(function($query) use ($user) {
                     $query->where('player_1_id', $user->id)
@@ -957,7 +957,7 @@ class PlayerController extends Controller
                 ->count();
 
             // Get specific match details for this user
-            $userMatches = DB::table('pool_matches')
+            $userMatches = DB::table('matches')
                 ->where('status', 'completed')
                 ->where(function($query) use ($user) {
                     $query->where('player_1_id', $user->id)
