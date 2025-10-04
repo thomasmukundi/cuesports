@@ -462,13 +462,15 @@ class PlayerController extends Controller
                 $isWinner = $winnerId === $userId;
                 
                 return [
-                    'id' => $match->id,
-                    'tournament' => $match->tournament_name,
                     'opponent' => $opponent,
-                    'result' => $isWinner ? 'Won' : 'Lost',
+                    'tournament' => $match->tournament_name ?: 'Regular Match',
                     'date' => date('Y-m-d', strtotime($match->created_at)),
-                    'player_1_points' => $match->player_1_points,
-                    'player_2_points' => $match->player_2_points,
+                    'player_1_points' => (int) ($match->player_1_points ?? 0),
+                    'player_2_points' => (int) ($match->player_2_points ?? 0),
+                    'player_1_id' => (int) $match->player_1_id,
+                    'player_2_id' => (int) $match->player_2_id,
+                    'winner_id' => (int) $match->winner_id,
+                    'result' => $isWinner ? 'Won' : 'Lost'
                 ];
             });
 
@@ -505,7 +507,7 @@ class PlayerController extends Controller
             'success' => true,
             'data' => [
                 'past_matches' => $pastMatches,
-                'awards' => $awards,
+                'awards_summary' => $awards,
                 'user_stats' => [
                     'name' => $user->name,
                     'total_points' => $totalPoints,
@@ -517,146 +519,6 @@ class PlayerController extends Controller
         ]);
     }
 
-    /**
-     * Get awards page with detailed player statistics
-     */
-    public function awards(Request $request)
-    {
-        $user = Auth::user();
-        
-        // Calculate comprehensive statistics
-        $totalMatches = DB::table('matches')->where(function ($q) use ($user) {
-            $q->where('player_1_id', $user->id)
-              ->orWhere('player_2_id', $user->id);
-        })->where('status', 'completed')->count();
-
-        $wonMatches = DB::table('matches')->where('winner_id', $user->id)->count();
-        $lostMatches = $totalMatches - $wonMatches;
-        $winRate = $totalMatches > 0 ? round(($wonMatches / $totalMatches) * 100, 1) : 0;
-        $totalPoints = $wonMatches * 10;
-
-        // Tournament statistics
-        $tournamentParticipations = DB::table('tournament_registrations')
-            ->where('player_id', $user->id)
-            ->count();
-
-        // Get awards from winners table with tournament details
-        $awards = DB::table('winners')
-            ->leftJoin('tournaments', 'winners.tournament_id', '=', 'tournaments.id')
-            ->where('winners.player_id', $user->id)
-            ->whereIn('winners.position', [1, 2, 3])
-            ->select([
-                'winners.*',
-                'tournaments.name as tournament_name',
-                'tournaments.area_scope',
-                'tournaments.special',
-                'tournaments.start_date',
-                'tournaments.end_date'
-            ])
-            ->orderBy('winners.created_at', 'desc')
-            ->get();
-
-        $tournamentWins = $awards->where('position', 1)->count();
-        $totalPodiumFinishes = $awards->count();
-
-        // Recent performance (last 10 matches)
-        $recentMatches = DB::table('matches')->where(function ($q) use ($user) {
-            $q->where('player_1_id', $user->id)
-              ->orWhere('player_2_id', $user->id);
-        })
-        ->where('status', 'completed')
-        ->orderBy('created_at', 'desc')
-        ->limit(10)
-        ->get();
-
-        $recentWins = $recentMatches->where('winner_id', $user->id)->count();
-        $recentWinRate = $recentMatches->count() > 0 ? round(($recentWins / $recentMatches->count()) * 100, 1) : 0;
-
-        // Achievements
-        $achievements = [];
-        $firstPlaces = $awards->where('position', 1)->count();
-        $secondPlaces = $awards->where('position', 2)->count();
-        $thirdPlaces = $awards->where('position', 3)->count();
-        
-        if ($firstPlaces >= 1) $achievements[] = ['name' => 'Champion', 'description' => 'Won 1st place in tournament', 'icon' => '🥇'];
-        if ($firstPlaces >= 3) $achievements[] = ['name' => 'Triple Champion', 'description' => 'Won 3+ tournaments', 'icon' => '👑'];
-        if ($secondPlaces >= 1) $achievements[] = ['name' => 'Runner-up', 'description' => 'Achieved 2nd place', 'icon' => '🥈'];
-        if ($thirdPlaces >= 1) $achievements[] = ['name' => 'Podium Finisher', 'description' => 'Achieved 3rd place', 'icon' => '🥉'];
-        if ($totalPodiumFinishes >= 5) $achievements[] = ['name' => 'Consistent Performer', 'description' => '5+ podium finishes', 'icon' => '🏆'];
-        
-        if ($wonMatches >= 1) $achievements[] = ['name' => 'First Victory', 'description' => 'Won your first match', 'icon' => '⭐'];
-        if ($wonMatches >= 10) $achievements[] = ['name' => 'Veteran Player', 'description' => 'Won 10+ matches', 'icon' => '🎖️'];
-        if ($winRate >= 70) $achievements[] = ['name' => 'Dominator', 'description' => 'Win rate above 70%', 'icon' => '🔥'];
-        if ($totalMatches >= 20) $achievements[] = ['name' => 'Active Player', 'description' => 'Played 20+ matches', 'icon' => '⚡'];
-        if ($tournamentParticipations >= 3) $achievements[] = ['name' => 'Tournament Regular', 'description' => 'Participated in 3+ tournaments', 'icon' => '🏅'];
-
-        return response()->json([
-            'success' => true,
-            'data' => [
-                'player_stats' => [
-                    'name' => $user->name,
-                    'profile_image' => $user->profile_image,
-                    'total_points' => $totalPoints,
-                    'total_matches' => $totalMatches,
-                    'won_matches' => $wonMatches,
-                    'lost_matches' => $lostMatches,
-                    'win_rate' => $winRate,
-                    'tournament_participations' => $tournamentParticipations,
-                    'tournament_wins' => $tournamentWins,
-                    'recent_win_rate' => $recentWinRate,
-                    'recent_matches_count' => $recentMatches->count(),
-                    'podium_finishes' => $totalPodiumFinishes,
-                    'first_places' => $firstPlaces,
-                    'second_places' => $secondPlaces,
-                    'third_places' => $thirdPlaces
-                ],
-                'achievements' => $achievements,
-                'tournament_awards' => $awards->map(function($award) {
-                    $positionText = match($award->position) {
-                        1 => '1st Place - Champion',
-                        2 => '2nd Place - Runner Up',
-                        3 => '3rd Place - Third Place',
-                        default => $award->position . 'th Place'
-                    };
-                    
-                    $levelText = '';
-                    if ($award->special) {
-                        $levelText = 'Special Tournament';
-                    } else {
-                        $levelText = match($award->area_scope) {
-                            'community' => 'Community Level',
-                            'county' => 'County Level', 
-                            'regional' => 'Regional Level',
-                            'national' => 'National Level',
-                            default => ucfirst($award->level ?? $award->area_scope) . ' Level'
-                        };
-                    }
-                    
-                    return [
-                        'position' => $award->position,
-                        'position_text' => $positionText,
-                        'level' => $award->level,
-                        'level_text' => $levelText,
-                        'tournament_id' => $award->tournament_id,
-                        'tournament_name' => $award->tournament_name ?? 'Unknown Tournament',
-                        'area_scope' => $award->area_scope,
-                        'is_special' => (bool) $award->special,
-                        'prize_amount' => $award->prize_amount,
-                        'points' => $award->points ?? 0,
-                        'wins' => $award->wins ?? 0,
-                        'date' => $award->start_date ? date('M j, Y', strtotime($award->start_date)) : date('M j, Y', strtotime($award->created_at)),
-                        'created_at' => $award->created_at
-                    ];
-                }),
-                'performance_summary' => [
-                    'rank' => $this->getUserRank($user->id, $totalPoints),
-                    'points_to_next_level' => $this->getPointsToNextLevel($totalPoints),
-                    'current_streak' => $this->getCurrentStreak($user->id),
-                    'best_streak' => $this->getBestStreak($user->id)
-                ]
-            ]
-        ]);
-    }
 
     /**
      * Get player statistics
@@ -769,11 +631,107 @@ class PlayerController extends Controller
     }
 
     /**
+     * Get player awards and achievements
+     */
+    public function awards(Request $request)
+    {
+        $user = Auth::user();
+        
+        // Get player stats for award calculations
+        $stats = $this->calculatePlayerStats($user);
+        
+        $achievements = [];
+        
+        // Win-based awards
+        if ($stats['wins'] >= 50) {
+            $achievements[] = ['icon' => '🏆', 'name' => 'Master Shooter', 'description' => '50+ match wins'];
+        } elseif ($stats['wins'] >= 25) {
+            $achievements[] = ['icon' => '🥇', 'name' => 'Expert Player', 'description' => '25+ match wins'];
+        } elseif ($stats['wins'] >= 10) {
+            $achievements[] = ['icon' => '⭐', 'name' => 'Rising Star', 'description' => '10+ match wins'];
+        } elseif ($stats['wins'] >= 1) {
+            $achievements[] = ['icon' => '🏆', 'name' => 'First Victory', 'description' => 'Won your first match'];
+        }
+        
+        // Tournament awards
+        if ($stats['tournament_wins'] >= 5) {
+            $achievements[] = ['icon' => '👑', 'name' => 'Tournament Legend', 'description' => '5+ tournament wins'];
+        } elseif ($stats['tournament_wins'] >= 1) {
+            $achievements[] = ['icon' => '🏅', 'name' => 'Champion', 'description' => 'Tournament winner'];
+        }
+        
+        // Performance awards
+        if ($stats['win_rate'] >= 80 && $stats['total_matches'] >= 10) {
+            $achievements[] = ['icon' => '🎯', 'name' => 'Precision Shooter', 'description' => '80%+ win rate with 10+ matches'];
+        }
+        
+        // Activity awards
+        if ($stats['total_matches'] >= 50) {
+            $achievements[] = ['icon' => '🛡️', 'name' => 'Veteran Player', 'description' => '50+ matches played'];
+        }
+        
+        // Calculate best streak
+        $bestStreak = $this->calculateBestStreak($user);
+        
+        // Get tournament participations
+        $tournamentParticipations = DB::table('winners')
+            ->where('player_id', $user->id)
+            ->distinct('tournament_id')
+            ->count();
+        
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'player_stats' => [
+                    'total_points' => $stats['wins'] * 10, // Leaderboard points
+                    'win_rate' => $stats['win_rate'],
+                    'total_matches' => $stats['total_matches'],
+                    'tournament_participations' => $tournamentParticipations
+                ],
+                'performance_summary' => [
+                    'rank' => $stats['rankings']['national'],
+                    'best_streak' => $bestStreak
+                ],
+                'achievements' => $achievements
+            ]
+        ]);
+    }
+    
+    /**
+     * Calculate player's best winning streak
+     */
+    private function calculateBestStreak($user)
+    {
+        $matches = DB::table('matches')
+            ->where(function($q) use ($user) {
+                $q->where('player_1_id', $user->id)
+                  ->orWhere('player_2_id', $user->id);
+            })
+            ->where('status', 'completed')
+            ->orderBy('created_at', 'asc')
+            ->get();
+        
+        $currentStreak = 0;
+        $bestStreak = 0;
+        
+        foreach ($matches as $match) {
+            if ($match->winner_id == $user->id) {
+                $currentStreak++;
+                $bestStreak = max($bestStreak, $currentStreak);
+            } else {
+                $currentStreak = 0;
+            }
+        }
+        
+        return $bestStreak;
+    }
+
+    /**
      * Calculate player statistics
      */
     private function calculatePlayerStats($player)
     {
-        $matches = PoolMatch::where(function($q) use ($player) {
+        $matches = DB::table('matches')->where(function($q) use ($player) {
             $q->where('player_1_id', $player->id)
               ->orWhere('player_2_id', $player->id);
         })->where('status', 'completed');
@@ -806,7 +764,7 @@ class PlayerController extends Controller
             ->count();
         
         // Get recent form (last 5 matches)
-        $recentMatches = PoolMatch::where(function($q) use ($player) {
+        $recentMatches = DB::table('matches')->where(function($q) use ($player) {
             $q->where('player_1_id', $player->id)
               ->orWhere('player_2_id', $player->id);
         })->where('status', 'completed')
@@ -819,20 +777,29 @@ class PlayerController extends Controller
             $recentForm[] = $match->winner_id == $player->id ? 'W' : 'L';
         }
         
-        // Rankings
-        $communityRank = User::where('community_id', $player->community_id)
-            ->where('total_points', '>', $player->total_points)
-            ->count() + 1;
-            
-        $countyRank = User::where('county_id', $player->county_id)
-            ->where('total_points', '>', $player->total_points)
-            ->count() + 1;
-            
-        $regionalRank = User::where('region_id', $player->region_id)
-            ->where('total_points', '>', $player->total_points)
-            ->count() + 1;
-            
-        $nationalRank = User::where('total_points', '>', $player->total_points)
+        // Calculate rankings based on wins (leaderboard points)
+        $playerLeaderboardPoints = $wins * 10;
+        
+        // Community ranking
+        $communityRank = 1;
+        if ($player->community_id) {
+            $communityRank = DB::table('users')
+                ->where('community_id', $player->community_id)
+                ->where('id', '!=', $player->id)
+                ->where(function($query) use ($playerLeaderboardPoints) {
+                    $query->whereRaw('(SELECT COUNT(*) FROM matches WHERE winner_id = users.id AND status = "completed") * 10 > ?', [$playerLeaderboardPoints]);
+                })
+                ->count() + 1;
+        }
+        
+        // For county, regional, and national rankings, we'll use a simplified approach
+        $countyRank = 1;
+        $regionalRank = 1;
+        $nationalRank = DB::table('users')
+            ->where('id', '!=', $player->id)
+            ->where(function($query) use ($playerLeaderboardPoints) {
+                $query->whereRaw('(SELECT COUNT(*) FROM matches WHERE winner_id = users.id AND status = "completed") * 10 > ?', [$playerLeaderboardPoints]);
+            })
             ->count() + 1;
         
         return [
