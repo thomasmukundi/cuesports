@@ -673,28 +673,125 @@ class PlayerController extends Controller
         // Calculate best streak
         $bestStreak = $this->calculateBestStreak($user);
         
-        // Get tournament participations
-        $tournamentParticipations = DB::table('winners')
-            ->where('player_id', $user->id)
+        // Get tournament participations from matches (not just winners table)
+        $tournamentParticipations = DB::table('matches')
+            ->where(function($q) use ($user) {
+                $q->where('player_1_id', $user->id)
+                  ->orWhere('player_2_id', $user->id);
+            })
+            ->whereNotNull('tournament_id')
             ->distinct('tournament_id')
             ->count();
+        
+        // Calculate total match points (actual points scored, not leaderboard points)
+        $totalMatchPoints = 0;
+        $userMatches = DB::table('matches')
+            ->where(function($q) use ($user) {
+                $q->where('player_1_id', $user->id)
+                  ->orWhere('player_2_id', $user->id);
+            })
+            ->where('status', 'completed')
+            ->get();
+            
+        foreach ($userMatches as $match) {
+            if ($match->player_1_id == $user->id) {
+                $totalMatchPoints += $match->player_1_points ?? 0;
+            } else {
+                $totalMatchPoints += $match->player_2_points ?? 0;
+            }
+        }
+        
+        // Get consistent ranking from leaderboard logic
+        $leaderboardRank = $this->getLeaderboardRank($user);
         
         return response()->json([
             'success' => true,
             'data' => [
                 'player_stats' => [
-                    'total_points' => $stats['wins'] * 10, // Leaderboard points
+                    'total_points' => $totalMatchPoints, // Actual match points scored
                     'win_rate' => $stats['win_rate'],
                     'total_matches' => $stats['total_matches'],
                     'tournament_participations' => $tournamentParticipations
                 ],
                 'performance_summary' => [
-                    'rank' => $stats['rankings']['national'],
+                    'rank' => $leaderboardRank,
                     'best_streak' => $bestStreak
                 ],
                 'achievements' => $achievements
             ]
         ]);
+    }
+    
+    /**
+     * Get player's rank using the same logic as leaderboard
+     */
+    private function getLeaderboardRank($user)
+    {
+        // Get all users who have participated in completed matches (excluding admin)
+        $users = DB::table('users')
+            ->whereExists(function ($query) {
+                $query->select(DB::raw(1))
+                    ->from('matches')
+                    ->where('status', 'completed')
+                    ->where(function($q) {
+                        $q->whereColumn('matches.player_1_id', 'users.id')
+                          ->orWhereColumn('matches.player_2_id', 'users.id');
+                    });
+            })
+            ->where('email', '!=', 'admin@cuesports.com')
+            ->select('id', 'username', 'name')
+            ->get();
+
+        $allPlayers = collect();
+
+        foreach ($users as $player) {
+            // Count wins
+            $wins = DB::table('matches')
+                ->where('winner_id', $player->id)
+                ->where('status', 'completed')
+                ->count();
+
+            // Count tournament wins
+            $tournamentWins = DB::table('winners')
+                ->where('player_id', $player->id)
+                ->where('position', 1)
+                ->count();
+
+            $playerData = (object) [
+                'id' => $player->id,
+                'wins' => $wins,
+                'tournament_wins' => $tournamentWins,
+                'leaderboard_points' => $wins * 10
+            ];
+
+            $allPlayers->push($playerData);
+        }
+
+        // Sort using same logic as leaderboard
+        $allPlayers = $allPlayers->sort(function($a, $b) {
+            // First compare by leaderboard points (higher is better)
+            if ($a->leaderboard_points != $b->leaderboard_points) {
+                return $b->leaderboard_points - $a->leaderboard_points;
+            }
+            
+            // Then by wins (higher is better)
+            if ($a->wins != $b->wins) {
+                return $b->wins - $a->wins;
+            }
+            
+            // Finally by tournament wins (higher is better)
+            return $b->tournament_wins - $a->tournament_wins;
+        })->values();
+
+        // Find user's rank
+        foreach ($allPlayers as $index => $player) {
+            if ($player->id == $user->id) {
+                return $index + 1;
+            }
+        }
+
+        // If user not found in rankings, they haven't played any matches
+        return $allPlayers->count() + 1;
     }
     
     /**
