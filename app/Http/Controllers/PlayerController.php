@@ -164,6 +164,14 @@ class PlayerController extends Controller
             $winRate = $player->total_matches > 0 ? 
                 round(($player->wins / $player->total_matches) * 100, 1) : 0;
                 
+            // Get most recent tournament placement for this player
+            $recentWinner = DB::table('winners')
+                ->join('tournaments', 'winners.tournament_id', '=', 'tournaments.id')
+                ->where('winners.player_id', $player->id)
+                ->select('winners.position', 'winners.prize_amount', 'winners.level', 'tournaments.name as tournament_name', 'winners.created_at')
+                ->orderBy('winners.created_at', 'desc')
+                ->first();
+
             return [
                 'rank' => $index + 1,
                 'id' => $player->id,
@@ -178,7 +186,14 @@ class PlayerController extends Controller
                 'leaderboard_points' => (int) $player->leaderboard_points,
                 'profile_image' => $player->profile_image,
                 'member_since' => $player->created_at ? date('Y-m-d', strtotime($player->created_at)) : null,
-                'performance_rating' => $this->calculatePerformanceRating($player)
+                'performance_rating' => $this->calculatePerformanceRating($player),
+                'recent_tournament_placement' => $recentWinner ? [
+                    'position' => (int) $recentWinner->position,
+                    'tournament_name' => $recentWinner->tournament_name,
+                    'level' => $recentWinner->level,
+                    'prize_amount' => (float) ($recentWinner->prize_amount ?? 0),
+                    'date' => $recentWinner->created_at ? date('Y-m-d', strtotime($recentWinner->created_at)) : null
+                ] : null
             ];
         });
 
@@ -203,6 +218,14 @@ class PlayerController extends Controller
             \Log::info('Random players to fill gaps:', ['count' => $randomPlayers->count(), 'data' => $randomPlayers->toArray()]);
             
             $randomPlayersFormatted = $randomPlayers->map(function($player, $index) use ($playersWithMatches) {
+                // Get most recent tournament placement for random players too
+                $recentWinner = DB::table('winners')
+                    ->join('tournaments', 'winners.tournament_id', '=', 'tournaments.id')
+                    ->where('winners.player_id', $player->id)
+                    ->select('winners.position', 'winners.prize_amount', 'winners.level', 'tournaments.name as tournament_name', 'winners.created_at')
+                    ->orderBy('winners.created_at', 'desc')
+                    ->first();
+
                 return [
                     'rank' => $playersWithMatches->count() + $index + 1,
                     'id' => $player->id,
@@ -217,7 +240,14 @@ class PlayerController extends Controller
                     'leaderboard_points' => 0,
                     'profile_image' => $player->profile_image,
                     'member_since' => $player->created_at ? date('Y-m-d', strtotime($player->created_at)) : null,
-                    'performance_rating' => 0
+                    'performance_rating' => 0,
+                    'recent_tournament_placement' => $recentWinner ? [
+                        'position' => (int) $recentWinner->position,
+                        'tournament_name' => $recentWinner->tournament_name,
+                        'level' => $recentWinner->level,
+                        'prize_amount' => (float) ($recentWinner->prize_amount ?? 0),
+                        'date' => $recentWinner->created_at ? date('Y-m-d', strtotime($recentWinner->created_at)) : null
+                    ] : null
                 ];
             });
             
@@ -246,6 +276,158 @@ class PlayerController extends Controller
         
         \Log::info('Returning top players response count:', ['count' => count($response['data'])]);
         return response()->json($response);
+    }
+
+    /**
+     * Get main leaderboard with all players and their recent tournament placements
+     */
+    public function mainLeaderboard(Request $request)
+    {
+        \Log::info('Main leaderboard query starting...');
+        
+        // Get all users who have participated in completed matches (excluding admin)
+        $users = DB::table('users')
+            ->whereExists(function ($query) {
+                $query->select(DB::raw(1))
+                    ->from('matches')
+                    ->where('status', 'completed')
+                    ->where(function($q) {
+                        $q->whereColumn('matches.player_1_id', 'users.id')
+                          ->orWhereColumn('matches.player_2_id', 'users.id');
+                    });
+            })
+            ->where('email', '!=', 'admin@cuesports.com')
+            ->select('id', 'username', 'name', 'profile_image', 'community_id', 'created_at')
+            ->get();
+
+        $allPlayers = collect();
+
+        foreach ($users as $user) {
+            // Count wins - matches where this user is the winner
+            $wins = DB::table('matches')
+                ->where('winner_id', $user->id)
+                ->where('status', 'completed')
+                ->count();
+
+            // Count total matches - matches where this user participated
+            $totalMatches = DB::table('matches')
+                ->where('status', 'completed')
+                ->where(function($query) use ($user) {
+                    $query->where('player_1_id', $user->id)
+                          ->orWhere('player_2_id', $user->id);
+                })
+                ->count();
+
+            // Count tournament wins
+            $tournamentWins = DB::table('winners')
+                ->where('player_id', $user->id)
+                ->where('position', 1)
+                ->count();
+
+            // Count tournaments participated
+            $tournamentsParticipated = DB::table('winners')
+                ->where('player_id', $user->id)
+                ->distinct('tournament_id')
+                ->count();
+
+            // Calculate total prize money
+            $totalPrizeMoney = DB::table('winners')
+                ->where('player_id', $user->id)
+                ->sum('prize_amount') ?? 0;
+
+            // Calculate average points per match
+            $avgPointsQuery = DB::table('matches')
+                ->where('status', 'completed')
+                ->where(function($query) use ($user) {
+                    $query->where('player_1_id', $user->id)
+                          ->orWhere('player_2_id', $user->id);
+                })
+                ->selectRaw('AVG(CASE 
+                    WHEN player_1_id = ? THEN player_1_points 
+                    WHEN player_2_id = ? THEN player_2_points 
+                    END) as avg_points', [$user->id, $user->id])
+                ->first();
+            
+            $avgPointsPerMatch = $avgPointsQuery->avg_points ?? 0;
+
+            // Get most recent tournament placement for this player
+            $recentWinner = DB::table('winners')
+                ->join('tournaments', 'winners.tournament_id', '=', 'tournaments.id')
+                ->where('winners.player_id', $user->id)
+                ->select('winners.position', 'winners.prize_amount', 'winners.level', 'tournaments.name as tournament_name', 'winners.created_at')
+                ->orderBy('winners.created_at', 'desc')
+                ->first();
+
+            $playerData = (object) [
+                'id' => $user->id,
+                'username' => $user->username,
+                'name' => $user->name,
+                'profile_image' => $user->profile_image,
+                'community_id' => $user->community_id,
+                'created_at' => $user->created_at,
+                'wins' => $wins,
+                'total_matches' => $totalMatches,
+                'tournament_wins' => $tournamentWins,
+                'tournaments_participated' => $tournamentsParticipated,
+                'total_prize_money' => $totalPrizeMoney,
+                'avg_points_per_match' => $avgPointsPerMatch,
+                'leaderboard_points' => $wins * 10,
+                'recent_winner' => $recentWinner
+            ];
+
+            $allPlayers->push($playerData);
+        }
+
+        // Sort by leaderboard points, then wins, then tournament wins
+        $allPlayers = $allPlayers->sort(function($a, $b) {
+            // First compare by leaderboard points (higher is better)
+            if ($a->leaderboard_points != $b->leaderboard_points) {
+                return $b->leaderboard_points - $a->leaderboard_points;
+            }
+            
+            // Then by wins (higher is better)
+            if ($a->wins != $b->wins) {
+                return $b->wins - $a->wins;
+            }
+            
+            // Finally by tournament wins (higher is better)
+            return $b->tournament_wins - $a->tournament_wins;
+        })->values();
+
+        $leaderboardFormatted = $allPlayers->map(function($player, $index) {
+            $winRate = $player->total_matches > 0 ? 
+                round(($player->wins / $player->total_matches) * 100, 1) : 0;
+
+            return [
+                'rank' => $index + 1,
+                'id' => $player->id,
+                'name' => $player->name ?: $player->username,
+                'wins' => (int) $player->wins,
+                'total_matches' => (int) $player->total_matches,
+                'win_rate' => $winRate,
+                'tournament_wins' => (int) $player->tournament_wins,
+                'tournaments_participated' => (int) $player->tournaments_participated,
+                'total_prize_money' => (float) ($player->total_prize_money ?? 0),
+                'avg_points_per_match' => round((float) ($player->avg_points_per_match ?? 0), 1),
+                'leaderboard_points' => (int) $player->leaderboard_points,
+                'profile_image' => $player->profile_image,
+                'member_since' => $player->created_at ? date('Y-m-d', strtotime($player->created_at)) : null,
+                'performance_rating' => $this->calculatePerformanceRating($player),
+                'recent_tournament_placement' => $player->recent_winner ? [
+                    'position' => (int) $player->recent_winner->position,
+                    'tournament_name' => $player->recent_winner->tournament_name,
+                    'level' => $player->recent_winner->level,
+                    'prize_amount' => (float) ($player->recent_winner->prize_amount ?? 0),
+                    'date' => $player->recent_winner->created_at ? date('Y-m-d', strtotime($player->recent_winner->created_at)) : null
+                ] : null
+            ];
+        });
+
+        return response()->json([
+            'success' => true,
+            'data' => $leaderboardFormatted->toArray(),
+            'total_players' => $leaderboardFormatted->count()
+        ]);
     }
 
     /**

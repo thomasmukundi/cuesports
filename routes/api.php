@@ -172,7 +172,8 @@ Route::middleware('auth:api')->group(function () {
     Route::post('/logout-old', [App\Http\Controllers\AuthController::class, 'logout']);
     
     // Player Stats and Leaderboard
-    Route::get('/players/leaderboard', [App\Http\Controllers\PlayerController::class, 'leaderboard']);
+    Route::get('/players/leaderboard', [App\Http\Controllers\PlayerController::class, 'leaderboard']); // Top shooters (4 players)
+    Route::get('/players/main-leaderboard', [App\Http\Controllers\PlayerController::class, 'mainLeaderboard']); // Full leaderboard with tournament placements
     Route::get('/players/debug-leaderboard', [App\Http\Controllers\PlayerController::class, 'debugLeaderboard']);
     Route::get('/players/simple-leaderboard', [App\Http\Controllers\PlayerController::class, 'simpleLeaderboard']);
     Route::get('/players/top-shooters-detailed', [App\Http\Controllers\PlayerController::class, 'topShootersDetailed']);
