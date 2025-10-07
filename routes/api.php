@@ -58,6 +58,9 @@ Route::get('/debug/config', function() {
 // Complete registration after email verification (public)
 Route::post('/complete-registration', [App\Http\Controllers\CompleteRegistrationController::class, 'completeRegistration']);
 
+// Update FCM token after registration (authenticated)
+Route::post('/update-fcm-token', [App\Http\Controllers\CompleteRegistrationController::class, 'updateFcmToken'])->middleware('auth:api');
+
 // Public routes
 Route::post('/register-old', [App\Http\Controllers\AuthController::class, 'register']);
 Route::post('/login-old', [App\Http\Controllers\AuthController::class, 'login']);

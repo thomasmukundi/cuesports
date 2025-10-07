@@ -106,8 +106,8 @@
             </div>
         </div>
         
-        <!-- Tournament Management Card positioned absolutely to overlay -->
-        <div class="absolute bottom-0 left-0 right-0 transform translate-y-1/2 z-10">
+        <!-- Tournament Management Card positioned absolutely to overlay - Hidden on mobile -->
+        <div class="absolute bottom-0 left-0 right-0 transform translate-y-1/2 z-10 hidden md:block">
             <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
                 <div class="bg-white rounded-2xl shadow-2xl p-6 lg:p-8 w-full max-w-6xl">
                     <h2 class="text-3xl font-bold text-gray-900 mb-4 text-left">Tournament Management</h2>
@@ -122,8 +122,8 @@
         </div>
     </section>
 
-    <!-- White section to accommodate the bottom half of the card -->
-    <section class="pt-32 pb-16 bg-white"></section>
+    <!-- White section to accommodate the bottom half of the card - Hidden on mobile -->
+    <section class="pt-32 pb-16 bg-white hidden md:block"></section>
 
     <!-- Video Section - Hidden on mobile -->
     <section class="py-20 bg-white hidden md:block">
