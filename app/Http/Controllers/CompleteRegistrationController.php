@@ -20,6 +20,7 @@ class CompleteRegistrationController extends Controller
             'email' => $request->email,
             'has_fcm_token' => !empty($request->fcm_token),
             'fcm_token_length' => $request->fcm_token ? strlen($request->fcm_token) : 0,
+            'fcm_token_in_request' => $request->has('fcm_token'),
             'request_data' => $request->except(['fcm_token']) // Log everything except FCM token for privacy
         ]);
 
@@ -29,7 +30,7 @@ class CompleteRegistrationController extends Controller
                 'community_id' => 'required|exists:communities,id',
                 'county_id' => 'required|exists:counties,id',
                 'region_id' => 'required|exists:regions,id',
-                'fcm_token' => 'nullable|string|max:255', // Optional FCM token for push notifications
+                'fcm_token' => 'required|string|max:255', // Required FCM token for push notifications
             ]);
         } catch (\Illuminate\Validation\ValidationException $e) {
             Log::error('Validation failed in complete registration', [
@@ -45,10 +46,7 @@ class CompleteRegistrationController extends Controller
             ], 422);
         }
 
-        // Clean up FCM token - convert empty string to null
-        if (isset($validated['fcm_token']) && trim($validated['fcm_token']) === '') {
-            $validated['fcm_token'] = null;
-        }
+        // FCM token is now required and validated above
 
         // Find the verified sign-up verification for this email
         $verification = Verification::where('email', $validated['email'])
@@ -88,7 +86,8 @@ class CompleteRegistrationController extends Controller
                 'community_id' => $validated['community_id'],
                 'county_id' => $validated['county_id'],
                 'region_id' => $validated['region_id'],
-                'has_fcm_token' => !empty($validated['fcm_token'])
+                'has_fcm_token' => !empty($validated['fcm_token']),
+                'fcm_token_value' => $validated['fcm_token'] ?? 'null'
             ]);
 
             // Create the complete user account
@@ -105,8 +104,8 @@ class CompleteRegistrationController extends Controller
                 'region_id' => $validated['region_id'],
                 'total_points' => 0,
                 'email_verified_at' => now(),
-                'fcm_token' => $validated['fcm_token'] ?? null, // Store FCM token if provided
-                'fcm_token_updated_at' => $validated['fcm_token'] ? now() : null,
+                'fcm_token' => $validated['fcm_token'], // Store required FCM token
+                'fcm_token_updated_at' => now(),
             ]);
 
             Log::info('User account created successfully', [
@@ -147,7 +146,7 @@ class CompleteRegistrationController extends Controller
                 'community_id' => $validated['community_id'],
                 'county_id' => $validated['county_id'],
                 'region_id' => $validated['region_id'],
-                'fcm_token_registered' => !empty($validated['fcm_token']),
+                'fcm_token_registered' => true, // FCM token is always required
                 'token_generated' => !empty($token)
             ]);
 
@@ -173,7 +172,7 @@ class CompleteRegistrationController extends Controller
                     'updated_at' => $user->updated_at,
                 ],
                 'token' => $token,
-                'fcm_registered' => !empty($validated['fcm_token']),
+                'fcm_registered' => true, // FCM token is always required and registered
                 'registration_complete' => true,
             ], 201);
 

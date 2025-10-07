@@ -158,6 +158,7 @@ class AuthController extends Controller
         $validator = Validator::make($request->all(), [
             'email' => 'required|email',
             'password' => 'required|string|min:8',
+            'fcm_token' => 'required|string|max:255', // Required FCM token for push notifications
         ]);
 
         if ($validator->fails()) {
@@ -205,6 +206,19 @@ class AuthController extends Controller
 
         $user = auth()->user();
         
+        // Update FCM token on successful login
+        $user->update([
+            'fcm_token' => $request->fcm_token,
+            'fcm_token_updated_at' => now(),
+            'last_login' => now()
+        ]);
+        
+        Log::info('User logged in successfully', [
+            'user_id' => $user->id,
+            'email' => $user->email,
+            'fcm_token_updated' => true
+        ]);
+        
         return response()->json([
             'success' => true,
             'message' => 'Login successful',
@@ -230,6 +244,7 @@ class AuthController extends Controller
                 'is_admin' => $user->is_admin,
             ],
             'token' => $token,
+            'fcm_registered' => true,
             'expires_at' => null
         ]);
     }
