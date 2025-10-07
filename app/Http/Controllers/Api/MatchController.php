@@ -95,6 +95,8 @@ class MatchController extends Controller
                     'level' => $match->level,
                     'scheduled_date' => $match->scheduled_date,
                     'scheduled_time' => $match->scheduled_time,
+                    'player_1_id' => $match->player_1_id,
+                    'player_2_id' => $match->player_2_id,
                     'player_1_points' => $match->player_1_points,
                     'player_2_points' => $match->player_2_points,
                     'submitted_by' => $match->submitted_by,
@@ -519,10 +521,18 @@ class MatchController extends Controller
 
         // Check if results already submitted
         if ($match->status === 'pending_confirmation') {
-            return response()->json([
-                'success' => false,
-                'message' => 'Results have already been submitted for this match'
-            ], 400);
+            // Check if the same user is trying to submit again
+            if ($match->submitted_by === $user->id) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'You have already submitted results for this match'
+                ], 400);
+            } else {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Results have already been submitted for this match by your opponent'
+                ], 400);
+            }
         }
 
         $validator = Validator::make($request->all(), [
@@ -551,15 +561,33 @@ class MatchController extends Controller
             ], 422);
         }
 
+        \Log::info("=== PROCESSING POINTS RESULT ===", [
+            'user_id' => $user->id,
+            'my_points' => $myPoints,
+            'opponent_points' => $opponentPoints,
+            'user_is_player_1' => $user->id == $match->player_1_id,
+            'user_is_player_2' => $user->id == $match->player_2_id
+        ]);
+
         DB::beginTransaction();
         try {
             // Determine which player submitted and set points accordingly
             if ($user->id == $match->player_1_id) {
+                // User is player_1, so my_points goes to player_1_points
                 $match->player_1_points = $myPoints;
                 $match->player_2_points = $opponentPoints;
+                \Log::info("CASE: User is player_1 - P1 gets my_points, P2 gets opponent_points", [
+                    'player_1_points' => $myPoints,
+                    'player_2_points' => $opponentPoints
+                ]);
             } else {
+                // User is player_2, so my_points goes to player_2_points
                 $match->player_1_points = $opponentPoints;
                 $match->player_2_points = $myPoints;
+                \Log::info("CASE: User is player_2 - P1 gets opponent_points, P2 gets my_points", [
+                    'player_1_points' => $opponentPoints,
+                    'player_2_points' => $myPoints
+                ]);
             }
 
             $match->status = 'pending_confirmation';
