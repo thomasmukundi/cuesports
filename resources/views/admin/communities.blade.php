@@ -6,11 +6,11 @@
 @section('content')
 <div class="content-card">
     <div class="card-header">
-        <h3 class="card-title">Communities</h3>
+        <h3 class="card-title">Communities - {{ $communities->total() }}</h3>
         <div class="d-flex gap-2">
-            <button type="button" class="btn btn-warning" onclick="replaceCommunitiesWithWards()" title="Replace communities with wards from wards.txt">
+            <!-- <button type="button" class="btn btn-warning" onclick="replaceCommunitiesWithWards()" title="Replace communities with wards from wards.txt">
                 <i class="fas fa-sync-alt me-1"></i>Replace with Wards
-            </button>
+            </button> -->
             <a href="{{ route('admin.communities.create') }}" class="btn btn-primary">
                 <i class="fas fa-plus me-1"></i>Add Community
             </a>

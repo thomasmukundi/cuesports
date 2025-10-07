@@ -402,7 +402,7 @@
                 <div class="nav-item">
                     <a class="nav-link {{ request()->routeIs('admin.communities*') ? 'active' : '' }}" href="{{ route('admin.communities') }}">
                         <i class="fas fa-users-cog"></i>
-                        Communities ({{ \App\Models\Community::count() }})
+                        Communities
                     </a>
                 </div>
                 <div class="nav-item">
