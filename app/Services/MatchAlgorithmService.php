@@ -2624,10 +2624,13 @@ class MatchAlgorithmService
         DB::beginTransaction();
         try {
             // Get all registered players for the tournament
-            $players = $tournament->registeredUsers()
+            $allRegisteredPlayers = $tournament->registeredUsers()
                 ->wherePivot('payment_status', 'paid')
                 ->wherePivot('status', 'approved')
                 ->get();
+
+            // Filter players based on tournament's area scope
+            $players = $this->filterPlayersByTournamentScope($allRegisteredPlayers, $tournament);
 
             if ($players->isEmpty()) {
                 throw new \Exception("No eligible players found for special tournament");
@@ -2746,6 +2749,30 @@ class MatchAlgorithmService
         }
 
         return $matches;
+    }
+
+    /**
+     * Filter players based on tournament's area scope
+     */
+    private function filterPlayersByTournamentScope($players, Tournament $tournament)
+    {
+        // If no area scope, return all players (national tournaments)
+        if (!$tournament->area_scope || $tournament->area_scope === 'national') {
+            return $players;
+        }
+
+        return $players->filter(function ($player) use ($tournament) {
+            switch ($tournament->area_scope) {
+                case 'community':
+                    return $player->community && $player->community->name === $tournament->area_name;
+                case 'county':
+                    return $player->county && $player->county->name === $tournament->area_name;
+                case 'region':
+                    return $player->region && $player->region->name === $tournament->area_name;
+                default:
+                    return false;
+            }
+        });
     }
 
     /**

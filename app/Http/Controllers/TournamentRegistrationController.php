@@ -6,6 +6,9 @@ use App\Models\Tournament;
 use App\Models\User;
 use App\Models\Notification;
 use App\Models\Transaction;
+use App\Models\Community;
+use App\Models\County;
+use App\Models\Region;
 use App\Services\TinyPesaService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -31,6 +34,9 @@ class TournamentRegistrationController extends Controller
                 $q->whereNull('registration_deadline')
                   ->orWhere('registration_deadline', '>', now());
             });
+        
+        // Apply location-based filtering
+        $this->applyLocationFilter($query, $user);
         
         // Filter by area scope if applicable
         if ($request->has('scope')) {
@@ -258,25 +264,62 @@ class TournamentRegistrationController extends Controller
     }
 
     /**
+     * Apply location-based filtering for tournaments
+     */
+    private function applyLocationFilter($query, $user)
+    {
+        // Get user's location information
+        $userCommunity = $user->community_id ? $user->community : null;
+        $userCounty = $user->county_id ? $user->county : null;
+        $userRegion = $user->region_id ? $user->region : null;
+
+        $query->where(function ($q) use ($user, $userCommunity, $userCounty, $userRegion) {
+            // Show national tournaments (including special national tournaments)
+            $q->where('area_scope', 'national')
+              ->orWhereNull('area_scope');
+
+            // Show community tournaments if user is in that community
+            if ($userCommunity) {
+                $q->orWhere(function ($subQ) use ($userCommunity) {
+                    $subQ->where('area_scope', 'community')
+                         ->where('area_name', $userCommunity->name);
+                });
+            }
+
+            // Show county tournaments (including special county tournaments) if user is in that county
+            if ($userCounty) {
+                $q->orWhere(function ($subQ) use ($userCounty) {
+                    $subQ->where('area_scope', 'county')
+                         ->where('area_name', $userCounty->name);
+                });
+            }
+
+            // Show regional tournaments (including special regional tournaments) if user is in that region
+            if ($userRegion) {
+                $q->orWhere(function ($subQ) use ($userRegion) {
+                    $subQ->where('area_scope', 'regional')
+                         ->where('area_name', $userRegion->name);
+                });
+            }
+        });
+    }
+
+    /**
      * Check eligibility based on area scope
      */
     private function checkEligibility(User $user, Tournament $tournament)
     {
-        if ($tournament->special) {
-            return true; // Special tournaments are open to all
-        }
-        
         if (!$tournament->area_scope) {
             return true; // No area restriction
         }
         
         switch ($tournament->area_scope) {
             case 'community':
-                return $user->community->name === $tournament->area_name;
+                return $user->community && $user->community->name === $tournament->area_name;
             case 'county':
-                return $user->county->name === $tournament->area_name;
+                return $user->county && $user->county->name === $tournament->area_name;
             case 'region':
-                return $user->region->name === $tournament->area_name;
+                return $user->region && $user->region->name === $tournament->area_name;
             case 'national':
                 return true; // National is open to all
             default:

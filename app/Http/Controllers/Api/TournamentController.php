@@ -93,9 +93,8 @@ class TournamentController extends Controller
         $userRegion = $user->region_id ? Region::find($user->region_id) : null;
 
         $query->where(function ($q) use ($user, $userCommunity, $userCounty, $userRegion) {
-            // Always show special tournaments and national tournaments
-            $q->where('special', true)
-              ->orWhere('area_scope', 'national')
+            // Show national tournaments (including special national tournaments)
+            $q->where('area_scope', 'national')
               ->orWhereNull('area_scope');
 
             // Show community tournaments if user is in that community
@@ -106,7 +105,7 @@ class TournamentController extends Controller
                 });
             }
 
-            // Show county tournaments if user is in that county
+            // Show county tournaments (including special county tournaments) if user is in that county
             if ($userCounty) {
                 $q->orWhere(function ($subQ) use ($userCounty) {
                     $subQ->where('area_scope', 'county')
@@ -114,7 +113,7 @@ class TournamentController extends Controller
                 });
             }
 
-            // Show regional tournaments if user is in that region
+            // Show regional tournaments (including special regional tournaments) if user is in that region
             if ($userRegion) {
                 $q->orWhere(function ($subQ) use ($userRegion) {
                     $subQ->where('area_scope', 'regional')

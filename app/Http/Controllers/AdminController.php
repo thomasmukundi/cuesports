@@ -10,6 +10,7 @@ use App\Models\Community;
 use App\Models\Region;
 use App\Models\County;
 use App\Models\Winner;
+use App\Models\Notification;
 use App\Services\EmailService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -1153,6 +1154,9 @@ class AdminController extends Controller
                 'emails_failed' => $results['failed']
             ]);
 
+            // Send push notifications to eligible users
+            $this->sendTournamentPushNotifications($tournament);
+
         } catch (\Exception $e) {
             \Log::error('❌ Failed to send tournament announcement emails', [
                 'tournament_id' => $tournament->id,
@@ -1228,6 +1232,129 @@ class AdminController extends Controller
         ]);
 
         return $recipients;
+    }
+
+    /**
+     * Send push notifications for tournament announcement
+     */
+    private function sendTournamentPushNotifications(Tournament $tournament)
+    {
+        try {
+            // Get eligible users for push notifications (similar logic to email recipients)
+            $query = User::select('id', 'name', 'fcm_token')
+                ->whereNotNull('fcm_token')
+                ->where('fcm_token', '!=', '')
+                ->where(function($q) {
+                    $q->where('is_admin', '!=', true)
+                      ->orWhereNull('is_admin');
+                });
+
+            // Apply area scope filtering
+            if (!$tournament->special && $tournament->area_scope && $tournament->area_scope !== 'national') {
+                if ($tournament->area_scope === 'community' && $tournament->area_name) {
+                    $community = Community::where('name', $tournament->area_name)->first();
+                    if ($community) {
+                        $query->where('community_id', $community->id);
+                    } else {
+                        \Log::warning('Community not found for tournament push notifications', [
+                            'tournament_id' => $tournament->id,
+                            'area_name' => $tournament->area_name
+                        ]);
+                        return;
+                    }
+                } elseif ($tournament->area_scope === 'county' && $tournament->area_name) {
+                    $county = County::where('name', $tournament->area_name)->first();
+                    if ($county) {
+                        $query->where('county_id', $county->id);
+                    } else {
+                        \Log::warning('County not found for tournament push notifications', [
+                            'tournament_id' => $tournament->id,
+                            'area_name' => $tournament->area_name
+                        ]);
+                        return;
+                    }
+                } elseif ($tournament->area_scope === 'regional' && $tournament->area_name) {
+                    $region = Region::where('name', $tournament->area_name)->first();
+                    if ($region) {
+                        $query->where('region_id', $region->id);
+                    } else {
+                        \Log::warning('Region not found for tournament push notifications', [
+                            'tournament_id' => $tournament->id,
+                            'area_name' => $tournament->area_name
+                        ]);
+                        return;
+                    }
+                }
+            }
+
+            $eligibleUsers = $query->get();
+
+            if ($eligibleUsers->isEmpty()) {
+                \Log::info('📱 No eligible users with FCM tokens for tournament push notifications', [
+                    'tournament_id' => $tournament->id,
+                    'tournament_name' => $tournament->name,
+                    'area_scope' => $tournament->area_scope,
+                    'area_name' => $tournament->area_name
+                ]);
+                return;
+            }
+
+            \Log::info('📱 Starting tournament push notifications', [
+                'tournament_id' => $tournament->id,
+                'tournament_name' => $tournament->name,
+                'total_users' => $eligibleUsers->count(),
+                'area_scope' => $tournament->area_scope,
+                'area_name' => $tournament->area_name
+            ]);
+
+            $notificationsSent = 0;
+            $notificationsFailed = 0;
+
+            foreach ($eligibleUsers as $user) {
+                try {
+                    // Create notification in database
+                    Notification::create([
+                        'player_id' => $user->id,
+                        'type' => 'tournament_announcement',
+                        'message' => "🏆 New tournament '{$tournament->name}' is now open for registration!",
+                        'data' => [
+                            'tournament_id' => $tournament->id,
+                            'tournament_name' => $tournament->name,
+                            'area_scope' => $tournament->area_scope,
+                            'area_name' => $tournament->area_name,
+                            'registration_deadline' => $tournament->registration_deadline,
+                            'start_date' => $tournament->start_date,
+                            'entry_fee' => $tournament->entry_fee ?? 0
+                        ]
+                    ]);
+
+                    $notificationsSent++;
+                } catch (\Exception $e) {
+                    $notificationsFailed++;
+                    \Log::error('Failed to create tournament notification for user', [
+                        'user_id' => $user->id,
+                        'tournament_id' => $tournament->id,
+                        'error' => $e->getMessage()
+                    ]);
+                }
+            }
+
+            \Log::info('📱 Tournament push notifications completed', [
+                'tournament_id' => $tournament->id,
+                'tournament_name' => $tournament->name,
+                'notifications_sent' => $notificationsSent,
+                'notifications_failed' => $notificationsFailed,
+                'total_users' => $eligibleUsers->count()
+            ]);
+
+        } catch (\Exception $e) {
+            \Log::error('❌ Failed to send tournament push notifications', [
+                'tournament_id' => $tournament->id,
+                'tournament_name' => $tournament->name,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+        }
     }
 
     public function logout(Request $request)
