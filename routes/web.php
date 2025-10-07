@@ -90,6 +90,7 @@ Route::prefix('admin')->middleware(['auth'])->group(function () {
     Route::put('/communities/{community}', [AdminController::class, 'updateCommunity'])->name('admin.communities.update');
     Route::delete('/communities/{community}', [AdminController::class, 'deleteCommunity'])->name('admin.communities.delete');
     Route::get('/communities/{community}', [AdminController::class, 'viewCommunity'])->name('admin.communities.view');
+    Route::post('/communities/replace-with-wards', [AdminController::class, 'replaceCommunitiesWithWards'])->name('admin.communities.replace-with-wards');
     
     Route::get('/matches', [AdminController::class, 'matches'])->name('admin.matches');
     Route::delete('/matches/{match}', [AdminController::class, 'deleteMatch'])->name('admin.matches.destroy');

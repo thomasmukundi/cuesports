@@ -711,6 +711,138 @@ class AdminController extends Controller
         }
     }
 
+    public function replaceCommunitiesWithWards(Request $request)
+    {
+        // Check admin privileges
+        if (!auth()->user() || !auth()->user()->is_admin) {
+            return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
+        }
+
+        try {
+            DB::beginTransaction();
+            
+            // Read wards.txt file from root directory
+            $wardsFilePath = base_path('wards.txt');
+            if (!file_exists($wardsFilePath)) {
+                return response()->json(['success' => false, 'message' => 'wards.txt file not found in root directory'], 404);
+            }
+            
+            $wardsContent = file_get_contents($wardsFilePath);
+            $lines = explode("\n", $wardsContent);
+            
+            // Parse wards data
+            $wardsData = [];
+            $currentCounty = null;
+            
+            foreach ($lines as $line) {
+                $line = trim($line);
+                if (empty($line) || $line === '--------------------------------------------------' || $line === 'Wards:') {
+                    continue;
+                }
+                
+                if (strpos($line, 'County:') === 0) {
+                    $currentCounty = trim(str_replace('County:', '', $line));
+                } elseif (strpos($line, '- ') === 0 && $currentCounty) {
+                    $ward = trim(str_replace('- ', '', $line));
+                    if (!isset($wardsData[$currentCounty])) {
+                        $wardsData[$currentCounty] = [];
+                    }
+                    $wardsData[$currentCounty][] = $ward;
+                }
+            }
+            
+            // Get communities that have players
+            $communitiesWithPlayers = Community::whereHas('users')->pluck('id')->toArray();
+            
+            // Delete communities without players
+            $deletedCount = Community::whereNotIn('id', $communitiesWithPlayers)->delete();
+            
+            // Create new communities from wards
+            $createdCount = 0;
+            $preservedCount = count($communitiesWithPlayers);
+            
+            foreach ($wardsData as $countyName => $wards) {
+                // Find county by name (case-insensitive and handle variations)
+                $county = County::whereRaw('UPPER(name) = ?', [strtoupper($countyName)])->first();
+                
+                // Handle common name variations
+                if (!$county) {
+                    $variations = [
+                        'TAITA TAVETA' => 'Taita Taveta',
+                        'TRANS NZOIA' => 'Trans-Nzoia',
+                        'ELGEYO/MARAKWET' => 'Elgeyo-Marakwet',
+                        'THARAKA-NITHI' => 'Tharaka-Nithi',
+                        'WEST POKOT' => 'West Pokot',
+                        'UASIN GISHU' => 'Uasin Gishu',
+                        'MURANG\'A' => 'Murang\'a',
+                        'HOMA BAY' => 'Homa Bay',
+                        'TANA RIVER' => 'Tana River'
+                    ];
+                    
+                    if (isset($variations[$countyName])) {
+                        $county = County::where('name', $variations[$countyName])->first();
+                    }
+                }
+                
+                if (!$county) {
+                    \Log::warning("County not found: {$countyName}");
+                    continue;
+                }
+                
+                foreach ($wards as $ward) {
+                    // Check if ward community already exists
+                    $existingCommunity = Community::where('name', $ward)
+                        ->where('county_id', $county->id)
+                        ->first();
+                    
+                    if (!$existingCommunity) {
+                        Community::create([
+                            'name' => $ward,
+                            'county_id' => $county->id,
+                            'region_id' => $county->region_id,
+                            'created_at' => now(),
+                            'updated_at' => now(),
+                        ]);
+                        $createdCount++;
+                    }
+                }
+            }
+            
+            DB::commit();
+            
+            // Log the action
+            \Log::info('Communities replaced with wards', [
+                'admin_user' => auth()->user()->email,
+                'deleted_count' => $deletedCount,
+                'created_count' => $createdCount,
+                'preserved_count' => $preservedCount,
+                'total_counties_processed' => count($wardsData),
+                'counties_found' => array_keys($wardsData)
+            ]);
+            
+            return response()->json([
+                'success' => true,
+                'message' => 'Communities successfully replaced with wards',
+                'deleted_count' => $deletedCount,
+                'created_count' => $createdCount,
+                'preserved_count' => $preservedCount
+            ]);
+            
+        } catch (\Exception $e) {
+            DB::rollback();
+            \Log::error('Error replacing communities with wards: ' . $e->getMessage(), [
+                'admin_user' => auth()->user()->email ?? 'unknown',
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+            
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to replace communities with wards: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
     public function transactions(Request $request)
     {
         // Check admin privileges

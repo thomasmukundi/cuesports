@@ -7,9 +7,14 @@
 <div class="content-card">
     <div class="card-header">
         <h3 class="card-title">Communities</h3>
-        <a href="{{ route('admin.communities.create') }}" class="btn btn-primary">
-            <i class="fas fa-plus me-1"></i>Add Community
-        </a>
+        <div class="d-flex gap-2">
+            <button type="button" class="btn btn-warning" onclick="replaceCommunitiesWithWards()" title="Replace communities with wards from wards.txt">
+                <i class="fas fa-sync-alt me-1"></i>Replace with Wards
+            </button>
+            <a href="{{ route('admin.communities.create') }}" class="btn btn-primary">
+                <i class="fas fa-plus me-1"></i>Add Community
+            </a>
+        </div>
     </div>
     <div class="card-body">
         <!-- Filters -->
@@ -101,4 +106,44 @@
         @endif
     </div>
 </div>
+
+<script>
+function replaceCommunitiesWithWards() {
+    if (!confirm('This will delete all communities that have no players and replace them with wards from wards.txt. Communities with players will be preserved. Are you sure you want to continue?')) {
+        return;
+    }
+    
+    // Show loading state
+    const button = event.target.closest('button');
+    const originalText = button.innerHTML;
+    button.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Processing...';
+    button.disabled = true;
+    
+    fetch('{{ route("admin.communities.replace-with-wards") }}', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRF-TOKEN': '{{ csrf_token() }}'
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert(`Success! ${data.message}\n\nDeleted: ${data.deleted_count} communities\nCreated: ${data.created_count} ward communities\nPreserved: ${data.preserved_count} communities with players`);
+            location.reload();
+        } else {
+            alert('Error: ' + data.message);
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('An error occurred while processing the request.');
+    })
+    .finally(() => {
+        // Restore button state
+        button.innerHTML = originalText;
+        button.disabled = false;
+    });
+}
+</script>
 @endsection
