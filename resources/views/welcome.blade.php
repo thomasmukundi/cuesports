@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>CueSports Kenya - Pool Tournament Management</title>
+    <title>CueSports Africa - Pool Tournament Management</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
         tailwind.config = {
@@ -27,7 +27,7 @@
             <div class="flex justify-between h-16">
                 <div class="flex items-center">
                     <div class="flex-shrink-0">
-                        <h1 id="nav-logo" class="text-2xl font-bold text-white transition-colors duration-300">CueSports Kenya</h1>
+                        <h1 id="nav-logo" class="text-2xl font-bold text-white transition-colors duration-300">CueSports Africa</h1>
                     </div>
                 </div>
                 <div class="hidden md:flex items-center space-x-8">
@@ -63,13 +63,13 @@
             <div class="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
                 <div class="text-white">
                     <h1 class="text-5xl lg:text-6xl font-bold mb-6">
-                        Kenya's Premier<br>
+                        Africa's Premier<br>
                         <span class="text-green-400">Pool Tournament</span><br>
                         Management System
                     </h1>
                     <p class="text-xl mb-8 text-gray-300">
-                        Join Kenya's comprehensive pool tournament ecosystem. Compete with players nationwide, 
-                        develop your career, and be part of a thriving pool culture across the country.
+                        Join Africa's comprehensive pool tournament ecosystem. Compete with players across the continent, 
+                        develop your career, and be part of a thriving pool culture across Africa.
                     </p>
                     <div class="mb-8">
                         <p class="text-lg mb-4">Get the app</p>
@@ -88,12 +88,19 @@
                                     <div class="text-lg font-semibold">Google Play</div>
                                 </div>
                             </a>
+                            <a href="https://www.seroxideentertainment.co.ke/tickets/spotbot/download.php" class="md:hidden bg-green-600 text-white px-6 py-3 rounded-lg flex items-center justify-center hover:bg-green-700 transition duration-300">
+                                <i class="fas fa-download mr-3 text-xl"></i>
+                                <div>
+                                    <div class="text-xs">Download</div>
+                                    <div class="text-lg font-semibold">Directly</div>
+                                </div>
+                            </a>
                         </div>
                     </div>
                 </div>
-                <div class="relative z-20">
+                <div class="relative z-20 hidden md:block">
                     <img src="https://themewagon.github.io/NextJS-Tailwind-App-Presentation-Page/image/iphones.png" 
-                         alt="CueSports Kenya Mobile App" 
+                         alt="CueSports Africa Mobile App" 
                          class="w-full max-w-lg mx-auto">
                 </div>
             </div>
@@ -108,7 +115,7 @@
                         Experience seamless tournament organization with our comprehensive management system. 
                         From community level to national championships, we've got you covered. Our ecosystem offers 
                         structured career pathways, professional development opportunities, smart player pairing, real-time match updates, 
-                        and comprehensive performance tracking to help build Kenya's thriving pool culture and create sustainable careers for talented players.
+                        and comprehensive performance tracking to help build Africa's thriving pool culture and create sustainable careers for talented players.
                     </p>
                 </div>
             </div>
@@ -118,8 +125,8 @@
     <!-- White section to accommodate the bottom half of the card -->
     <section class="pt-32 pb-16 bg-white"></section>
 
-    <!-- Video Section -->
-    <section class="py-20 bg-white">
+    <!-- Video Section - Hidden on mobile -->
+    <section class="py-20 bg-white hidden md:block">
         <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
             <div class="bg-black rounded-2xl overflow-hidden relative" style="padding-bottom: 35%; height: 0;">
                 <div class="absolute inset-0 flex items-center justify-center">
@@ -141,7 +148,7 @@
                 <p class="text-cue-green font-semibold mb-2">POOL MANAGEMENT ECOSYSTEM</p>
                 <h2 class="text-4xl font-bold text-gray-900 mb-4">Comprehensive Career Development System</h2>
                 <p class="text-xl text-gray-600 max-w-3xl mx-auto">
-                    Everything you need to build a career in pool sports across Kenya. 
+                    Everything you need to build a career in pool sports across Africa. 
                     From community tournaments to professional opportunities, we provide the complete ecosystem for player development.
                 </p>
             </div>
@@ -164,7 +171,7 @@
                     </div>
                     <h3 class="text-xl font-bold text-gray-900 mb-2">Community Building</h3>
                     <p class="text-gray-600">
-                        Connect with pool players nationwide and build lasting relationships within Kenya's 
+                        Connect with pool players across the continent and build lasting relationships within Africa's 
                         growing pool community and culture.
                     </p>
                 </div>
@@ -187,7 +194,7 @@
                     <h3 class="text-xl font-bold text-gray-900 mb-2">Career Opportunities</h3>
                     <p class="text-gray-600">
                         Access coaching programs, sponsorship opportunities, and multiple career paths 
-                        within Kenya's expanding pool sports ecosystem.
+                        within Africa's expanding pool sports ecosystem.
                     </p>
                 </div>
             </div>
@@ -198,7 +205,7 @@
     <section class="py-20 bg-gray-50">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div class="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
-                <div class="order-2 lg:order-1">
+                <div class="order-2 lg:order-1 hidden md:block">
                     <img src="https://themewagon.github.io/NextJS-Tailwind-App-Presentation-Page/image/iphone.png" 
                          alt="Mobile App Stats" 
                          class="w-full max-w-md mx-auto">
@@ -243,7 +250,7 @@
                 <h2 class="text-4xl font-bold text-gray-900 mb-4">What Players Say</h2>
                 <p class="text-xl text-gray-600 max-w-3xl mx-auto">
                     Discover what our valued players have to say about their experiences with 
-                    CueSports Kenya. We take pride in delivering exceptional tournament management.
+                    CueSports Africa. We take pride in delivering exceptional tournament management.
                 </p>
             </div>
             
@@ -293,7 +300,7 @@
             <div class="text-center mb-16">
                 <h2 class="text-4xl font-bold text-gray-900 mb-4">Frequently Asked Questions</h2>
                 <p class="text-xl text-gray-600">
-                    Get answers to common questions about participating in CueSports Kenya tournaments.
+                    Get answers to common questions about participating in CueSports Africa tournaments.
                 </p>
             </div>
             
@@ -334,10 +341,10 @@
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div class="grid grid-cols-1 md:grid-cols-2 gap-12">
                 <div>
-                    <h3 class="text-2xl font-bold mb-4">CueSports Kenya</h3>
+                    <h3 class="text-2xl font-bold mb-4">CueSports Africa</h3>
                     <p class="text-gray-300 mb-6">
-                        Kenya's premier pool tournament management platform. 
-                        Connecting players nationwide through organized competition.
+                        Africa's premier pool tournament management platform. 
+                        Connecting players across the continent through organized competition.
                     </p>
                     <div class="flex space-x-4">
                         <a href="#" class="text-gray-300 hover:text-white transition duration-300">
@@ -372,6 +379,13 @@
                                 <div class="text-lg font-semibold">Google Play</div>
                             </div>
                         </a>
+                        <a href="https://www.seroxideentertainment.co.ke/tickets/spotbot/download.php" class="md:hidden bg-green-600 text-white px-6 py-3 rounded-lg flex items-center hover:bg-green-700 transition duration-300 w-fit">
+                            <i class="fas fa-download mr-3 text-xl"></i>
+                            <div>
+                                <div class="text-xs">Download</div>
+                                <div class="text-lg font-semibold">Directly</div>
+                            </div>
+                        </a>
                     </div>
                 </div>
             </div>
@@ -385,7 +399,7 @@
                         <a href="#" class="text-gray-300 hover:text-white transition duration-300">Contact</a>
                     </div>
                     <p class="text-gray-400 text-sm">
-                        © 2024 CueSports Kenya. All rights reserved.
+                        © 2025 CueSports Africa. All rights reserved.
                     </p>
                 </div>
             </div>
