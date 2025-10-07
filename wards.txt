@@ -1,0 +1,1636 @@
+
+County: BARINGO
+Wards:
+ - Tirioko
+ - Kolowa
+ - Ribkwo
+ - Silale
+ - Loiyamorock
+ - Tangulbei/korossi
+ - Churo/amaya
+ - Barwessa
+ - Kabartonjo
+ - Saimo/kipsaraman
+ - Saimo/soi
+ - Bartabwa
+ - Kabarnet
+ - Sacho
+ - Tenges
+ - Ewalel chapchap
+ - Kapropita
+ - Marigat
+ - Ilchamus
+ - Mochongoi
+ - Mukutani
+ - Mogotio
+ - Emining
+ - Kisanana
+ - Lembus
+ - Lembus kwen
+ - Ravine
+ - Mumberes/maji mazuri
+ - Lembus/perkerra
+ - Koibatek
+--------------------------------------------------
+
+County: BOMET
+Wards:
+ - Ndanai/abosi
+ - Chemagel
+ - Kipsonoi
+ - Kapletundo
+ - Rongena/manaret
+ - Kong'asis
+ - Nyangores
+ - Sigor
+ - Chebunyo
+ - Siongiroi
+ - Merigi
+ - Kembu
+ - Longisa
+ - Kipreres
+ - Chemaner
+ - Silibwet township
+ - Ndaraweta
+ - Singorwet
+ - Chesoen
+ - Mutarakwa
+ - Chepchabas
+ - Kimulot
+ - Mogogosiek
+ - Boito
+ - Embomos
+--------------------------------------------------
+
+County: BUNGOMA
+Wards:
+ - Cheptais
+ - Chesikaki
+ - Chepyuk
+ - Kapkateny
+ - Kaptama
+ - Elgon
+ - Namwela
+ - Malakisi/south kulisiru
+ - Lwandanyi
+ - Kabuchai/chwele
+ - West nalondo
+ - Bwake/luuya
+ - Mukuyuni
+ - South bukusu
+ - Bumula
+ - Khasoko
+ - Kabula
+ - Kimaeti
+ - West bukusu
+ - Siboti
+ - Bukembe west
+ - Bukembe east
+ - Township
+ - Khalaba
+ - Musikoma
+ - East sang'alo
+ - Marakaru/tuuti
+ - Sang'alo west
+ - Mihuu
+ - Ndivisi
+ - Maraka
+ - Misikhu
+ - Sitikho
+ - Matulo
+ - Bokoli
+ - Kimilili
+ - Kibingei
+ - Maeni
+ - Kamukuywa
+ - Mbakalo
+ - Naitiri/kabuyefwe
+ - Milima
+ - Ndalu/ tabani
+ - Tongaren
+ - Soysambu/ mitua
+--------------------------------------------------
+
+County: BUSIA
+Wards:
+ - Malaba central
+ - Malaba north
+ - Ang'urai south
+ - Ang'urai north
+ - Ang'urai east
+ - Malaba south
+ - Ang'orom
+ - Chakol south
+ - Chakol north
+ - Amukura west
+ - Amukura east
+ - Amukura central
+ - Nambale township
+ - Bukhayo north/waltsi
+ - Bukhayo east
+ - Bukhayo central
+ - Bukhayo west
+ - Mayenje
+ - Matayos south
+ - Busibwabo
+ - Burumba
+ - Marachi west
+ - Kingandole
+ - Marachi central
+ - Marachi east
+ - Marachi north
+ - Elugulu
+ - Namboboto nambuku
+ - Nangina
+ - Ageng'a nanguba
+ - Bwiri
+ - Bunyala central
+ - Bunyala north
+ - Bunyala west
+ - Bunyala south
+--------------------------------------------------
+
+County: ELGEYO/MARAKWET
+Wards:
+ - Kapyego
+ - Sambirir
+ - Endo
+ - Embobut / embulot
+ - Lelan
+ - Sengwer
+ - Cherang'any/chebororwa
+ - Moiben/kuserwo
+ - Kapsowar
+ - Arror
+ - Emsoo
+ - Kamariny
+ - Kapchemutwa
+ - Tambach
+ - Kaptarakwa
+ - Chepkorio
+ - Soy north
+ - Soy south
+ - Kabiemit
+ - Metkei
+--------------------------------------------------
+
+County: EMBU
+Wards:
+ - Ruguru/ngandori
+ - Kithimu
+ - Nginda
+ - Mbeti north
+ - Kirimari
+ - Gaturi south
+ - Gaturi north
+ - Kagaari south
+ - Central  ward
+ - Kagaari north
+ - Kyeni north
+ - Kyeni south
+ - Mwea
+ - Makima
+ - Mbeti south
+ - Mavuria
+ - Kiambere
+ - Nthawa
+ - Muminji
+ - Evurore
+--------------------------------------------------
+
+County: GARISSA
+Wards:
+ - Waberi
+ - Galbet
+ - Township
+ - Iftin
+ - Balambala
+ - Danyere
+ - Jara jara
+ - Saka
+ - Sankuri
+ - Modogashe
+ - Benane
+ - Goreale
+ - Maalimin
+ - Sabena
+ - Baraki
+ - Dertu
+ - Dadaab
+ - Labasigale
+ - Damajale
+ - Liboi
+ - Abakaile
+ - Bura
+ - Dekaharia
+ - Jarajila
+ - Fafi
+ - Nanighi
+ - Hulugho
+ - Sangailu
+ - Ijara
+ - Masalani
+--------------------------------------------------
+
+County: HOMA BAY
+Wards:
+ - West kasipul
+ - South kasipul
+ - Central kasipul
+ - East kamagak
+ - West kamagak
+ - Kabondo east
+ - Kabondo west
+ - Kokwanyo/kakelo
+ - Kojwach
+ - West karachuonyo
+ - North karachuonyo
+ - Central
+ - Kanyaluo
+ - Kibiri
+ - Wangchieng
+ - Kendu bay town
+ - West gem
+ - East gem
+ - Kagan
+ - Kochia
+ - Homa bay central
+ - Homa bay arujo
+ - Homa bay west
+ - Homa bay east
+ - Kwabwai
+ - Kanyadoto
+ - Kanyikela
+ - North kabuoch
+ - Kabuoch south/pala
+ - Kanyamwa kologi
+ - Kanyamwa kosewe
+ - Mfangano island
+ - Rusinga island
+ - Kasgunga
+ - Gembe
+ - Lambwe
+ - Gwassi south
+ - Gwassi north
+ - Kaksingri west
+ - Ruma kaksingri east
+--------------------------------------------------
+
+County: ISIOLO
+Wards:
+ - Wabera
+ - Bulla pesa
+ - Chari
+ - Cherab
+ - Ngare mara
+ - Burat
+ - Oldonyiro
+ - Garbatulla
+ - Kinna
+ - Sericho
+--------------------------------------------------
+
+County: KAJIADO
+Wards:
+ - Olkeri
+ - Ongata rongai
+ - Nkaimurunya
+ - Oloolua
+ - Ngong
+ - Purko
+ - Ildamat
+ - Dalalekutuk
+ - Matapato north
+ - Matapato south
+ - Kaputiei north
+ - Kitengela
+ - Oloosirkon/sholinke
+ - Kenyawa-poka
+ - Imaroro
+ - Keekonyokie
+ - Iloodokilani
+ - Magadi
+ - Ewuaso oonkidong'i
+ - Mosiro
+ - Entonet/lenkisim
+ - Mbirikani/eselenkei
+ - Kuku
+ - Rombo
+ - Kimana
+--------------------------------------------------
+
+County: KAKAMEGA
+Wards:
+ - Mautuma
+ - Lugari
+ - Lumakanda
+ - Chekalini
+ - Chevaywa
+ - Lwandeti
+ - Likuyani
+ - Sango
+ - Kongoni
+ - Nzoia
+ - Sinoko
+ - West kabras
+ - Chemuche
+ - East kabras
+ - Butali/chegulo
+ - Manda-shivanga
+ - Shirugu-mugai
+ - South kabras
+ - Butsotso east
+ - Butsotso south
+ - Butsotso central
+ - Sheywe
+ - Mahiakalo
+ - Shirere
+ - Ingostse-mathia
+ - Shinoyi-shikomari-
+ - Bunyala west
+ - Bunyala east
+ - Bunyala central
+ - Mumias central
+ - Mumias north
+ - Etenje
+ - Musanda
+ - Lubinu/lusheya
+ - Isongo/makunga/malaha
+ - East wanga
+ - Koyonzo
+ - Kholera
+ - Khalaba
+ - Mayoni
+ - Namamali
+ - Marama west
+ - Marama central
+ - Marenyo - shianda
+ - Marama north
+ - Marama south
+ - Kisa north
+ - Kisa east
+ - Kisa west
+ - Kisa central
+ - Isukha north
+ - Murhanda
+ - Isukha central
+ - Isukha south
+ - Isukha east
+ - Isukha west
+ - Idakho south
+ - Idakho east
+ - Idakho north
+ - Idakho central
+--------------------------------------------------
+
+County: KERICHO
+Wards:
+ - Londiani
+ - Kedowa/kimugul
+ - Chepseon
+ - Tendeno/sorget
+ - Kunyak
+ - Kamasian
+ - Kipkelion
+ - Chilchila
+ - Kapsoit
+ - Ainamoi
+ - Kapkugerwet
+ - Kipchebor
+ - Kipchimchim
+ - Kapsaos
+ - Kisiara
+ - Tebesonik
+ - Cheboin
+ - Chemosot
+ - Litein
+ - Cheplanget
+ - Kapkatet
+ - Waldai
+ - Kabianga
+ - Cheptororiet/seretut
+ - Chaik
+ - Kapsuser
+ - Sigowet
+ - Kaplelartet
+ - Soliat
+ - Soin
+--------------------------------------------------
+
+County: KIAMBU
+Wards:
+ - Kiamwangi
+ - Kiganjo
+ - Ndarugu
+ - Ngenda
+ - Gituamba
+ - Githobokoni
+ - Chania
+ - Mang'u
+ - Murera
+ - Theta
+ - Juja
+ - Witeithie
+ - Kalimoni
+ - Township
+ - Kamenu
+ - Hospital
+ - Gatuanyaga
+ - Ngoliba
+ - Gitothua
+ - Biashara
+ - Gatongora
+ - Kahawa sukari
+ - Kahawa wendani
+ - Kiuu
+ - Mwiki
+ - Mwihoko
+ - Githunguri
+ - Githiga
+ - Ikinu
+ - Ngewa
+ - Komothai
+ - Ting'ang'a
+ - Ndumberi
+ - Riabai
+ - Cianda
+ - Karuri
+ - Ndenderu
+ - Muchatha
+ - Kihara
+ - Gitaru
+ - Muguga
+ - Nyadhuna
+ - Kabete
+ - Uthiru
+ - Karai
+ - Nachu
+ - Sigona
+ - Kikuyu
+ - Kinoo
+ - Bibirioni
+ - Limuru central
+ - Ndeiya
+ - Limuru east
+ - Ngecha tigoni
+ - Kinale
+ - Kijabe
+ - Nyanduma
+ - Kamburu
+ - Lari/kirenga
+--------------------------------------------------
+
+County: KILIFI
+Wards:
+ - Tezo
+ - Sokoni
+ - Kibarani
+ - Dabaso
+ - Matsangoni
+ - Watamu
+ - Mnarani
+ - Junju
+ - Mwarakaya
+ - Shimo la tewa
+ - Chasimba
+ - Mtepeni
+ - Mariakani
+ - Kayafungo
+ - Kaloleni
+ - Mwanamwinga
+ - Mwawesa
+ - Ruruma
+ - Kambe/ribe
+ - Rabai/kisurutini
+ - Ganze
+ - Bamba
+ - Jaribuni
+ - Sokoke
+ - Jilore
+ - Kakuyuni
+ - Ganda
+ - Malindi town
+ - Shella
+ - Marafa
+ - Magarini
+ - Gongoni
+ - Adu
+ - Garashi
+ - Sabaki
+--------------------------------------------------
+
+County: KIRINYAGA
+Wards:
+ - Mutithi
+ - Kangai
+ - Thiba
+ - Wamumu
+ - Nyangati
+ - Murinduko
+ - Gathigiriri
+ - Tebere
+ - Kabare
+ - Baragwi
+ - Njukiini
+ - Ngariama
+ - Karumandi
+ - Mukure
+ - Kiine
+ - Kariti
+ - Mutira
+ - Kanyeki-ini
+ - Kerugoya
+ - Inoi
+--------------------------------------------------
+
+County: KISII
+Wards:
+ - Bomariba
+ - Bogiakumu
+ - Bomorenda
+ - Riana
+ - Tabaka
+ - Boikang'a
+ - Bogetenga
+ - Borabu / chitago
+ - Moticho
+ - Getenga
+ - Bombaba borabu
+ - Boochi borabu
+ - Bokimonge
+ - Magenche
+ - Masige west
+ - Masige east
+ - Bobasi central
+ - Nyacheki
+ - Bobasi bogetaorio
+ - Bobasi chache
+ - Sameta/mokwerero
+ - Bobasi boitangare
+ - Majoge
+ - Boochi/tendere
+ - Bosoti/sengera
+ - Ichuni
+ - Nyamasibi
+ - Masimba
+ - Gesusu
+ - Kiamokama
+ - Bobaracho
+ - Kisii central
+ - Keumbu
+ - Kiogoro
+ - Birongo
+ - Ibeno
+ - Monyerero
+ - Sensi
+ - Marani
+ - Kegogi
+ - Bogusero
+ - Bogeka
+ - Nyakoe
+ - Kitutu   central
+ - Nyatieko
+--------------------------------------------------
+
+County: KISUMU
+Wards:
+ - Kajulu
+ - Kolwa east
+ - Manyatta 'b'
+ - Nyalenda 'a'
+ - Kolwa central
+ - South west kisumu
+ - Central kisumu
+ - Kisumu north
+ - West kisumu
+ - North west kisumu
+ - Railways
+ - Migosi
+ - Shaurimoyo kaloleni
+ - Market milimani
+ - Kondele
+ - Nyalenda b
+ - West seme
+ - Central seme
+ - East seme
+ - North seme
+ - East kano/wawidhi
+ - Awasi/onjiko
+ - Ahero
+ - Kabonyo/kanyagwal
+ - Kobura
+ - Miwani
+ - Ombeyi
+ - Masogo/nyang'oma
+ - Chemelil
+ - Muhoroni/koru
+ - South west nyakach
+ - North nyakach
+ - Central nyakach
+ - West nyakach
+ - South east nyakach
+--------------------------------------------------
+
+County: KITUI
+Wards:
+ - Ngomeni
+ - Kyuso
+ - Mumoni
+ - Tseikuru
+ - Tharaka
+ - Kyome/thaana
+ - Nguutani
+ - Migwani
+ - Kiomo/kyethani
+ - Central
+ - Kivou
+ - Nguni
+ - Nuu
+ - Mui
+ - Waita
+ - Mutonguni
+ - Kauwi
+ - Matinyani
+ - Kwa mutonga/kithumula
+ - Kisasi
+ - Mbitini
+ - Kwavonza/yatta
+ - Kanyangi
+ - Miambani
+ - Township
+ - Kyangwithya west
+ - Mulango
+ - Kyangwithya east
+ - Zombe/mwitika
+ - Chuluni
+ - Nzambani
+ - Voo/kyamatu
+ - Endau/malalani
+ - Mutito/kaliku
+ - Ikanga/kyatune
+ - Mutomo
+ - Mutha
+ - Ikutha
+ - Kanziko
+ - Athi
+--------------------------------------------------
+
+County: KWALE
+Wards:
+ - Gombatobongwe
+ - Ukunda
+ - Kinondo
+ - Ramisi
+ - Pongwekikoneni
+ - Dzombo
+ - Mwereni
+ - Vanga
+ - Tsimba golini
+ - Waa
+ - Tiwi
+ - Kubo south
+ - Mkongani
+ - Nadavaya
+ - Puma
+ - Kinango
+ - Mackinnon-road
+ - Chengoni/samburu
+ - Mwavumbo
+ - Kasemeni
+--------------------------------------------------
+
+County: LAIKIPIA
+Wards:
+ - Olmoran
+ - Rumuruti township
+ - Kinamba
+ - Marmanet
+ - Igwamiti
+ - Salama
+ - Ngobit
+ - Tigithi
+ - Thingithu
+ - Nanyuki
+ - Umande
+ - Sosian
+ - Segera
+ - Mukogondo west
+ - Mukogondo east
+--------------------------------------------------
+
+County: LAMU
+Wards:
+ - Faza
+ - Kiunga
+ - Basuba
+ - Shella
+ - Mkomani
+ - Hindi
+ - Mkunumbi
+ - Hongwe
+ - Witu
+ - Bahari
+--------------------------------------------------
+
+County: MACHAKOS
+Wards:
+ - Kivaa
+ - Masinga central
+ - Ekalakala
+ - Muthesya
+ - Ndithini
+ - Ndalani
+ - Matuu
+ - Kithimani
+ - Ikombe
+ - Katangi
+ - Kangundo north
+ - Kangundo central
+ - Kangundo east
+ - Kangundo west
+ - Tala
+ - Matungulu north
+ - Matungulu east
+ - Matungulu west
+ - Kyeleni
+ - Mitaboni
+ - Kathiani central
+ - Upper kaewa/iveti
+ - Lower kaewa/kaani
+ - Athi river
+ - Kinanie
+ - Muthwani
+ - Syokimau/mulolongo
+ - Kalama
+ - Mua
+ - Mutituni
+ - Machakos central
+ - Mumbuni north
+ - Muvuti/kiima-kimwe
+ - Kola
+ - Mbiuni
+ - Makutano/ mwala
+ - Masii
+ - Muthetheni
+ - Wamunyu
+ - Kibauni
+--------------------------------------------------
+
+County: MAKUENI
+Wards:
+ - Tulimani
+ - Mbooni
+ - Kithungo/kitundu
+ - Kisau/kiteta
+ - Waia/kako
+ - Kalawa
+ - Kasikeu
+ - Mukaa
+ - Kiima kiu/kalanzoni
+ - Ukia
+ - Kee
+ - Kilungu
+ - Ilima
+ - Wote
+ - Muvau/kikuumini
+ - Mavindini
+ - Kitise/kithuki
+ - Kathonzweni
+ - Nzaui/kilili/kalamba
+ - Mbitini
+ - Makindu
+ - Nguumo
+ - Kikumbulyu north
+ - Kikumbulyu south
+ - Nguu/masumba
+ - Emali/mulala
+ - Masongaleni
+ - Mtito andei
+ - Thange
+ - Ivingoni/nzambani
+--------------------------------------------------
+
+County: MANDERA
+Wards:
+ - Takaba south
+ - Takaba
+ - Lag sure
+ - Dandu
+ - Gither
+ - Banissa
+ - Derkhale
+ - Guba
+ - Malkamari
+ - Kiliwehiri
+ - Ashabito
+ - Guticha
+ - Morothile
+ - Rhamu
+ - Rhamu-dimtu
+ - Wargudud
+ - Kutulo
+ - Elwak south
+ - Elwak north
+ - Shimbir fatuma
+ - Arabia
+ - Bulla mpya
+ - Khalalio
+ - Neboi
+ - Township
+ - Libehia
+ - Fino
+ - Lafey
+ - Warankara
+ - Alungo gof
+--------------------------------------------------
+
+County: MARSABIT
+Wards:
+ - Butiye
+ - Sololo
+ - Heilu-manyatta
+ - Golbo
+ - Moyale township
+ - Uran
+ - Obbu
+ - Illeret
+ - North horr
+ - Dukana
+ - Maikona
+ - Turbi
+ - Sagante/jaldesa
+ - Karare
+ - Marsabit central
+ - Loiyangalani
+ - Kargi/south horr
+ - Korr/ngurunit
+ - Log logo
+ - Laisamis
+--------------------------------------------------
+
+County: MERU
+Wards:
+ - Maua
+ - Kiegoi/antubochiu
+ - Athiru gaiti
+ - Akachiu
+ - Kanuni
+ - Akirang'ondu
+ - Athiru ruujine
+ - Igembe east
+ - Njia
+ - Kangeta
+ - Antuambui
+ - Ntunene
+ - Antubetwe kiongo
+ - Naathu
+ - Amwathi
+ - Athwana
+ - Akithii
+ - Kianjai
+ - Nkomo
+ - Mbeu
+ - Thangatha
+ - Mikinduri
+ - Kiguchwa
+ - Muthara
+ - Karama
+ - Municipality
+ - Ntima east
+ - Ntima west
+ - Nyaki west
+ - Nyaki east
+ - Timau
+ - Kisima
+ - Kiirua/naari
+ - Ruiri/rwarera
+ - Kibirichia
+ - Mwanganthia
+ - Abothuguchi central
+ - Abothuguchi west
+ - Kiagu
+ - Mitunguu
+ - Igoji east
+ - Igoji west
+ - Abogeta east
+ - Abogeta west
+ - Nkuene
+--------------------------------------------------
+
+County: MIGORI
+Wards:
+ - North kamagambo
+ - Central kamagambo
+ - East kamagambo
+ - South kamagambo
+ - North sakwa
+ - South sakwa
+ - West sakwa
+ - Central sakwa
+ - God jope
+ - Suna central
+ - Kakrao
+ - Kwa
+ - Wiga
+ - Wasweta ii
+ - Ragana-oruba
+ - Wasimbete
+ - West kanyamkago
+ - North kanyamkago
+ - Central kanyamkago
+ - South kanyamkago
+ - East kanyamkago
+ - Kachien'g
+ - Kanyasa
+ - North kadem
+ - Macalder/kanyarwanda
+ - Kaler
+ - Got kachola
+ - Muhuru
+ - Bukira east
+ - Bukira centrl/ikerege
+ - Isibania
+ - Makerero
+ - Masaba
+ - Tagare
+ - Nyamosense/komosoko
+ - Gokeharaka/getambwega
+ - Ntimaru west
+ - Ntimaru east
+ - Nyabasi east
+ - Nyabasi west
+--------------------------------------------------
+
+County: MOMBASA
+Wards:
+ - Port reitz
+ - Kipevu
+ - Airport
+ - Changamwe
+ - Chaani
+ - Jomvu kuu
+ - Miritini
+ - Mikindani
+ - Mjambere
+ - Junda
+ - Bamburi
+ - Mwakirunge
+ - Mtopanga
+ - Magogoni
+ - Shanzu
+ - Frere town
+ - Ziwa la ng'ombe
+ - Mkomani
+ - Kongowea
+ - Kadzandani
+ - Mtongwe
+ - Shika adabu
+ - Bofu
+ - Likoni
+ - Timbwani
+ - Mji wa kale/makadara
+ - Tudor
+ - Tononoka
+ - Shimanzi/ganjoni
+ - Majengo
+--------------------------------------------------
+
+County: MURANG'A
+Wards:
+ - Kanyenyaini
+ - Muguru
+ - Rwathia
+ - Gitugi
+ - Kiru
+ - Kamacharia
+ - Wangu
+ - Mugoiri
+ - Mbiri
+ - Township
+ - Murarandia
+ - Gaturi
+ - Kahumbu
+ - Muthithi
+ - Kigumo
+ - Kangari
+ - Kinyona
+ - Kimorori/wempa
+ - Makuyu
+ - Kambiti
+ - Kamahuha
+ - Ichagaki
+ - Nginda
+ - Ng'araria
+ - Muruka
+ - Kagundu-ini
+ - Gaichanjiru
+ - Ithiru
+ - Ruchu
+ - Ithanga
+ - Kakuzi/mitubiri
+ - Mugumo-ini
+ - Kihumbu-ini
+ - Gatanga
+ - Kariara
+--------------------------------------------------
+
+County: NAIROBI
+Wards:
+ - Kitisuru
+ - Parklands/highridge
+ - Karura
+ - Kangemi
+ - Mountain view
+ - Kilimani
+ - Kawangware
+ - Gatina
+ - Kileleshwa
+ - Kabiro
+ - Mutuini
+ - Ngando
+ - Riruta
+ - Uthiru/ruthimitu
+ - Waithaka
+ - Karen
+ - Nairobi west
+ - Mugumo-ini
+ - South-c
+ - Nyayo highrise
+ - Laini saba
+ - Lindi
+ - Makina
+ - Woodley/kenyatta golf
+ - Sarangombe
+ - Githurai
+ - Kahawa west
+ - Zimmerman
+ - Roysambu
+ - Kahawa
+ - Claycity
+ - Mwiki
+ - Kasarani
+ - Njiru
+ - Ruai
+ - Baba dogo
+ - Utalii
+ - Mathare north
+ - Lucky summer
+ - Korogocho
+ - Imara daima
+ - Kwa njenga
+ - Kwa reuben
+ - Pipeline
+ - Kware
+ - Kariobangi north
+ - Dandora area i
+ - Dandora area ii
+ - Dandora area iii
+ - Dandora area iv
+ - Kayole north
+ - Kayole central
+ - Kayole south
+ - Komarock
+ - Matopeni
+ - Upper savannah
+ - Lower savannah
+ - Embakasi
+ - Utawala
+ - Mihango
+ - Umoja i
+ - Umoja ii
+ - Mowlem
+ - Kariobangi south
+ - Makongeni
+ - Maringo/hamza
+ - Harambee
+ - Viwandani
+ - Pumwani
+ - Eastleigh north
+ - Eastleigh south
+ - Airbase
+ - California
+ - Nairobi central
+ - Ngara
+ - Ziwani/kariokor
+ - Pangani
+ - Landimawe
+ - Nairobi south
+ - Hospital
+ - Mabatini
+ - Huruma
+ - Ngei
+ - Mlango kubwa
+ - Kiamaiko
+--------------------------------------------------
+
+County: NAKURU
+Wards:
+ - Mariashoni
+ - Elburgon
+ - Turi
+ - Molo
+ - Maunarok
+ - Mauche
+ - Kihingo
+ - Nessuit
+ - Lare
+ - Njoro
+ - Biashara
+ - Hells gate
+ - Lakeview
+ - Maai-mahiu
+ - Maiella
+ - Olkaria
+ - Naivasha east
+ - Viwandani
+ - Gilgil
+ - Elementaita
+ - Mbaruk/eburu
+ - Malewa west
+ - Murindati
+ - Amalo
+ - Keringet
+ - Kiptagich
+ - Tinet
+ - Kiptororo
+ - Nyota
+ - Sirikwa
+ - Kamara
+ - Subukia
+ - Waseges
+ - Kabazi
+ - Menengai west
+ - Soin
+ - Visoi
+ - Mosop
+ - Solai
+ - Dundori
+ - Kabatini
+ - Kiamaina
+ - Lanet/umoja
+ - Bahati
+ - Barut
+ - London
+ - Kaptembwo
+ - Kapkures
+ - Rhoda
+ - Shaabab
+ - Kivumbini
+ - Flamingo
+ - Menengai
+ - Nakuru east
+--------------------------------------------------
+
+County: NANDI
+Wards:
+ - Songhor/soba
+ - Tindiret
+ - Chemelil/chemase
+ - Kapsimotwo
+ - Kabwareng
+ - Terik
+ - Kemeloi-maraba
+ - Kobujoi
+ - Kaptumo-kaboi
+ - Koyo-ndurio
+ - Nandi hills
+ - Chepkunyuk
+ - Ol'lessos
+ - Kapchorua
+ - Chemundu/kapng'etuny
+ - Kosirai
+ - Lelmokwo/ngechek
+ - Kaptel/kamoiywo
+ - Kiptuya
+ - Chepkumia
+ - Kapkangani
+ - Kapsabet
+ - Kilibwoni
+ - Chepterwai
+ - Kipkaren
+ - Kurgung/surungai
+ - Kabiyet
+ - Ndalat
+ - Kabisaga
+ - Sangalo/kebulonik
+--------------------------------------------------
+
+County: NAROK
+Wards:
+ - Kilgoris central
+ - Keyian
+ - Angata barikoi
+ - Shankoe
+ - Kimintet
+ - Lolgorian
+ - Ilkerin
+ - Ololmasani
+ - Mogondo
+ - Kapsasian
+ - Olpusimoru
+ - Olokurto
+ - Narok town
+ - Nkareta
+ - Olorropil
+ - Melili
+ - Mosiro
+ - Ildamat
+ - Keekonyokie
+ - Suswa
+ - Majimoto/naroosura
+ - Ololulung'a
+ - Melelo
+ - Loita
+ - Sogoo
+ - Sagamian
+ - Ilmotiok
+ - Mara
+ - Siana
+ - Naikarra
+--------------------------------------------------
+
+County: NYAMIRA
+Wards:
+ - Rigoma
+ - Gachuba
+ - Kemera
+ - Magombo
+ - Manga
+ - Gesima
+ - Nyamaiya
+ - Bogichora
+ - Bosamaro
+ - Bonyamatuta
+ - Township
+ - Itibo
+ - Bomwagamo
+ - Bokeira
+ - Magwagwa
+ - Ekerenyo
+ - Mekenene
+ - Kiabonyoru
+ - Nyansiongo
+ - Esise
+--------------------------------------------------
+
+County: NYANDARUA
+Wards:
+ - Engineer
+ - Gathara
+ - North kinangop
+ - Murungaru
+ - Njabini\kiburu
+ - Nyakio
+ - Githabai
+ - Magumu
+ - Wanjohi
+ - Kipipiri
+ - Geta
+ - Githioro
+ - Karau
+ - Kanjuiri ridge
+ - Mirangine
+ - Kaimbaga
+ - Rurii
+ - Gathanji
+ - Gatimu
+ - Weru
+ - Charagita
+ - Leshau pondo
+ - Kiriita
+ - Central
+ - Shamata
+--------------------------------------------------
+
+County: NYERI
+Wards:
+ - Dedan kimanthi
+ - Wamagana
+ - Aguthi/gaaki
+ - Mweiga
+ - Naromoru kiamathaga
+ - Mwiyogo/endarasha
+ - Mugunda
+ - Gatarakwa
+ - Thegu river
+ - Kabaru
+ - Gakawa
+ - Ruguru
+ - Magutu
+ - Iriaini
+ - Konyu
+ - Kirimukuyu
+ - Karatina town
+ - Mahiga
+ - Iria-ini
+ - Chinga
+ - Karima
+ - Gikondi
+ - Rugi
+ - Mukurwe-ini west
+ - Mukurwe-ini central
+ - Kiganjo/mathari
+ - Rware
+ - Gatitu/muruguru
+ - Ruring'u
+ - Kamakwa/mukaro
+--------------------------------------------------
+
+County: SAMBURU
+Wards:
+ - Lodokejek
+ - Suguta marmar
+ - Maralal
+ - Loosuk
+ - Poro
+ - El-barta
+ - Nachola
+ - Ndoto
+ - Nyiro
+ - Angata nanyokie
+ - Baawa
+ - Waso
+ - Wamba west
+ - Wamba east
+ - Wamba north
+--------------------------------------------------
+
+County: SIAYA
+Wards:
+ - West ugenya
+ - Ukwala
+ - North ugenya
+ - East ugenya
+ - Sidindi
+ - Sigomere
+ - Ugunja
+ - Usonga
+ - West alego
+ - Central alego
+ - Siaya township
+ - North alego
+ - South east alego
+ - North gem
+ - West gem
+ - Central gem
+ - Yala township
+ - East gem
+ - South gem
+ - West yimbo
+ - Central sakwa
+ - South sakwa
+ - Yimbo east
+ - West sakwa
+ - North sakwa
+ - East asembo
+ - West asembo
+ - North uyoma
+ - South uyoma
+ - West uyoma
+--------------------------------------------------
+
+County: TAITA TAVETA
+Wards:
+ - Chala
+ - Mahoo
+ - Bomeni
+ - Mboghoni
+ - Mata
+ - Wundanyi/mbale
+ - Werugha
+ - Wumingu/kishushe
+ - Mwanda/mgange
+ - Rong'e
+ - Mwatate
+ - Bura
+ - Chawia
+ - Wusi/kishamba
+ - Mbololo
+ - Sagalla
+ - Kaloleni
+ - Marungu
+ - Kasigau
+ - Ngolia
+--------------------------------------------------
+
+County: TANA RIVER
+Wards:
+ - Kipini east
+ - Garsen south
+ - Kipini west
+ - Garsen central
+ - Garsen west
+ - Garsen north
+ - Kinakomba
+ - Mikinduni
+ - Chewani
+ - Wayu
+ - Chewele
+ - Bura
+ - Bangale
+ - Sala
+ - Madogo
+--------------------------------------------------
+
+County: THARAKA-NITHI
+Wards:
+ - Mitheru
+ - Muthambi
+ - Mwimbi
+ - Ganga
+ - Chogoria
+ - Mariani
+ - Karingani
+ - Magumoni
+ - Mugwe
+ - Igambang'ombe
+ - Gatunga
+ - Mukothima
+ - Nkondi
+ - Chiakariga
+ - Marimanti
+--------------------------------------------------
+
+County: TRANS NZOIA
+Wards:
+ - Kapomboi
+ - Kwanza
+ - Keiyo
+ - Bidii
+ - Chepchoina
+ - Endebess
+ - Matumbei
+ - Kinyoro
+ - Matisi
+ - Tuwani
+ - Saboti
+ - Machewa
+ - Kiminini
+ - Waitaluk
+ - Sirende
+ - Hospital
+ - Sikhendu
+ - Nabiswa
+ - Sinyerere
+ - Makutano
+ - Kaplamai
+ - Motosiet
+ - Cherangany/suwerwa
+ - Chepsiro/kiptoror
+ - Sitatunga
+--------------------------------------------------
+
+County: TURKANA
+Wards:
+ - Kaeris
+ - Lake zone
+ - Lapur
+ - Kaaleng/kaikor
+ - Kibish
+ - Nakalale
+ - Kakuma
+ - Lopur
+ - Letea
+ - Songot
+ - Kalobeyei
+ - Lokichoggio
+ - Nanaam
+ - Kerio delta
+ - Kang'atotha
+ - Kalokol
+ - Lodwar township
+ - Kanamkemer
+ - Kotaruk/lobei
+ - Turkwel
+ - Loima
+ - Lokiriama/lorengippi
+ - Kaputir
+ - Katilu
+ - Lobokat
+ - Kalapata
+ - Lokichar
+ - Kapedo/napeitom
+ - Katilia
+ - Lokori/kochodin
+--------------------------------------------------
+
+County: UASIN GISHU
+Wards:
+ - Moi's bridge
+ - Kapkures
+ - Ziwa
+ - Segero/barsombe
+ - Kipsomba
+ - Soy
+ - Kuinet/kapsuswa
+ - Ngenyilel
+ - Tapsagoi
+ - Kamagut
+ - Kiplombe
+ - Kapsaos
+ - Huruma
+ - Tembelio
+ - Sergoit
+ - Karuna/meibeki
+ - Moiben
+ - Kimumu
+ - Kapsoya
+ - Kaptagat
+ - Ainabkoi/olare
+ - Simat/kapseret
+ - Kipkenyo
+ - Ngeria
+ - Megun
+ - Langas
+ - Racecourse
+ - Cheptiret/kipchamo
+ - Tulwet/chuiyat
+ - Tarakwa
+--------------------------------------------------
+
+County: VIHIGA
+Wards:
+ - Lugaga-wamuluma
+ - South maragoli
+ - Central maragoli
+ - Mungoma
+ - Lyaduywa/izava
+ - West sabatia
+ - Chavakali
+ - North maragoli
+ - Wodanga
+ - Busali
+ - Shiru
+ - Muhudu
+ - Shamakhokho
+ - Gisambai
+ - Banja
+ - Tambua
+ - Jepkoyai
+ - Luanda township
+ - Wemilabi
+ - Mwibona
+ - Luanda south
+ - Emabungo
+ - North east bunyore
+ - Central bunyore
+ - West bunyore
+--------------------------------------------------
+
+County: WAJIR
+Wards:
+ - Gurar
+ - Bute
+ - Korondile
+ - Malkagufu
+ - Batalu
+ - Danaba
+ - Godoma
+ - Wagberi
+ - Township
+ - Barwago
+ - Khorof/harar
+ - Elben
+ - Sarman
+ - Tarbaj
+ - Wargadud
+ - Arbajahan
+ - Hadado/athibohol
+ - Ademasajide
+ - Wagalla/ganyure
+ - Eldas
+ - Della
+ - Lakoley south/basir
+ - Elnur/tula tula
+ - Benane
+ - Burder
+ - Dadaja bulla
+ - Habasswein
+ - Lagboghol south
+ - Ibrahim ure
+ - Diif
+--------------------------------------------------
+
+County: WEST POKOT
+Wards:
+ - Riwo
+ - Kapenguria
+ - Mnagei
+ - Siyoi
+ - Endugh
+ - Sook
+ - Sekerr
+ - Masool
+ - Lomut
+ - Weiwei
+ - Suam
+ - Kodich
+ - Kapckok
+ - Kasei
+ - Kiwawa
+ - Alale
+ - Chepareria
+ - Batei
+ - Lelan
+ - Tapach
+--------------------------------------------------
