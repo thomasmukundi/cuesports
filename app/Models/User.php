@@ -63,6 +63,7 @@ class User extends Authenticatable implements JWTSubject
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
             'last_login' => 'datetime',
+            'fcm_token_updated_at' => 'datetime',
         ];
     }
 
