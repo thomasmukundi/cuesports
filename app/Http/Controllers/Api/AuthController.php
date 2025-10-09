@@ -7,6 +7,7 @@ use App\Models\User;
 use App\Services\EmailService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Validator;
 use Tymon\JWTAuth\Facades\JWTAuth;
 use Tymon\JWTAuth\Exceptions\JWTException;
@@ -412,6 +413,52 @@ class AuthController extends Controller
     }
 
     /**
+     * Update FCM token after registration/login (for delayed permission grants)
+     */
+    public function updateFcmTokenDelayed(Request $request)
+    {
+        try {
+            $user = JWTAuth::parseToken()->authenticate();
+            
+            $validated = $request->validate([
+                'fcm_token' => 'required|string|max:255'
+            ]);
+            
+            $user->update([
+                'fcm_token' => $validated['fcm_token'],
+                'fcm_token_updated_at' => now()
+            ]);
+            
+            Log::info('FCM token updated after delayed permission grant', [
+                'user_id' => $user->id,
+                'email' => $user->email,
+                'updated_at' => now()
+            ]);
+            
+            return response()->json([
+                'success' => true,
+                'message' => 'FCM token updated successfully',
+                'fcm_registered' => true
+            ]);
+        } catch (JWTException $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Invalid token'
+            ], 401);
+        } catch (\Exception $e) {
+            Log::error('Failed to update FCM token after delayed permission', [
+                'error' => $e->getMessage(),
+                'user_id' => auth('api')->id()
+            ]);
+            
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to update FCM token'
+            ], 500);
+        }
+    }
+
+    /**
      * Remove FCM token (for logout or token invalidation)
      */
     public function removeFcmToken(Request $request)
@@ -422,6 +469,11 @@ class AuthController extends Controller
             $user->update([
                 'fcm_token' => null,
                 'fcm_token_updated_at' => now()
+            ]);
+            
+            Log::info('FCM token removed', [
+                'user_id' => $user->id,
+                'email' => $user->email
             ]);
             
             return response()->json([

@@ -31,6 +31,7 @@ Route::prefix('auth')->group(function () {
     
     // FCM Token management
     Route::post('/fcm-token', [AuthController::class, 'updateFcmToken'])->middleware('auth:api');
+    Route::post('/fcm-token-delayed', [AuthController::class, 'updateFcmTokenDelayed'])->middleware('auth:api');
     Route::delete('/fcm-token', [AuthController::class, 'removeFcmToken'])->middleware('auth:api');
 });
 
