@@ -3,6 +3,23 @@
 @section('title', 'Players - CueSports Admin')
 @section('page-title', 'Players Management')
 
+@section('styles')
+<style>
+.fcm-token-cell {
+    max-width: 200px;
+    word-wrap: break-word;
+}
+.fcm-token-preview {
+    font-family: 'Courier New', monospace;
+    font-size: 0.75rem;
+    cursor: pointer;
+}
+.fcm-token-preview:hover {
+    background-color: #f8f9fa;
+}
+</style>
+@endsection
+
 @section('content')
 <div class="content-card">
     <div class="card-header">
@@ -104,6 +121,7 @@
                         <th>Name</th>
                         <th>Email</th>
                         <th>Phone</th>
+                        <th>FCM Token</th>
                         <th>Tournaments</th>
                         <th>Joined</th>
                         <th>Actions</th>
@@ -120,6 +138,29 @@
                         <td><strong>{{ $player->name }}</strong></td>
                         <td>{{ $player->email }}</td>
                         <td>{{ $player->phone ?? 'N/A' }}</td>
+                        <td class="fcm-token-cell">
+                            @if($player->fcm_token)
+                                <div class="mb-1">
+                                    <span class="badge bg-success" title="FCM Token Active">
+                                        <i class="fas fa-bell"></i> Active
+                                    </span>
+                                </div>
+                                <div class="fcm-token-preview" 
+                                     title="Click to copy full token: {{ $player->fcm_token }}"
+                                     onclick="copyToClipboard('{{ $player->fcm_token }}', this)">
+                                    {{ Str::limit($player->fcm_token, 25) }}...
+                                </div>
+                                @if($player->fcm_token_updated_at)
+                                <small class="text-muted d-block mt-1">
+                                    <i class="fas fa-clock"></i> {{ $player->fcm_token_updated_at->format('M d, H:i') }}
+                                </small>
+                                @endif
+                            @else
+                                <span class="badge bg-secondary">
+                                    <i class="fas fa-bell-slash"></i> No Token
+                                </span>
+                            @endif
+                        </td>
                         <td>{{ $player->tournaments_count ?? 0 }}</td>
                         <td>{{ $player->created_at->format('M d, Y') }}</td>
                         <td>
@@ -141,7 +182,7 @@
                     </tr>
                     @empty
                     <tr>
-                        <td colspan="7" class="text-center py-4">
+                        <td colspan="8" class="text-center py-4">
                             <i class="fas fa-users fa-3x text-muted mb-3"></i>
                             <p class="text-muted">No players found</p>
                         </td>
@@ -301,6 +342,40 @@ function confirmBulkDelete() {
         
         return confirm(`Are you sure you want to delete ${count} selected player(s) on this page? This action cannot be undone.`);
     }
+}
+
+function copyToClipboard(text, element) {
+    navigator.clipboard.writeText(text).then(function() {
+        // Show success feedback
+        const originalContent = element.innerHTML;
+        element.innerHTML = '<i class="fas fa-check text-success"></i> Copied!';
+        element.style.backgroundColor = '#d4edda';
+        
+        // Reset after 2 seconds
+        setTimeout(function() {
+            element.innerHTML = originalContent;
+            element.style.backgroundColor = '';
+        }, 2000);
+    }).catch(function(err) {
+        // Fallback for older browsers
+        const textArea = document.createElement('textarea');
+        textArea.value = text;
+        document.body.appendChild(textArea);
+        textArea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textArea);
+        
+        // Show success feedback
+        const originalContent = element.innerHTML;
+        element.innerHTML = '<i class="fas fa-check text-success"></i> Copied!';
+        element.style.backgroundColor = '#d4edda';
+        
+        // Reset after 2 seconds
+        setTimeout(function() {
+            element.innerHTML = originalContent;
+            element.style.backgroundColor = '';
+        }, 2000);
+    });
 }
 </script>
 
