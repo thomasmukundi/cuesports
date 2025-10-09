@@ -49,15 +49,35 @@ class AuthController extends Controller
                 'region_id' => 'nullable|exists:regions,id',
             ]);
         } catch (\Illuminate\Validation\ValidationException $e) {
+            // Check for specific validation errors and provide better messages
+            $errors = $e->errors();
+            $message = 'Registration failed, please check the information provided';
+            
+            if (isset($errors['email']) && in_array('The email has already been taken.', $errors['email'])) {
+                $message = 'A user with this email address already exists';
+            } elseif (isset($errors['username']) && in_array('The username has already been taken.', $errors['username'])) {
+                $message = 'A user with this username already exists';
+            } elseif (isset($errors['password'])) {
+                $message = 'Password validation failed. Please ensure your password meets the requirements';
+            } elseif (isset($errors['email']) && in_array('The email field must be a valid email address.', $errors['email'])) {
+                $message = 'Please provide a valid email address';
+            }
+            
             return response()->json([
                 'success' => false,
-                'message' => 'Registration failed, please try again',
-                'errors' => $e->errors()
+                'message' => $message,
+                'errors' => $errors
             ], 422);
         } catch (\Exception $e) {
+            Log::error('Registration failed with exception', [
+                'email' => $request->email,
+                'username' => $request->username,
+                'error' => $e->getMessage()
+            ]);
+            
             return response()->json([
                 'success' => false,
-                'message' => 'Registration failed, please try again'
+                'message' => 'Registration failed due to a server error. Please try again later.'
             ], 500);
         }
 
@@ -163,10 +183,19 @@ class AuthController extends Controller
         ]);
 
         if ($validator->fails()) {
+            $errors = $validator->errors();
+            $message = 'Please check your login information';
+            
+            if (isset($errors['email'])) {
+                $message = 'Please provide a valid email address';
+            } elseif (isset($errors['password'])) {
+                $message = 'Password must be at least 8 characters long';
+            }
+            
             return response()->json([
                 'success' => false,
-                'message' => 'Validation failed',
-                'errors' => $validator->errors()
+                'message' => $message,
+                'errors' => $errors
             ], 422);
         }
 
@@ -176,17 +205,26 @@ class AuthController extends Controller
         $user = User::where('email', $credentials['email'])->first();
         
         if (!$user) {
+            Log::warning('Login attempt with non-existent email', [
+                'email' => $credentials['email']
+            ]);
+            
             return response()->json([
                 'success' => false,
-                'message' => 'No account found with this email address'
+                'message' => 'No account found with this email address. Please check your email or register for a new account.'
             ], 401);
         }
 
         // Check if password is correct
         if (!Hash::check($credentials['password'], $user->password)) {
+            Log::warning('Login attempt with incorrect password', [
+                'user_id' => $user->id,
+                'email' => $user->email
+            ]);
+            
             return response()->json([
                 'success' => false,
-                'message' => 'Wrong password'
+                'message' => 'Incorrect password. Please check your password and try again.'
             ], 401);
         }
 

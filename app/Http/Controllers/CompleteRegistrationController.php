@@ -33,16 +33,33 @@ class CompleteRegistrationController extends Controller
                 'fcm_token' => 'nullable|string|max:255', // Optional FCM token for push notifications
             ]);
         } catch (\Illuminate\Validation\ValidationException $e) {
+            $errors = $e->errors();
+            $message = 'Please check the information provided';
+            
+            // Provide specific error messages
+            if (isset($errors['email'])) {
+                $message = 'Please provide a valid email address';
+            } elseif (isset($errors['community_id'])) {
+                $message = 'Please select a valid community';
+            } elseif (isset($errors['county_id'])) {
+                $message = 'Please select a valid county';
+            } elseif (isset($errors['region_id'])) {
+                $message = 'Please select a valid region';
+            } elseif (isset($errors['fcm_token'])) {
+                $message = 'Invalid notification token provided';
+            }
+            
             Log::error('Validation failed in complete registration', [
                 'email' => $request->email,
-                'errors' => $e->errors(),
+                'errors' => $errors,
+                'message' => $message,
                 'request_data' => $request->except(['fcm_token'])
             ]);
             
             return response()->json([
                 'success' => false,
-                'message' => 'Validation failed',
-                'errors' => $e->errors()
+                'message' => $message,
+                'errors' => $errors
             ], 422);
         }
 
@@ -77,9 +94,14 @@ class CompleteRegistrationController extends Controller
         // Check if user already exists with this email
         $existingUser = User::where('email', $validated['email'])->first();
         if ($existingUser) {
+            Log::warning('Attempted registration with existing email', [
+                'email' => $validated['email'],
+                'existing_user_id' => $existingUser->id
+            ]);
+            
             return response()->json([
                 'success' => false,
-                'message' => 'User already exists with this email.'
+                'message' => 'An account with this email address already exists. Please try logging in instead.'
             ], 400);
         }
 
