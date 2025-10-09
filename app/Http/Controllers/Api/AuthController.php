@@ -158,7 +158,7 @@ class AuthController extends Controller
         $validator = Validator::make($request->all(), [
             'email' => 'required|email',
             'password' => 'required|string|min:8',
-            'fcm_token' => 'required|string|max:255', // Required FCM token for push notifications
+            'fcm_token' => 'nullable|string|max:255', // Optional FCM token for push notifications
         ]);
 
         if ($validator->fails()) {
@@ -206,17 +206,24 @@ class AuthController extends Controller
 
         $user = auth()->user();
         
-        // Update FCM token on successful login
-        $user->update([
-            'fcm_token' => $request->fcm_token,
-            'fcm_token_updated_at' => now(),
-            'last_login' => now()
-        ]);
+        // Update last login time
+        $updateData = ['last_login' => now()];
+        
+        // Update FCM token if provided
+        $fcmTokenUpdated = false;
+        if ($request->filled('fcm_token')) {
+            $updateData['fcm_token'] = $request->fcm_token;
+            $updateData['fcm_token_updated_at'] = now();
+            $fcmTokenUpdated = true;
+        }
+        
+        $user->update($updateData);
         
         Log::info('User logged in successfully', [
             'user_id' => $user->id,
             'email' => $user->email,
-            'fcm_token_updated' => true
+            'fcm_token_provided' => $request->filled('fcm_token'),
+            'fcm_token_updated' => $fcmTokenUpdated
         ]);
         
         return response()->json([
@@ -244,7 +251,7 @@ class AuthController extends Controller
                 'is_admin' => $user->is_admin,
             ],
             'token' => $token,
-            'fcm_registered' => true,
+            'fcm_registered' => $fcmTokenUpdated,
             'expires_at' => null
         ]);
     }
