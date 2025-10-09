@@ -121,7 +121,7 @@
                         <th>Name</th>
                         <th>Email</th>
                         <th>Phone</th>
-                        <th>FCM Token</th>
+                        {{-- <th>FCM Token</th> --}}
                         <th>Tournaments</th>
                         <th>Joined</th>
                         <th>Actions</th>
@@ -138,7 +138,7 @@
                         <td><strong>{{ $player->name }}</strong></td>
                         <td>{{ $player->email }}</td>
                         <td>{{ $player->phone ?? 'N/A' }}</td>
-                        <td class="fcm-token-cell">
+                        {{-- <td class="fcm-token-cell">
                             @if($player->fcm_token)
                                 <div class="mb-1">
                                     <span class="badge bg-success" title="FCM Token Active">
@@ -160,7 +160,7 @@
                                     <i class="fas fa-bell-slash"></i> No Token
                                 </span>
                             @endif
-                        </td>
+                        </td> --}}
                         <td>{{ $player->tournaments_count ?? 0 }}</td>
                         <td>{{ $player->created_at->format('M d, Y') }}</td>
                         <td>
@@ -182,7 +182,7 @@
                     </tr>
                     @empty
                     <tr>
-                        <td colspan="8" class="text-center py-4">
+                        <td colspan="7" class="text-center py-4">
                             <i class="fas fa-users fa-3x text-muted mb-3"></i>
                             <p class="text-muted">No players found</p>
                         </td>
