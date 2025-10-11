@@ -2650,6 +2650,9 @@ class MatchAlgorithmService
 
             // Send notifications to all players
             $this->sendSpecialTournamentNotifications($tournament, $players);
+            
+            // Send pairing notifications for specific matches
+            $this->sendPairingNotifications($tournament, 'special');
 
             \Log::info("Special tournament initialized successfully", [
                 'tournament_id' => $tournament->id,
