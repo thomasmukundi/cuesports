@@ -16,24 +16,24 @@
         }
         .email-container {
             background-color: #ffffff;
-            padding: 30px;
-            border-radius: 10px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            padding: 25px;
+            border: 1px solid #dee2e6;
+            box-shadow: none;
         }
         .header {
             text-align: center;
-            margin-bottom: 30px;
-            padding-bottom: 20px;
-            border-bottom: 2px solid #6366f1;
+            margin-bottom: 25px;
+            padding-bottom: 15px;
+            border-bottom: 1px solid #dee2e6;
         }
         .logo {
-            font-size: 28px;
+            font-size: 24px;
             font-weight: bold;
-            color: #6366f1;
-            margin-bottom: 10px;
+            color: #212529;
+            margin-bottom: 8px;
         }
         .subtitle {
-            color: #666;
+            color: #6c757d;
             font-size: 14px;
         }
         .content {
@@ -56,11 +56,11 @@
         }
         .button {
             display: inline-block;
-            background-color: #6366f1;
+            background-color: #007bff;
             color: white;
             padding: 12px 24px;
             text-decoration: none;
-            border-radius: 6px;
+            border-radius: 4px;
             font-weight: bold;
             margin: 10px 0;
         }
@@ -76,16 +76,16 @@
             background-color: #fff3cd;
             border: 1px solid #ffeaa7;
             color: #856404;
-            padding: 15px;
-            border-radius: 6px;
+            padding: 12px;
+            border-radius: 4px;
             margin: 15px 0;
         }
         .success {
             background-color: #d4edda;
             border: 1px solid #c3e6cb;
             color: #155724;
-            padding: 15px;
-            border-radius: 6px;
+            padding: 12px;
+            border-radius: 4px;
             margin: 15px 0;
         }
     </style>
