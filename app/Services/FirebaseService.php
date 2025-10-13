@@ -157,6 +157,10 @@ class FirebaseService
             case 'chat_message':
                 return 'New Message';
             case 'admin_message':
+                // Check if this is a tournament announcement
+                if (isset($data['tournament_id']) || isset($data['tournament_name'])) {
+                    return 'New Tournament Available';
+                }
                 return 'Admin Announcement';
             default:
                 return 'CueSports Kenya';
