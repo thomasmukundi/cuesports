@@ -1316,7 +1316,7 @@ class AdminController extends Controller
                     Notification::create([
                         'player_id' => $user->id,
                         'type' => 'tournament_announcement',
-                        'message' => "🏆 New tournament '{$tournament->name}' is now open for registration!",
+                        'message' => "New tournament '{$tournament->name}' is now open for registration!",
                         'data' => [
                             'tournament_id' => $tournament->id,
                             'tournament_name' => $tournament->name,

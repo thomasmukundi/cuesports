@@ -148,6 +148,7 @@ class FirebaseService
             case 'match_forfeit':
                 return 'Match Forfeit';
             case 'tournament_created':
+            case 'tournament_announcement':
                 return 'New Tournament Available';
             case 'tournament_started':
                 return 'Tournament Started';
@@ -179,7 +180,9 @@ class FirebaseService
             case 'match_forfeit':
                 return "A match has been forfeited. Check your tournament status.";
             case 'tournament_created':
-                return "A new {$data['level']} level tournament is now available for registration";
+            case 'tournament_announcement':
+                $tournamentName = $data['tournament_name'] ?? 'tournament';
+                return "New tournament '{$tournamentName}' is now open for registration!";
             case 'tournament_started':
                 return "Tournament {$data['tournament_name']} has started. Good luck!";
             case 'tournament_completed':

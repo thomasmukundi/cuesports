@@ -94,7 +94,7 @@
     <div class="email-container">
         <div class="header">
             <div class="logo">{{ $app_name ?? config('app.name') }}</div>
-            <div class="subtitle">Kenya's Premier Pool Tournament Platform</div>
+            <div class="subtitle">Africa's Premier Pool Tournament Platform</div>
         </div>
         
         <div class="content">
