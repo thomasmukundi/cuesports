@@ -137,6 +137,7 @@ Route::prefix('admin')->middleware(['auth'])->group(function () {
     })->name('admin.communications');
     Route::post('/communications/send-all', [App\Http\Controllers\AdminCommunicationController::class, 'sendToAllPlayers'])->name('admin.communications.send-all');
     Route::post('/communications/test-send', [App\Http\Controllers\AdminCommunicationController::class, 'sendTestCommunication'])->name('admin.communications.test-send');
+    Route::post('/communications/test-email', [App\Http\Controllers\AdminCommunicationController::class, 'sendTestEmail'])->name('admin.communications.test-email');
     Route::post('/communications/tournament-announcement', [App\Http\Controllers\AdminCommunicationController::class, 'sendTournamentAnnouncement'])->name('admin.communications.tournament');
     Route::get('/communications/stats', [App\Http\Controllers\AdminCommunicationController::class, 'getStats'])->name('admin.communications.stats');
     

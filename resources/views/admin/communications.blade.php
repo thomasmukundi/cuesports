@@ -7,8 +7,11 @@
     <div class="row">
         <div class="col-12">
             <div class="card">
-                <div class="card-header">
+                <div class="card-header d-flex justify-content-between align-items-center">
                     <h3 class="card-title">📧 Player Communications</h3>
+                    <button type="button" class="btn btn-outline-info" id="testEmailBtn" onclick="sendTestEmail()">
+                        <i class="fas fa-envelope-open-text"></i> Test Email
+                    </button>
                 </div>
                 <div class="card-body">
                     <!-- Statistics Cards -->
@@ -373,6 +376,70 @@ function showResults(result, title) {
     
     content.innerHTML = html;
     results.style.display = 'block';
+}
+
+async function sendTestEmail() {
+    const button = document.getElementById('testEmailBtn');
+    const originalText = button.innerHTML;
+    
+    // Show loading state
+    button.disabled = true;
+    button.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Sending...';
+    
+    showLoading('Sending test email to thomasngomono90@gmail.com...');
+    
+    try {
+        const response = await fetch('/admin/communications/test-email', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
+            }
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            showResults({
+                success: true,
+                message: result.message,
+                results: {
+                    total: 1,
+                    sent: 1,
+                    failed: 0
+                }
+            }, 'Test Email Results');
+            
+            // Show additional details
+            const content = document.getElementById('results-content');
+            content.innerHTML += `
+                <div class="mt-3 p-3 bg-light rounded">
+                    <h6><i class="fas fa-info-circle"></i> Test Email Details:</h6>
+                    <ul class="mb-0">
+                        <li><strong>Recipient:</strong> ${result.details.recipient}</li>
+                        <li><strong>Test Code:</strong> ${result.details.test_code}</li>
+                        <li><strong>Sent At:</strong> ${result.details.sent_at}</li>
+                        <li><strong>Note:</strong> ${result.details.note}</li>
+                    </ul>
+                </div>
+            `;
+        } else {
+            showResults({
+                success: false,
+                message: result.message
+            }, 'Test Email Failed');
+        }
+        
+    } catch (error) {
+        showResults({
+            success: false,
+            message: 'Network error: ' + error.message
+        }, 'Test Email Error');
+    } finally {
+        // Restore button state
+        button.disabled = false;
+        button.innerHTML = originalText;
+    }
 }
 
 </script>

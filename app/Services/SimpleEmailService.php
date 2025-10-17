@@ -99,11 +99,25 @@ class SimpleEmailService
                 'mail_driver' => config('mail.default'),
                 'mail_host' => config('mail.mailers.smtp.host'),
                 'mail_port' => config('mail.mailers.smtp.port'),
+                'mail_username' => config('mail.mailers.smtp.username'),
+                'mail_from_address' => config('mail.from.address'),
+                'mail_from_name' => config('mail.from.name'),
+                'template' => $template,
+                'subject' => $subject,
                 'sending_now' => true
             ]);
 
             // Add small delay to prevent SMTP connection overload
             $this->preventSmtpOverload($stepId, $email);
+
+            // Check if template exists
+            $templatePath = resource_path("views/{$template}.blade.php");
+            Log::info("📄 STEP 5.5: Email template check", [
+                'step_id' => $stepId,
+                'template' => $template,
+                'template_path' => $templatePath,
+                'template_exists' => file_exists($templatePath)
+            ]);
 
             // Send the email
             Mail::send($template, $data, function ($message) use ($email, $name, $subject, $stepId) {
@@ -111,15 +125,21 @@ class SimpleEmailService
                     'step_id' => $stepId,
                     'email' => $email,
                     'name' => $name,
-                    'subject' => $subject
+                    'subject' => $subject,
+                    'from_address' => config('mail.from.address'),
+                    'from_name' => config('mail.from.name')
                 ]);
                 
+                // Set from address explicitly
+                $message->from(config('mail.from.address'), config('mail.from.name'));
                 $message->to($email, $name)->subject($subject);
                 
                 Log::info("✅ STEP 7: Mail message configured", [
                     'step_id' => $stepId,
                     'email' => $email,
-                    'message_configured' => true
+                    'message_configured' => true,
+                    'message_to' => $email,
+                    'message_subject' => $subject
                 ]);
             });
 
@@ -145,14 +165,16 @@ class SimpleEmailService
                     'retry_attempt' => 1
                 ]);
                 
-                // Wait 5 seconds and try once more
-                sleep(5);
+                // Wait longer for SMTP connection limits (15-30 seconds)
+                $retryDelay = rand(15, 30);
+                sleep($retryDelay);
                 
                 try {
-                    Log::info("🔄 STEP 5.4: Retrying email send after SMTP delay", [
+                    Log::info("🔄 STEP 5.4: Retrying email send after extended SMTP delay", [
                         'step_id' => $stepId,
                         'email' => $email,
-                        'retry_delay' => 5
+                        'retry_delay' => $retryDelay,
+                        'reason' => 'Extended delay for SMTP connection limit'
                     ]);
                     
                     Mail::send($template, $data, function ($message) use ($email, $name, $subject, $stepId) {
@@ -165,6 +187,7 @@ class SimpleEmailService
                         'type' => $type,
                         'method' => 'direct_smtp_retry',
                         'success' => true,
+                        'retry_delay_used' => $retryDelay,
                         'timestamp' => now()->toISOString()
                     ]);
                     
@@ -209,9 +232,9 @@ class SimpleEmailService
         $currentTime = time();
         $timeSinceLastEmail = $currentTime - $lastEmailTime;
         
-        // If last email was sent less than 3 seconds ago, add delay
-        if ($timeSinceLastEmail < 3) {
-            $delaySeconds = 3 - $timeSinceLastEmail;
+        // If last email was sent less than 10 seconds ago, add delay
+        if ($timeSinceLastEmail < 10) {
+            $delaySeconds = 10 - $timeSinceLastEmail;
             
             Log::info("⏳ STEP 5.1: Adding SMTP protection delay", [
                 'step_id' => $stepId,
@@ -233,7 +256,7 @@ class SimpleEmailService
                 'step_id' => $stepId,
                 'email' => $email,
                 'time_since_last_email' => $timeSinceLastEmail,
-                'reason' => 'Sufficient time gap'
+                'reason' => 'Sufficient time gap (10+ seconds)'
             ]);
         }
         
@@ -256,7 +279,7 @@ class SimpleEmailService
             'can_send_now' => true,
             'last_email_sent' => $lastEmailTime > 0 ? date('Y-m-d H:i:s', $lastEmailTime) : 'never',
             'time_since_last_email' => $timeSinceLastEmail,
-            'smtp_protection' => $timeSinceLastEmail < 3 ? 'will_add_delay' : 'no_delay_needed',
+            'smtp_protection' => $timeSinceLastEmail < 10 ? 'will_add_delay' : 'no_delay_needed',
             'current_time' => now()->format('Y-m-d H:i:s')
         ];
     }

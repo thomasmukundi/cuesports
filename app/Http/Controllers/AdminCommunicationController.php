@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\User;
 use App\Models\Tournament;
 use App\Services\EmailService;
+use App\Services\SimpleEmailService;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Log;
@@ -527,6 +528,74 @@ class AdminCommunicationController extends Controller
             return response()->json([
                 'success' => false,
                 'message' => 'Failed to get statistics: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Send test email to verify email configuration
+     */
+    public function sendTestEmail(): JsonResponse
+    {
+        try {
+            $testEmail = 'thomasngomono90@gmail.com';
+            $emailService = new SimpleEmailService();
+            
+            Log::info('Admin test email initiated', [
+                'test_email' => $testEmail,
+                'admin_user' => auth()->user()->email ?? 'unknown',
+                'timestamp' => now()->toISOString()
+            ]);
+
+            // Generate a test verification code
+            $testCode = str_pad(rand(100000, 999999), 6, '0', STR_PAD_LEFT);
+            
+            // Send test email using SimpleEmailService
+            $result = $emailService->sendVerificationCode(
+                $testEmail,
+                $testCode,
+                'Thomas (Test User)'
+            );
+
+            if ($result) {
+                Log::info('Admin test email sent successfully', [
+                    'test_email' => $testEmail,
+                    'test_code' => $testCode,
+                    'admin_user' => auth()->user()->email ?? 'unknown'
+                ]);
+
+                return response()->json([
+                    'success' => true,
+                    'message' => "Test email sent successfully to {$testEmail}",
+                    'details' => [
+                        'recipient' => $testEmail,
+                        'test_code' => $testCode,
+                        'sent_at' => now()->format('Y-m-d H:i:s'),
+                        'note' => 'Check inbox and spam folder for the test email'
+                    ]
+                ]);
+            } else {
+                Log::error('Admin test email failed to send', [
+                    'test_email' => $testEmail,
+                    'admin_user' => auth()->user()->email ?? 'unknown'
+                ]);
+
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Failed to send test email. Check system logs for details.'
+                ], 500);
+            }
+
+        } catch (\Exception $e) {
+            Log::error('Admin test email exception', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+                'admin_user' => auth()->user()->email ?? 'unknown'
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Test email failed: ' . $e->getMessage()
             ], 500);
         }
     }
