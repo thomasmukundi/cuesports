@@ -45,11 +45,53 @@ class Verification extends Model
      */
     public static function createOrUpdate(string $email, string $type, ?int $userId = null, array $metadata = []): self
     {
-        // Delete any existing unused verification for this email and type
-        self::where('email', $email)
+        // Check if there's a recent valid verification (within last 20 minutes)
+        $recentVerification = self::where('email', $email)
             ->where('verification_type', $type)
             ->where('is_used', false)
+            ->where('expires_at', '>', Carbon::now())
+            ->where('created_at', '>', Carbon::now()->subMinutes(20))
+            ->first();
+
+        // If there's a recent valid verification, return it instead of creating new one
+        if ($recentVerification) {
+            \Log::info('🔄 Returning existing recent verification instead of creating new one', [
+                'verification_id' => $recentVerification->id,
+                'email' => $email,
+                'type' => $type,
+                'code' => $recentVerification->code,
+                'created_at' => $recentVerification->created_at,
+                'expires_at' => $recentVerification->expires_at,
+                'age_minutes' => Carbon::now()->diffInMinutes($recentVerification->created_at)
+            ]);
+            
+            // Resend the email for the existing verification
+            $recentVerification->sendEmail();
+            return $recentVerification;
+        }
+
+        // Only delete old verifications that are truly expired (past expiration time)
+        // Do NOT delete based on creation time to avoid deleting valid codes
+        $deletedCount = self::where('email', $email)
+            ->where('verification_type', $type)
+            ->where('is_used', false)
+            ->where('expires_at', '<=', Carbon::now())
             ->delete();
+
+        if ($deletedCount > 0) {
+            \Log::info('🗑️ Cleaned up expired verifications', [
+                'email' => $email,
+                'type' => $type,
+                'deleted_count' => $deletedCount
+            ]);
+        }
+
+        // Check how many active verifications exist before creating new one
+        $activeCount = self::where('email', $email)
+            ->where('verification_type', $type)
+            ->where('is_used', false)
+            ->where('expires_at', '>', Carbon::now())
+            ->count();
 
         $verification = self::create([
             'verification_type' => $type,
@@ -59,6 +101,15 @@ class Verification extends Model
             'expires_at' => Carbon::now()->addMinutes(15), // 15 minutes expiry
             'is_used' => false,
             'metadata' => $metadata,
+        ]);
+
+        \Log::info('✨ New verification code created', [
+            'verification_id' => $verification->id,
+            'email' => $email,
+            'type' => $type,
+            'code' => $verification->code,
+            'active_codes_before_creation' => $activeCount,
+            'expires_at' => $verification->expires_at
         ]);
 
         // Send email using EmailService

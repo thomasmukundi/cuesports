@@ -197,16 +197,16 @@ class VerificationController extends Controller
             'type' => 'required|in:sign_up,reset_password,change_email',
         ]);
 
-        // Check if there's a recent verification request (rate limiting)
+        // Check if there's a very recent verification request (rate limiting - 60 seconds)
         $recentVerification = Verification::where('email', $validated['email'])
             ->where('verification_type', $validated['type'])
-            ->where('created_at', '>', now()->subMinutes(1))
+            ->where('created_at', '>', now()->subSeconds(60))
             ->first();
 
         if ($recentVerification) {
             return response()->json([
                 'success' => false,
-                'message' => 'Please wait before requesting another code'
+                'message' => 'Please wait 1 minute before requesting another code'
             ], 429);
         }
 
