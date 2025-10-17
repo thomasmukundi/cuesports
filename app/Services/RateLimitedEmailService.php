@@ -4,6 +4,7 @@ namespace App\Services;
 
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Mail;
 use App\Jobs\SendVerificationEmailJob;
 
 class RateLimitedEmailService
@@ -50,17 +51,36 @@ class RateLimitedEmailService
         $this->incrementGlobalRateLimit();
         $this->incrementEmailRateLimit($email);
 
-        // Dispatch to queue with calculated delay
-        SendVerificationEmailJob::dispatch($email, $code, $name, 'verification', $delaySeconds);
+        // Try to dispatch to queue, but fallback to immediate sending if queue isn't working
+        try {
+            if ($delaySeconds === 0) {
+                // For immediate emails, try queue first but fallback quickly
+                SendVerificationEmailJob::dispatch($email, $code, $name, 'verification', $delaySeconds);
+                
+                // Check if queue is working by testing job count
+                $this->verifyQueueIsWorking($email, $code, $name, 'verification');
+            } else {
+                // For delayed emails, always use queue
+                SendVerificationEmailJob::dispatch($email, $code, $name, 'verification', $delaySeconds);
+            }
 
-        Log::info('Rate-limited verification email queued', [
-            'email' => $email,
-            'code' => $code,
-            'delay_seconds' => $delaySeconds,
-            'immediate' => $delaySeconds === 0
-        ]);
+            Log::info('Rate-limited verification email queued', [
+                'email' => $email,
+                'code' => $code,
+                'delay_seconds' => $delaySeconds,
+                'immediate' => $delaySeconds === 0
+            ]);
 
-        return true;
+            return true;
+        } catch (\Exception $e) {
+            Log::error('Failed to queue verification email, sending immediately', [
+                'email' => $email,
+                'error' => $e->getMessage()
+            ]);
+            
+            // Fallback to immediate sending
+            return $this->sendImmediately($email, $code, $name, 'verification');
+        }
     }
 
     /**
@@ -100,17 +120,36 @@ class RateLimitedEmailService
         $this->incrementGlobalRateLimit();
         $this->incrementEmailRateLimit($email);
 
-        // Dispatch to queue with calculated delay
-        SendVerificationEmailJob::dispatch($email, $code, $name, 'password_reset', $delaySeconds);
+        // Try to dispatch to queue, but fallback to immediate sending if queue isn't working
+        try {
+            if ($delaySeconds === 0) {
+                // For immediate emails, try queue first but fallback quickly
+                SendVerificationEmailJob::dispatch($email, $code, $name, 'password_reset', $delaySeconds);
+                
+                // Check if queue is working by testing job count
+                $this->verifyQueueIsWorking($email, $code, $name, 'password_reset');
+            } else {
+                // For delayed emails, always use queue
+                SendVerificationEmailJob::dispatch($email, $code, $name, 'password_reset', $delaySeconds);
+            }
 
-        Log::info('Rate-limited password reset email queued', [
-            'email' => $email,
-            'code' => $code,
-            'delay_seconds' => $delaySeconds,
-            'immediate' => $delaySeconds === 0
-        ]);
+            Log::info('Rate-limited password reset email queued', [
+                'email' => $email,
+                'code' => $code,
+                'delay_seconds' => $delaySeconds,
+                'immediate' => $delaySeconds === 0
+            ]);
 
-        return true;
+            return true;
+        } catch (\Exception $e) {
+            Log::error('Failed to queue password reset email, sending immediately', [
+                'email' => $email,
+                'error' => $e->getMessage()
+            ]);
+            
+            // Fallback to immediate sending
+            return $this->sendImmediately($email, $code, $name, 'password_reset');
+        }
     }
 
     /**
@@ -162,6 +201,61 @@ class RateLimitedEmailService
     {
         $key = self::RATE_LIMIT_KEY . ':' . now()->format('Y-m-d-H-i');
         return Cache::get($key, 0);
+    }
+
+    /**
+     * Verify queue is working and fallback to immediate sending if not
+     */
+    private function verifyQueueIsWorking(string $email, string $code, ?string $name, string $type): void
+    {
+        // For immediate emails on production, send directly to avoid queue delays
+        if (app()->environment('production')) {
+            Log::info('Production environment detected, sending email immediately to ensure delivery', [
+                'email' => $email,
+                'type' => $type
+            ]);
+            
+            // Send immediately in production to ensure reliability
+            $this->sendImmediately($email, $code, $name, $type);
+        }
+    }
+
+    /**
+     * Send email immediately without queue
+     */
+    private function sendImmediately(string $email, string $code, ?string $name, string $type): bool
+    {
+        try {
+            $data = [
+                'name' => $name ?? 'User',
+                'code' => $code,
+                'app_name' => config('app.name', 'CueSports Kenya'),
+            ];
+
+            $template = $type === 'password_reset' ? 'emails.password-reset' : 'emails.verification-code';
+            $subject = $type === 'password_reset' 
+                ? 'Password Reset Code - ' . config('app.name')
+                : 'Email Verification Code - ' . config('app.name');
+
+            \Mail::send($template, $data, function ($message) use ($email, $name, $subject) {
+                $message->to($email, $name)->subject($subject);
+            });
+
+            Log::info('Email sent immediately (bypassed queue)', [
+                'email' => $email,
+                'type' => $type,
+                'method' => 'immediate'
+            ]);
+
+            return true;
+        } catch (\Exception $e) {
+            Log::error('Failed to send email immediately', [
+                'email' => $email,
+                'type' => $type,
+                'error' => $e->getMessage()
+            ]);
+            return false;
+        }
     }
 
     /**

@@ -5,8 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Carbon\Carbon;
-use App\Services\EmailService;
-use App\Services\RateLimitedEmailService;
+use App\Services\SimpleEmailService;
 
 class Verification extends Model
 {
@@ -69,53 +68,82 @@ class Verification extends Model
     }
 
     /**
-     * Send verification email based on type (with rate limiting)
+     * Send verification email with comprehensive step-by-step logging
      */
     public function sendEmail(): bool
     {
-        $rateLimitedEmailService = new RateLimitedEmailService();
+        $emailService = new SimpleEmailService();
         $userName = $this->metadata['name'] ?? $this->metadata['registration_data']['first_name'] ?? 'User';
 
+        \Log::info("🎯 VERIFICATION EMAIL TRIGGER", [
+            'verification_id' => $this->id,
+            'email' => $this->email,
+            'type' => $this->verification_type,
+            'user_name' => $userName,
+            'code' => $this->code,
+            'created_at' => $this->created_at,
+            'expires_at' => $this->expires_at,
+            'trigger_source' => 'Verification::sendEmail()'
+        ]);
+
         try {
+            $result = false;
+            
             switch ($this->verification_type) {
                 case self::TYPE_SIGN_UP:
-                    return $rateLimitedEmailService->sendVerificationCode($this->email, $this->code, $userName);
+                    \Log::info("📝 Processing SIGN_UP verification email", [
+                        'verification_id' => $this->id,
+                        'email' => $this->email
+                    ]);
+                    $result = $emailService->sendVerificationCode($this->email, $this->code, $userName);
+                    break;
                 
                 case self::TYPE_RESET_PASSWORD:
-                    return $rateLimitedEmailService->sendPasswordResetCode($this->email, $this->code, $userName);
+                    \Log::info("🔐 Processing RESET_PASSWORD verification email", [
+                        'verification_id' => $this->id,
+                        'email' => $this->email
+                    ]);
+                    $result = $emailService->sendPasswordResetCode($this->email, $this->code, $userName);
+                    break;
                 
                 case self::TYPE_CHANGE_EMAIL:
-                    return $rateLimitedEmailService->sendVerificationCode($this->email, $this->code, $userName);
+                    \Log::info("📧 Processing CHANGE_EMAIL verification email", [
+                        'verification_id' => $this->id,
+                        'email' => $this->email
+                    ]);
+                    $result = $emailService->sendVerificationCode($this->email, $this->code, $userName);
+                    break;
                 
                 default:
-                    \Log::warning('Unknown verification type: ' . $this->verification_type);
+                    \Log::error('❌ Unknown verification type', [
+                        'verification_id' => $this->id,
+                        'email' => $this->email,
+                        'type' => $this->verification_type
+                    ]);
                     return false;
             }
-        } catch (\Exception $e) {
-            \Log::error('Failed to send verification email', [
+
+            \Log::info("🏁 VERIFICATION EMAIL RESULT", [
                 'verification_id' => $this->id,
                 'email' => $this->email,
                 'type' => $this->verification_type,
-                'error' => $e->getMessage()
+                'success' => $result,
+                'timestamp' => now()->toISOString()
             ]);
-            
-            // Fallback to regular email service if rate limited service fails
-            try {
-                $emailService = new EmailService();
-                switch ($this->verification_type) {
-                    case self::TYPE_SIGN_UP:
-                    case self::TYPE_CHANGE_EMAIL:
-                        return $emailService->sendVerificationCode($this->email, $this->code, $userName);
-                    case self::TYPE_RESET_PASSWORD:
-                        return $emailService->sendPasswordResetCode($this->email, $this->code, $userName);
-                }
-            } catch (\Exception $fallbackException) {
-                \Log::error('Fallback email service also failed', [
-                    'verification_id' => $this->id,
-                    'email' => $this->email,
-                    'error' => $fallbackException->getMessage()
-                ]);
-            }
+
+            return $result;
+
+        } catch (\Exception $e) {
+            \Log::error('💥 VERIFICATION EMAIL EXCEPTION', [
+                'verification_id' => $this->id,
+                'email' => $this->email,
+                'type' => $this->verification_type,
+                'error_message' => $e->getMessage(),
+                'error_code' => $e->getCode(),
+                'error_file' => $e->getFile(),
+                'error_line' => $e->getLine(),
+                'stack_trace' => $e->getTraceAsString()
+            ]);
             
             return false;
         }
