@@ -3,7 +3,7 @@
 namespace App\Console\Commands;
 
 use Illuminate\Console\Command;
-use App\Services\RateLimitedEmailService;
+use App\Services\SimpleEmailService;
 use Illuminate\Support\Facades\Mail;
 
 class TestEmailSending extends Command
@@ -61,27 +61,28 @@ class TestEmailSending extends Command
     
     private function testRateLimitedSending($email, $code)
     {
-        $this->info("Testing rate-limited email sending...");
+        $this->info("Testing simple email sending...");
         
         try {
-            $emailService = new RateLimitedEmailService();
+            $emailService = new SimpleEmailService();
             $result = $emailService->sendVerificationCode($email, $code, 'Test User');
             
             if ($result) {
-                $this->info("✅ Rate-limited email queued successfully!");
+                $this->info("✅ Simple email sent successfully!");
                 
-                // Show rate limit status
-                $status = $emailService->getRateLimitStatus();
-                $this->info("Rate limit status:");
-                $this->line("- Emails this minute: {$status['global_emails_this_minute']}/{$status['global_limit']}");
-                $this->line("- Will be immediate: " . ($status['will_be_immediate'] ? 'Yes' : 'No'));
+                // Show email status
+                $status = $emailService->getEmailStatus($email);
+                $this->info("Email status:");
+                $this->line("- Rate limiting: {$status['rate_limiting']}");
+                $this->line("- Can send now: " . ($status['can_send_now'] ? 'Yes' : 'No'));
+                $this->line("- SMTP protection: {$status['smtp_protection']}");
                 
             } else {
-                $this->error("❌ Rate-limited email failed!");
+                $this->error("❌ Simple email failed!");
             }
             
         } catch (\Exception $e) {
-            $this->error("❌ Rate-limited email failed: " . $e->getMessage());
+            $this->error("❌ Simple email failed: " . $e->getMessage());
         }
     }
 }

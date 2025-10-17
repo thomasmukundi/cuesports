@@ -4,7 +4,7 @@ namespace App\Console\Commands;
 
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
-use App\Services\RateLimitedEmailService;
+use App\Services\SimpleEmailService;
 
 class MonitorEmailQueue extends Command
 {
@@ -70,21 +70,19 @@ class MonitorEmailQueue extends Command
 
     private function checkRateLimits()
     {
-        $this->info("\n⏱️  Rate Limit Status:");
+        $this->info("\n⏱️  Email System Status:");
         
         try {
-            $rateLimitedService = new RateLimitedEmailService();
-            $status = $rateLimitedService->getRateLimitStatus();
+            $emailService = new SimpleEmailService();
+            $status = $emailService->getEmailStatus('test@example.com');
             
-            $this->line("Global emails this minute: {$status['global_emails_this_minute']}/{$status['global_limit']}");
-            $this->line("Global remaining: {$status['global_remaining']}");
-            $this->line("Per-email limit per hour: {$status['per_email_limit_per_hour']}");
+            $this->line("Rate limiting: {$status['rate_limiting']}");
+            $this->line("Can send emails: " . ($status['can_send_now'] ? 'Yes' : 'No'));
+            $this->line("Last email sent: {$status['last_email_sent']}");
+            $this->line("SMTP protection: {$status['smtp_protection']}");
             
-            if ($status['global_remaining'] < 5) {
-                $this->warn("⚠️  Rate limit nearly exceeded!");
-            }
         } catch (\Exception $e) {
-            $this->error("Error checking rate limits: " . $e->getMessage());
+            $this->error("Error checking email system: " . $e->getMessage());
         }
     }
 
