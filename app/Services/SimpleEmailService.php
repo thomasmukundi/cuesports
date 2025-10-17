@@ -140,6 +140,9 @@ class SimpleEmailService
                 'sending_now' => true
             ]);
 
+            // Add small delay to prevent SMTP connection overload
+            $this->preventSmtpOverload($stepId, $email);
+
             // Send the email
             Mail::send($template, $data, function ($message) use ($email, $name, $subject, $stepId) {
                 Log::info("📮 STEP 7: Inside Mail closure, setting recipients", [
@@ -170,6 +173,53 @@ class SimpleEmailService
             return true;
 
         } catch (Exception $e) {
+            // Check if this is an SMTP connection error that we can retry
+            if (str_contains($e->getMessage(), '421') || str_contains($e->getMessage(), 'Too many concurrent')) {
+                Log::warning("⚠️ STEP 6.3: SMTP connection limit hit, attempting retry", [
+                    'step_id' => $stepId,
+                    'email' => $email,
+                    'type' => $type,
+                    'error_message' => $e->getMessage(),
+                    'retry_attempt' => 1
+                ]);
+                
+                // Wait 5 seconds and try once more
+                sleep(5);
+                
+                try {
+                    Log::info("🔄 STEP 6.4: Retrying email send after SMTP delay", [
+                        'step_id' => $stepId,
+                        'email' => $email,
+                        'retry_delay' => 5
+                    ]);
+                    
+                    Mail::send($template, $data, function ($message) use ($email, $name, $subject, $stepId) {
+                        $message->to($email, $name)->subject($subject);
+                    });
+                    
+                    Log::info("🎉 STEP 9: Email sent successfully on retry!", [
+                        'step_id' => $stepId,
+                        'email' => $email,
+                        'type' => $type,
+                        'method' => 'direct_smtp_retry',
+                        'success' => true,
+                        'timestamp' => now()->toISOString()
+                    ]);
+                    
+                    return true;
+                    
+                } catch (Exception $retryException) {
+                    Log::error("💥 STEP ERROR: Email retry also failed", [
+                        'step_id' => $stepId,
+                        'email' => $email,
+                        'type' => $type,
+                        'original_error' => $e->getMessage(),
+                        'retry_error' => $retryException->getMessage(),
+                        'timestamp' => now()->toISOString()
+                    ]);
+                }
+            }
+            
             Log::error("💥 STEP ERROR: Email sending failed", [
                 'step_id' => $stepId,
                 'email' => $email,
@@ -222,6 +272,48 @@ class SimpleEmailService
             'cache_key' => $key,
             'expires_in_seconds' => 3600
         ]);
+    }
+
+    /**
+     * Prevent SMTP connection overload with intelligent delays
+     */
+    private function preventSmtpOverload(string $stepId, string $email): void
+    {
+        $lastEmailKey = 'last_email_sent';
+        $lastEmailTime = Cache::get($lastEmailKey, 0);
+        $currentTime = time();
+        $timeSinceLastEmail = $currentTime - $lastEmailTime;
+        
+        // If last email was sent less than 3 seconds ago, add delay
+        if ($timeSinceLastEmail < 3) {
+            $delaySeconds = 3 - $timeSinceLastEmail;
+            
+            Log::info("⏳ STEP 6.1: Adding SMTP protection delay", [
+                'step_id' => $stepId,
+                'email' => $email,
+                'time_since_last_email' => $timeSinceLastEmail,
+                'delay_seconds' => $delaySeconds,
+                'reason' => 'Prevent SMTP connection overload'
+            ]);
+            
+            sleep($delaySeconds);
+            
+            Log::info("✅ STEP 6.2: SMTP protection delay completed", [
+                'step_id' => $stepId,
+                'email' => $email,
+                'delay_completed' => true
+            ]);
+        } else {
+            Log::info("✅ STEP 6.1: No SMTP delay needed", [
+                'step_id' => $stepId,
+                'email' => $email,
+                'time_since_last_email' => $timeSinceLastEmail,
+                'reason' => 'Sufficient time gap'
+            ]);
+        }
+        
+        // Update last email time
+        Cache::put($lastEmailKey, $currentTime, 300); // Store for 5 minutes
     }
 
     /**
