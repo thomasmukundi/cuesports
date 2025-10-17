@@ -10,9 +10,35 @@ use Exception;
 class EmailService
 {
     /**
-     * Send verification code email
+     * Send verification code email (queued for better reliability)
      */
     public function sendVerificationCode(string $email, string $code, string $name = null): bool
+    {
+        try {
+            // Dispatch to queue for better handling of concurrent requests
+            \App\Jobs\SendVerificationEmailJob::dispatch($email, $code, $name, 'verification');
+
+            Log::info('Verification email queued successfully', [
+                'email' => $email,
+                'code' => $code
+            ]);
+
+            return true;
+        } catch (Exception $e) {
+            Log::error('Failed to queue verification email', [
+                'email' => $email,
+                'error' => $e->getMessage()
+            ]);
+            
+            // Fallback to immediate sending if queue fails
+            return $this->sendVerificationCodeImmediate($email, $code, $name);
+        }
+    }
+
+    /**
+     * Send verification code email immediately (fallback method)
+     */
+    private function sendVerificationCodeImmediate(string $email, string $code, string $name = null): bool
     {
         try {
             $data = [
@@ -26,14 +52,14 @@ class EmailService
                         ->subject('Email Verification Code - ' . config('app.name'));
             });
 
-            Log::info('Verification email sent successfully', [
+            Log::info('Verification email sent immediately (fallback)', [
                 'email' => $email,
                 'code' => $code
             ]);
 
             return true;
         } catch (Exception $e) {
-            Log::error('Failed to send verification email', [
+            Log::error('Failed to send verification email immediately', [
                 'email' => $email,
                 'error' => $e->getMessage()
             ]);
@@ -42,9 +68,35 @@ class EmailService
     }
 
     /**
-     * Send password reset code email
+     * Send password reset code email (queued for better reliability)
      */
     public function sendPasswordResetCode(string $email, string $code, string $name = null): bool
+    {
+        try {
+            // Dispatch to queue for better handling of concurrent requests
+            \App\Jobs\SendVerificationEmailJob::dispatch($email, $code, $name, 'password_reset');
+
+            Log::info('Password reset email queued successfully', [
+                'email' => $email,
+                'code' => $code
+            ]);
+
+            return true;
+        } catch (Exception $e) {
+            Log::error('Failed to queue password reset email', [
+                'email' => $email,
+                'error' => $e->getMessage()
+            ]);
+            
+            // Fallback to immediate sending if queue fails
+            return $this->sendPasswordResetCodeImmediate($email, $code, $name);
+        }
+    }
+
+    /**
+     * Send password reset code email immediately (fallback method)
+     */
+    private function sendPasswordResetCodeImmediate(string $email, string $code, string $name = null): bool
     {
         try {
             $data = [
@@ -58,14 +110,14 @@ class EmailService
                         ->subject('Password Reset Code - ' . config('app.name'));
             });
 
-            Log::info('Password reset email sent successfully', [
+            Log::info('Password reset email sent immediately (fallback)', [
                 'email' => $email,
                 'code' => $code
             ]);
 
             return true;
         } catch (Exception $e) {
-            Log::error('Failed to send password reset email', [
+            Log::error('Failed to send password reset email immediately', [
                 'email' => $email,
                 'error' => $e->getMessage()
             ]);
