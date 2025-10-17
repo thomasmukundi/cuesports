@@ -36,10 +36,13 @@ return [
     ],
 
     'firebase' => [
-    'credentials' => [
-        'file' => env('FIREBASE_CREDENTIALS'),
+        'credentials' => [
+            'file' => env('FIREBASE_CREDENTIALS'),
+        ],
     ],
-],
 
+    'brevo' => [
+        'api_key' => env('BREVO_API_KEY'),
+    ],
 
 ];

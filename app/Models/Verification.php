@@ -5,7 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Carbon\Carbon;
-use App\Services\SimpleEmailService;
+use App\Services\BrevoEmailService;
 
 class Verification extends Model
 {
@@ -72,7 +72,7 @@ class Verification extends Model
      */
     public function sendEmail(): bool
     {
-        $emailService = new SimpleEmailService();
+        $emailService = new BrevoEmailService();
         $userName = $this->metadata['name'] ?? $this->metadata['registration_data']['first_name'] ?? 'User';
 
         \Log::info("🎯 VERIFICATION EMAIL TRIGGER", [

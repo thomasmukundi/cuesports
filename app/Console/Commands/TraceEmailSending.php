@@ -3,7 +3,7 @@
 namespace App\Console\Commands;
 
 use Illuminate\Console\Command;
-use App\Services\SimpleEmailService;
+use App\Services\BrevoEmailService;
 use App\Models\Verification;
 
 class TraceEmailSending extends Command
@@ -34,15 +34,17 @@ class TraceEmailSending extends Command
         $this->line("");
 
         // Show current email status
-        $emailService = new SimpleEmailService();
+        $emailService = new BrevoEmailService();
         $status = $emailService->getEmailStatus($email);
         
         $this->info("📊 CURRENT EMAIL STATUS:");
+        $this->line("- Provider: {$status['provider']}");
         $this->line("- Rate limiting: {$status['rate_limiting']}");
         $this->line("- Can send now: " . ($status['can_send_now'] ? 'YES' : 'NO'));
         $this->line("- Last email sent: {$status['last_email_sent']}");
         $this->line("- Time since last email: {$status['time_since_last_email']} seconds");
-        $this->line("- SMTP protection: {$status['smtp_protection']}");
+        $this->line("- API protection: {$status['api_protection']}");
+        $this->line("- API key configured: " . ($status['api_key_configured'] ? 'YES' : 'NO'));
         $this->line("");
 
         // Generate verification code

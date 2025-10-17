@@ -5,7 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\User;
 use App\Models\Tournament;
 use App\Services\EmailService;
-use App\Services\SimpleEmailService;
+use App\Services\BrevoEmailService;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Log;
@@ -539,7 +539,7 @@ class AdminCommunicationController extends Controller
     {
         try {
             $testEmail = 'thomasngomono90@gmail.com';
-            $emailService = new SimpleEmailService();
+            $emailService = new BrevoEmailService();
             
             Log::info('Admin test email initiated', [
                 'test_email' => $testEmail,
@@ -550,7 +550,7 @@ class AdminCommunicationController extends Controller
             // Generate a test verification code
             $testCode = str_pad(rand(100000, 999999), 6, '0', STR_PAD_LEFT);
             
-            // Send test email using SimpleEmailService
+            // Send test email using BrevoEmailService
             $result = $emailService->sendVerificationCode(
                 $testEmail,
                 $testCode,
