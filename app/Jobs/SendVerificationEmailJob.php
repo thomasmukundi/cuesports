@@ -41,15 +41,18 @@ class SendVerificationEmailJob implements ShouldQueue
     /**
      * Create a new job instance.
      */
-    public function __construct(string $email, string $code, ?string $name = null, string $type = 'verification')
+    public function __construct(string $email, string $code, ?string $name = null, string $type = 'verification', int $delaySeconds = 0)
     {
         $this->email = $email;
         $this->code = $code;
         $this->name = $name ?? 'User';
         $this->type = $type;
         
-        // Add delay to spread out email sending
-        $this->delay(rand(1, 10)); // Random delay 1-10 seconds
+        // Only add delay if specified (for rate limiting scenarios)
+        if ($delaySeconds > 0) {
+            $this->delay($delaySeconds);
+        }
+        // Otherwise, process immediately
     }
 
     /**

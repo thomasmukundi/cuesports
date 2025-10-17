@@ -18,21 +18,7 @@ class RateLimitedEmailService
      */
     public function sendVerificationCode(string $email, string $code, ?string $name = null): bool
     {
-        // Check global rate limit
-        if (!$this->checkGlobalRateLimit()) {
-            Log::warning('Global email rate limit exceeded', [
-                'email' => $email,
-                'current_minute' => now()->format('Y-m-d H:i')
-            ]);
-            
-            // Queue with longer delay when rate limited
-            SendVerificationEmailJob::dispatch($email, $code, $name, 'verification')
-                ->delay(rand(60, 120)); // 1-2 minute delay
-            
-            return true; // Still return true as it's queued
-        }
-
-        // Check per-email rate limit
+        // Check per-email rate limit first (prevent spam)
         if (!$this->checkEmailRateLimit($email)) {
             Log::warning('Per-email rate limit exceeded', [
                 'email' => $email,
@@ -41,17 +27,37 @@ class RateLimitedEmailService
             return false; // Don't send if same email is being spammed
         }
 
+        // Check global rate limit and determine delay
+        $delaySeconds = 0;
+        if (!$this->checkGlobalRateLimit()) {
+            Log::warning('Global email rate limit exceeded', [
+                'email' => $email,
+                'current_minute' => now()->format('Y-m-d H:i')
+            ]);
+            
+            // Add delay when rate limited
+            $delaySeconds = rand(30, 90); // 30-90 second delay when rate limited
+        } else {
+            // Check current load to determine if we need a small delay
+            $currentLoad = $this->getCurrentLoad();
+            if ($currentLoad > 20) { // If more than 20 emails this minute
+                $delaySeconds = rand(1, 5); // Small delay to spread load
+            }
+            // Otherwise, send immediately (delaySeconds = 0)
+        }
+
         // Increment counters
         $this->incrementGlobalRateLimit();
         $this->incrementEmailRateLimit($email);
 
-        // Dispatch to queue with small random delay
-        SendVerificationEmailJob::dispatch($email, $code, $name, 'verification')
-            ->delay(rand(1, 10));
+        // Dispatch to queue with calculated delay
+        SendVerificationEmailJob::dispatch($email, $code, $name, 'verification', $delaySeconds);
 
         Log::info('Rate-limited verification email queued', [
             'email' => $email,
-            'code' => $code
+            'code' => $code,
+            'delay_seconds' => $delaySeconds,
+            'immediate' => $delaySeconds === 0
         ]);
 
         return true;
@@ -62,21 +68,7 @@ class RateLimitedEmailService
      */
     public function sendPasswordResetCode(string $email, string $code, ?string $name = null): bool
     {
-        // Check global rate limit
-        if (!$this->checkGlobalRateLimit()) {
-            Log::warning('Global email rate limit exceeded for password reset', [
-                'email' => $email,
-                'current_minute' => now()->format('Y-m-d H:i')
-            ]);
-            
-            // Queue with longer delay when rate limited
-            SendVerificationEmailJob::dispatch($email, $code, $name, 'password_reset')
-                ->delay(rand(60, 120)); // 1-2 minute delay
-            
-            return true; // Still return true as it's queued
-        }
-
-        // Check per-email rate limit
+        // Check per-email rate limit first (prevent spam)
         if (!$this->checkEmailRateLimit($email)) {
             Log::warning('Per-email rate limit exceeded for password reset', [
                 'email' => $email,
@@ -85,17 +77,37 @@ class RateLimitedEmailService
             return false; // Don't send if same email is being spammed
         }
 
+        // Check global rate limit and determine delay
+        $delaySeconds = 0;
+        if (!$this->checkGlobalRateLimit()) {
+            Log::warning('Global email rate limit exceeded for password reset', [
+                'email' => $email,
+                'current_minute' => now()->format('Y-m-d H:i')
+            ]);
+            
+            // Add delay when rate limited
+            $delaySeconds = rand(30, 90); // 30-90 second delay when rate limited
+        } else {
+            // Check current load to determine if we need a small delay
+            $currentLoad = $this->getCurrentLoad();
+            if ($currentLoad > 20) { // If more than 20 emails this minute
+                $delaySeconds = rand(1, 5); // Small delay to spread load
+            }
+            // Otherwise, send immediately (delaySeconds = 0)
+        }
+
         // Increment counters
         $this->incrementGlobalRateLimit();
         $this->incrementEmailRateLimit($email);
 
-        // Dispatch to queue with small random delay
-        SendVerificationEmailJob::dispatch($email, $code, $name, 'password_reset')
-            ->delay(rand(1, 10));
+        // Dispatch to queue with calculated delay
+        SendVerificationEmailJob::dispatch($email, $code, $name, 'password_reset', $delaySeconds);
 
         Log::info('Rate-limited password reset email queued', [
             'email' => $email,
-            'code' => $code
+            'code' => $code,
+            'delay_seconds' => $delaySeconds,
+            'immediate' => $delaySeconds === 0
         ]);
 
         return true;
@@ -144,6 +156,15 @@ class RateLimitedEmailService
     }
 
     /**
+     * Get current load (emails sent this minute)
+     */
+    private function getCurrentLoad(): int
+    {
+        $key = self::RATE_LIMIT_KEY . ':' . now()->format('Y-m-d-H-i');
+        return Cache::get($key, 0);
+    }
+
+    /**
      * Get current rate limit status
      */
     public function getRateLimitStatus(): array
@@ -155,7 +176,9 @@ class RateLimitedEmailService
             'global_emails_this_minute' => $globalCount,
             'global_limit' => self::MAX_EMAILS_PER_MINUTE,
             'global_remaining' => max(0, self::MAX_EMAILS_PER_MINUTE - $globalCount),
-            'per_email_limit_per_hour' => self::MAX_EMAILS_PER_EMAIL_PER_HOUR
+            'per_email_limit_per_hour' => self::MAX_EMAILS_PER_EMAIL_PER_HOUR,
+            'current_load' => $globalCount,
+            'will_be_immediate' => $globalCount <= 20 // Indicates if next email will be immediate
         ];
     }
 }

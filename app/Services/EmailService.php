@@ -15,12 +15,13 @@ class EmailService
     public function sendVerificationCode(string $email, string $code, ?string $name = null): bool
     {
         try {
-            // Dispatch to queue for better handling of concurrent requests
-            \App\Jobs\SendVerificationEmailJob::dispatch($email, $code, $name, 'verification');
+            // Dispatch to queue immediately (no delay) for better handling of concurrent requests
+            \App\Jobs\SendVerificationEmailJob::dispatch($email, $code, $name, 'verification', 0);
 
-            Log::info('Verification email queued successfully', [
+            Log::info('Verification email queued immediately', [
                 'email' => $email,
-                'code' => $code
+                'code' => $code,
+                'immediate' => true
             ]);
 
             return true;
@@ -73,12 +74,13 @@ class EmailService
     public function sendPasswordResetCode(string $email, string $code, ?string $name = null): bool
     {
         try {
-            // Dispatch to queue for better handling of concurrent requests
-            \App\Jobs\SendVerificationEmailJob::dispatch($email, $code, $name, 'password_reset');
+            // Dispatch to queue immediately (no delay) for better handling of concurrent requests
+            \App\Jobs\SendVerificationEmailJob::dispatch($email, $code, $name, 'password_reset', 0);
 
-            Log::info('Password reset email queued successfully', [
+            Log::info('Password reset email queued immediately', [
                 'email' => $email,
-                'code' => $code
+                'code' => $code,
+                'immediate' => true
             ]);
 
             return true;
