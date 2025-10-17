@@ -62,7 +62,18 @@ class Verification extends Model
         ]);
 
         // Send email using EmailService
-        $verification->sendEmail();
+        $emailSent = $verification->sendEmail();
+        
+        // If email sending fails, log it but still return the verification
+        // This allows the system to continue working even if email fails
+        if (!$emailSent) {
+            \Log::warning('⚠️ Verification created but email sending failed', [
+                'verification_id' => $verification->id,
+                'email' => $email,
+                'type' => $type,
+                'code' => $verification->code
+            ]);
+        }
 
         return $verification;
     }

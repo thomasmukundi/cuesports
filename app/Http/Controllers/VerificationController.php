@@ -43,9 +43,17 @@ class VerificationController extends Controller
             // Also log the code for development/testing
             Log::info("Verification code for {$validated['email']}: {$verification->code}");
 
+            // Check if this is a resend request by looking at recent verifications
+            $isResend = Verification::where('email', $validated['email'])
+                ->where('verification_type', $validated['type'])
+                ->where('created_at', '>', now()->subMinutes(5))
+                ->count() > 1;
+
+            $message = $isResend ? 'Verification code resent successfully' : 'Verification code sent successfully';
+
             return response()->json([
                 'success' => true,
-                'message' => 'Verification code sent successfully',
+                'message' => $message,
                 'expires_at' => $verification->expires_at->toISOString(),
             ]);
 
