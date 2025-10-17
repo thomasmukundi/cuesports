@@ -16,7 +16,7 @@ class RateLimitedEmailService
     /**
      * Send verification email with rate limiting
      */
-    public function sendVerificationCode(string $email, string $code, string $name = null): bool
+    public function sendVerificationCode(string $email, string $code, ?string $name = null): bool
     {
         // Check global rate limit
         if (!$this->checkGlobalRateLimit()) {
@@ -60,7 +60,7 @@ class RateLimitedEmailService
     /**
      * Send password reset email with rate limiting
      */
-    public function sendPasswordResetCode(string $email, string $code, string $name = null): bool
+    public function sendPasswordResetCode(string $email, string $code, ?string $name = null): bool
     {
         // Check global rate limit
         if (!$this->checkGlobalRateLimit()) {
@@ -118,8 +118,8 @@ class RateLimitedEmailService
     private function incrementGlobalRateLimit(): void
     {
         $key = self::RATE_LIMIT_KEY . ':' . now()->format('Y-m-d-H-i');
-        Cache::increment($key);
-        Cache::expire($key, 120); // Expire after 2 minutes
+        $current = Cache::get($key, 0);
+        Cache::put($key, $current + 1, 120); // Store for 2 minutes
     }
 
     /**
@@ -139,8 +139,8 @@ class RateLimitedEmailService
     private function incrementEmailRateLimit(string $email): void
     {
         $key = self::EMAIL_RATE_LIMIT_KEY . md5($email) . ':' . now()->format('Y-m-d-H');
-        Cache::increment($key);
-        Cache::expire($key, 3600); // Expire after 1 hour
+        $current = Cache::get($key, 0);
+        Cache::put($key, $current + 1, 3600); // Store for 1 hour
     }
 
     /**

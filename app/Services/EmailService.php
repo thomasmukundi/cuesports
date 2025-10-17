@@ -12,7 +12,7 @@ class EmailService
     /**
      * Send verification code email (queued for better reliability)
      */
-    public function sendVerificationCode(string $email, string $code, string $name = null): bool
+    public function sendVerificationCode(string $email, string $code, ?string $name = null): bool
     {
         try {
             // Dispatch to queue for better handling of concurrent requests
@@ -38,7 +38,7 @@ class EmailService
     /**
      * Send verification code email immediately (fallback method)
      */
-    private function sendVerificationCodeImmediate(string $email, string $code, string $name = null): bool
+    private function sendVerificationCodeImmediate(string $email, string $code, ?string $name = null): bool
     {
         try {
             $data = [
@@ -70,7 +70,7 @@ class EmailService
     /**
      * Send password reset code email (queued for better reliability)
      */
-    public function sendPasswordResetCode(string $email, string $code, string $name = null): bool
+    public function sendPasswordResetCode(string $email, string $code, ?string $name = null): bool
     {
         try {
             // Dispatch to queue for better handling of concurrent requests
@@ -96,7 +96,7 @@ class EmailService
     /**
      * Send password reset code email immediately (fallback method)
      */
-    private function sendPasswordResetCodeImmediate(string $email, string $code, string $name = null): bool
+    private function sendPasswordResetCodeImmediate(string $email, string $code, ?string $name = null): bool
     {
         try {
             $data = [
