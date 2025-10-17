@@ -89,8 +89,8 @@ class BrevoEmailService
             // Prepare Brevo API payload
             $payload = [
                 'sender' => [
-                    'name' => config('mail.from.name', 'CueSports Kenya'),
-                    'email' => config('mail.from.address', 'mukundithomas8@gmail.com')
+                    'name' => 'Cuesports',
+                    'email' => 'mukundithomas8@gmail.com'
                 ],
                 'to' => [
                     [
