@@ -38,15 +38,12 @@ class TraceEmailSending extends Command
         $status = $emailService->getEmailStatus($email);
         
         $this->info("📊 CURRENT EMAIL STATUS:");
-        $this->line("- Emails sent this hour: {$status['emails_sent_this_hour']}/{$status['limit_per_hour']}");
-        $this->line("- Remaining this hour: {$status['remaining_this_hour']}");
+        $this->line("- Rate limiting: {$status['rate_limiting']}");
         $this->line("- Can send now: " . ($status['can_send_now'] ? 'YES' : 'NO'));
+        $this->line("- Last email sent: {$status['last_email_sent']}");
+        $this->line("- Time since last email: {$status['time_since_last_email']} seconds");
+        $this->line("- SMTP protection: {$status['smtp_protection']}");
         $this->line("");
-
-        if (!$status['can_send_now']) {
-            $this->error("❌ Cannot send email - rate limit exceeded!");
-            return;
-        }
 
         // Generate verification code
         $code = str_pad(rand(100000, 999999), 6, '0', STR_PAD_LEFT);

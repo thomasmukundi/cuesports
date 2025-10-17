@@ -9,8 +9,6 @@ use Exception;
 
 class SimpleEmailService
 {
-    private const MAX_EMAILS_PER_EMAIL_PER_HOUR = 3; // Prevent spam to same email
-    private const EMAIL_RATE_LIMIT_KEY = 'simple_email_limit_';
 
     /**
      * Send verification code email with comprehensive logging
@@ -27,31 +25,13 @@ class SimpleEmailService
             'timestamp' => now()->toISOString()
         ]);
 
-        // Check per-email rate limit (prevent spam)
-        if (!$this->checkEmailRateLimit($email)) {
-            Log::warning("❌ STEP 2: Email rate limit exceeded", [
-                'step_id' => $stepId,
-                'email' => $email,
-                'limit' => self::MAX_EMAILS_PER_EMAIL_PER_HOUR,
-                'reason' => 'Too many emails to same address'
-            ]);
-            return false;
-        }
-
-        Log::info("✅ STEP 2: Rate limit check passed", [
+        Log::info("✅ STEP 2: No rate limiting - proceeding directly to send", [
             'step_id' => $stepId,
-            'email' => $email
+            'email' => $email,
+            'reason' => 'Rate limiting removed for better user experience'
         ]);
 
-        // Increment rate limit counter
-        $this->incrementEmailRateLimit($email);
-
-        Log::info("✅ STEP 3: Rate limit counter incremented", [
-            'step_id' => $stepId,
-            'email' => $email
-        ]);
-
-        // Send email directly
+        // Send email directly without rate limiting
         return $this->sendEmailDirect($stepId, $email, $code, $name, 'verification');
     }
 
@@ -70,31 +50,13 @@ class SimpleEmailService
             'timestamp' => now()->toISOString()
         ]);
 
-        // Check per-email rate limit (prevent spam)
-        if (!$this->checkEmailRateLimit($email)) {
-            Log::warning("❌ STEP 2: Email rate limit exceeded", [
-                'step_id' => $stepId,
-                'email' => $email,
-                'limit' => self::MAX_EMAILS_PER_EMAIL_PER_HOUR,
-                'reason' => 'Too many emails to same address'
-            ]);
-            return false;
-        }
-
-        Log::info("✅ STEP 2: Rate limit check passed", [
+        Log::info("✅ STEP 2: No rate limiting - proceeding directly to send", [
             'step_id' => $stepId,
-            'email' => $email
+            'email' => $email,
+            'reason' => 'Rate limiting removed for better user experience'
         ]);
 
-        // Increment rate limit counter
-        $this->incrementEmailRateLimit($email);
-
-        Log::info("✅ STEP 3: Rate limit counter incremented", [
-            'step_id' => $stepId,
-            'email' => $email
-        ]);
-
-        // Send email directly
+        // Send email directly without rate limiting
         return $this->sendEmailDirect($stepId, $email, $code, $name, 'password_reset');
     }
 
@@ -104,7 +66,7 @@ class SimpleEmailService
     private function sendEmailDirect(string $stepId, string $email, string $code, ?string $name, string $type): bool
     {
         try {
-            Log::info("📧 STEP 4: Preparing email data", [
+            Log::info("📧 STEP 3: Preparing email data", [
                 'step_id' => $stepId,
                 'email' => $email,
                 'type' => $type,
@@ -123,7 +85,7 @@ class SimpleEmailService
                 ? 'Password Reset Code - ' . config('app.name')
                 : 'Email Verification Code - ' . config('app.name');
 
-            Log::info("✅ STEP 5: Email data prepared", [
+            Log::info("✅ STEP 4: Email data prepared", [
                 'step_id' => $stepId,
                 'email' => $email,
                 'template' => $template,
@@ -131,7 +93,7 @@ class SimpleEmailService
                 'data_keys' => array_keys($data)
             ]);
 
-            Log::info("📤 STEP 6: Attempting to send email via Mail facade", [
+            Log::info("📤 STEP 5: Attempting to send email via Mail facade", [
                 'step_id' => $stepId,
                 'email' => $email,
                 'mail_driver' => config('mail.default'),
@@ -145,7 +107,7 @@ class SimpleEmailService
 
             // Send the email
             Mail::send($template, $data, function ($message) use ($email, $name, $subject, $stepId) {
-                Log::info("📮 STEP 7: Inside Mail closure, setting recipients", [
+                Log::info("📮 STEP 6: Inside Mail closure, setting recipients", [
                     'step_id' => $stepId,
                     'email' => $email,
                     'name' => $name,
@@ -154,14 +116,14 @@ class SimpleEmailService
                 
                 $message->to($email, $name)->subject($subject);
                 
-                Log::info("✅ STEP 8: Mail message configured", [
+                Log::info("✅ STEP 7: Mail message configured", [
                     'step_id' => $stepId,
                     'email' => $email,
                     'message_configured' => true
                 ]);
             });
 
-            Log::info("🎉 STEP 9: Email sent successfully!", [
+            Log::info("🎉 STEP 8: Email sent successfully!", [
                 'step_id' => $stepId,
                 'email' => $email,
                 'type' => $type,
@@ -175,7 +137,7 @@ class SimpleEmailService
         } catch (Exception $e) {
             // Check if this is an SMTP connection error that we can retry
             if (str_contains($e->getMessage(), '421') || str_contains($e->getMessage(), 'Too many concurrent')) {
-                Log::warning("⚠️ STEP 6.3: SMTP connection limit hit, attempting retry", [
+                Log::warning("⚠️ STEP 5.3: SMTP connection limit hit, attempting retry", [
                     'step_id' => $stepId,
                     'email' => $email,
                     'type' => $type,
@@ -187,7 +149,7 @@ class SimpleEmailService
                 sleep(5);
                 
                 try {
-                    Log::info("🔄 STEP 6.4: Retrying email send after SMTP delay", [
+                    Log::info("🔄 STEP 5.4: Retrying email send after SMTP delay", [
                         'step_id' => $stepId,
                         'email' => $email,
                         'retry_delay' => 5
@@ -197,7 +159,7 @@ class SimpleEmailService
                         $message->to($email, $name)->subject($subject);
                     });
                     
-                    Log::info("🎉 STEP 9: Email sent successfully on retry!", [
+                    Log::info("🎉 STEP 8: Email sent successfully on retry!", [
                         'step_id' => $stepId,
                         'email' => $email,
                         'type' => $type,
@@ -236,43 +198,6 @@ class SimpleEmailService
         }
     }
 
-    /**
-     * Check if per-email rate limit is exceeded
-     */
-    private function checkEmailRateLimit(string $email): bool
-    {
-        $key = self::EMAIL_RATE_LIMIT_KEY . md5($email) . ':' . now()->format('Y-m-d-H');
-        $current = Cache::get($key, 0);
-        
-        Log::info("🔍 Rate limit check", [
-            'email' => $email,
-            'current_count' => $current,
-            'limit' => self::MAX_EMAILS_PER_EMAIL_PER_HOUR,
-            'cache_key' => $key,
-            'will_allow' => $current < self::MAX_EMAILS_PER_EMAIL_PER_HOUR
-        ]);
-        
-        return $current < self::MAX_EMAILS_PER_EMAIL_PER_HOUR;
-    }
-
-    /**
-     * Increment per-email rate limit counter
-     */
-    private function incrementEmailRateLimit(string $email): void
-    {
-        $key = self::EMAIL_RATE_LIMIT_KEY . md5($email) . ':' . now()->format('Y-m-d-H');
-        $current = Cache::get($key, 0);
-        $new_count = $current + 1;
-        Cache::put($key, $new_count, 3600); // Store for 1 hour
-        
-        Log::info("📊 Rate limit incremented", [
-            'email' => $email,
-            'previous_count' => $current,
-            'new_count' => $new_count,
-            'cache_key' => $key,
-            'expires_in_seconds' => 3600
-        ]);
-    }
 
     /**
      * Prevent SMTP connection overload with intelligent delays
@@ -288,7 +213,7 @@ class SimpleEmailService
         if ($timeSinceLastEmail < 3) {
             $delaySeconds = 3 - $timeSinceLastEmail;
             
-            Log::info("⏳ STEP 6.1: Adding SMTP protection delay", [
+            Log::info("⏳ STEP 5.1: Adding SMTP protection delay", [
                 'step_id' => $stepId,
                 'email' => $email,
                 'time_since_last_email' => $timeSinceLastEmail,
@@ -298,13 +223,13 @@ class SimpleEmailService
             
             sleep($delaySeconds);
             
-            Log::info("✅ STEP 6.2: SMTP protection delay completed", [
+            Log::info("✅ STEP 5.2: SMTP protection delay completed", [
                 'step_id' => $stepId,
                 'email' => $email,
                 'delay_completed' => true
             ]);
         } else {
-            Log::info("✅ STEP 6.1: No SMTP delay needed", [
+            Log::info("✅ STEP 5.1: No SMTP delay needed", [
                 'step_id' => $stepId,
                 'email' => $email,
                 'time_since_last_email' => $timeSinceLastEmail,
@@ -321,17 +246,18 @@ class SimpleEmailService
      */
     public function getEmailStatus(string $email): array
     {
-        $key = self::EMAIL_RATE_LIMIT_KEY . md5($email) . ':' . now()->format('Y-m-d-H');
-        $current = Cache::get($key, 0);
+        $lastEmailKey = 'last_email_sent';
+        $lastEmailTime = Cache::get($lastEmailKey, 0);
+        $timeSinceLastEmail = time() - $lastEmailTime;
         
         return [
             'email' => $email,
-            'emails_sent_this_hour' => $current,
-            'limit_per_hour' => self::MAX_EMAILS_PER_EMAIL_PER_HOUR,
-            'remaining_this_hour' => max(0, self::MAX_EMAILS_PER_EMAIL_PER_HOUR - $current),
-            'can_send_now' => $current < self::MAX_EMAILS_PER_EMAIL_PER_HOUR,
-            'cache_key' => $key,
-            'current_hour' => now()->format('Y-m-d H:00')
+            'rate_limiting' => 'disabled',
+            'can_send_now' => true,
+            'last_email_sent' => $lastEmailTime > 0 ? date('Y-m-d H:i:s', $lastEmailTime) : 'never',
+            'time_since_last_email' => $timeSinceLastEmail,
+            'smtp_protection' => $timeSinceLastEmail < 3 ? 'will_add_delay' : 'no_delay_needed',
+            'current_time' => now()->format('Y-m-d H:i:s')
         ];
     }
 }
