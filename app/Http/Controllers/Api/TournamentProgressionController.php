@@ -217,7 +217,7 @@ class TournamentProgressionController extends Controller
     /**
      * Generate next round based on current round completion
      */
-    private function generateNextRound(Tournament $tournament, string $level, string $levelName, string $roundName)
+    private function generateNextRound(Tournament $tournament, string $level, ?string $levelName, string $roundName)
     {
         \Log::info("=== GENERATE NEXT ROUND START ===", [
             'tournament_id' => $tournament->id,
@@ -281,9 +281,11 @@ class TournamentProgressionController extends Controller
                 if ($isFirstRound) {
                     \Log::info("Generating semifinals from first round with 2 winners");
                     $this->generate4PlayerSemifinals($tournament, $level, $levelName, $matches);
+                    \Log::info("4-player semifinals generated successfully");
                 } elseif ($roundName === 'semifinal' || strpos($roundName, 'SF') !== false) {
                     \Log::info("Generating final from semifinals");
                     $this->generate4PlayerFinal($tournament, $level, $levelName);
+                    \Log::info("4-player final generated successfully");
                 } else {
                     \Log::info("2 winners but not in expected round", [
                         'round_name' => $roundName,
@@ -337,7 +339,7 @@ class TournamentProgressionController extends Controller
     /**
      * Generate 3-player final match
      */
-    private function generate3PlayerFinal(Tournament $tournament, string $level, string $levelName, $matches)
+    private function generate3PlayerFinal(Tournament $tournament, string $level, ?string $levelName, $matches)
     {
         $sfMatch = $matches->first();
         $sfWinner = $sfMatch->winner_id;
@@ -363,7 +365,7 @@ class TournamentProgressionController extends Controller
     /**
      * Generate 4-player semifinal matches
      */
-    private function generate4PlayerSemifinals(Tournament $tournament, string $level, string $levelName, $matches)
+    private function generate4PlayerSemifinals(Tournament $tournament, string $level, ?string $levelName, $matches)
     {
         $sortedMatches = $matches->sortBy('match_name');
         $match1 = $sortedMatches->first();
@@ -407,21 +409,33 @@ class TournamentProgressionController extends Controller
     /**
      * Generate 4-player final match
      */
-    private function generate4PlayerFinal(Tournament $tournament, string $level, string $levelName)
+    private function generate4PlayerFinal(Tournament $tournament, string $level, ?string $levelName)
     {
-        $winnersSF = PoolMatch::where('tournament_id', $tournament->id)
+        $winnersSFQuery = PoolMatch::where('tournament_id', $tournament->id)
             ->where('level', $level)
-            ->where('level_name', $levelName)
             ->where('match_name', '4_SF_winners')
-            ->where('status', 'completed')
-            ->first();
+            ->where('status', 'completed');
             
-        $losersSF = PoolMatch::where('tournament_id', $tournament->id)
+        if ($levelName) {
+            $winnersSFQuery->where('level_name', $levelName);
+        } else {
+            $winnersSFQuery->whereNull('level_name');
+        }
+        
+        $winnersSF = $winnersSFQuery->first();
+            
+        $losersSFQuery = PoolMatch::where('tournament_id', $tournament->id)
             ->where('level', $level)
-            ->where('level_name', $levelName)
             ->where('match_name', '4_SF_losers')
-            ->where('status', 'completed')
-            ->first();
+            ->where('status', 'completed');
+            
+        if ($levelName) {
+            $losersSFQuery->where('level_name', $levelName);
+        } else {
+            $losersSFQuery->whereNull('level_name');
+        }
+        
+        $losersSF = $losersSFQuery->first();
 
         if ($winnersSF && $losersSF) {
             $winnersLoser = ($winnersSF->player_1_id === $winnersSF->winner_id) ? 
@@ -758,7 +772,7 @@ class TournamentProgressionController extends Controller
     /**
      * Generate semifinal for 3 winners from round 1
      */
-    private function generate3WinnerSemifinal(Tournament $tournament, string $level, string $levelName, $matches)
+    private function generate3WinnerSemifinal(Tournament $tournament, string $level, ?string $levelName, $matches)
     {
         \Log::info("=== GENERATE 3-WINNER SEMIFINAL START ===");
         
@@ -776,11 +790,17 @@ class TournamentProgressionController extends Controller
         ]);
         
         // Check if 3_SF already exists to prevent duplicates
-        $existingSF = PoolMatch::where('tournament_id', $tournament->id)
+        $existingSFQuery = PoolMatch::where('tournament_id', $tournament->id)
             ->where('level', $level)
-            ->where('level_name', $levelName)
-            ->where('round_name', '3_SF')
-            ->exists();
+            ->where('round_name', '3_SF');
+            
+        if ($levelName) {
+            $existingSFQuery->where('level_name', $levelName);
+        } else {
+            $existingSFQuery->whereNull('level_name');
+        }
+        
+        $existingSF = $existingSFQuery->exists();
             
         \Log::info("Checking for existing 3_SF match", ['exists' => $existingSF]);
             
@@ -1026,7 +1046,7 @@ class TournamentProgressionController extends Controller
     /**
      * Check if final positions should be determined and call determineFinalPositions
      */
-    private function checkAndDetermineFinalPositions(Tournament $tournament, string $level, string $levelName)
+    private function checkAndDetermineFinalPositions(Tournament $tournament, string $level, ?string $levelName)
     {
         \Log::info("=== CHECKING FOR FINAL POSITION DETERMINATION ===", [
             'tournament_id' => $tournament->id,

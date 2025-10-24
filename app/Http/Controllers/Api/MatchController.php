@@ -1040,7 +1040,7 @@ class MatchController extends Controller
             $roundRequest = new \Illuminate\Http\Request([
                 'tournament_id' => $match->tournament_id,
                 'level' => $match->level,
-                'level_name' => $match->level_name ?? 'default',
+                'level_name' => $match->level_name,
                 'round_name' => $match->round_name,
             ]);
             
