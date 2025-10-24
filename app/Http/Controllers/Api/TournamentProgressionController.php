@@ -31,7 +31,7 @@ class TournamentProgressionController extends Controller
         $request->validate([
             'tournament_id' => 'required|exists:tournaments,id',
             'level' => 'required|string',
-            'level_name' => 'required|string',
+            'level_name' => 'nullable|string',
             'round_name' => 'required|string',
         ]);
 
@@ -44,18 +44,30 @@ class TournamentProgressionController extends Controller
         }
 
         // Check if all matches in this round are completed
-        $totalMatches = PoolMatch::where('tournament_id', $request->tournament_id)
+        $totalMatchesQuery = PoolMatch::where('tournament_id', $request->tournament_id)
             ->where('level', $request->level)
-            ->where('level_name', $request->level_name)
-            ->where('round_name', $request->round_name)
-            ->count();
+            ->where('round_name', $request->round_name);
+            
+        if ($request->level_name) {
+            $totalMatchesQuery->where('level_name', $request->level_name);
+        } else {
+            $totalMatchesQuery->whereNull('level_name');
+        }
+        
+        $totalMatches = $totalMatchesQuery->count();
 
-        $completedMatches = PoolMatch::where('tournament_id', $request->tournament_id)
+        $completedMatchesQuery = PoolMatch::where('tournament_id', $request->tournament_id)
             ->where('level', $request->level)
-            ->where('level_name', $request->level_name)
             ->where('round_name', $request->round_name)
-            ->where('status', 'completed')
-            ->count();
+            ->where('status', 'completed');
+            
+        if ($request->level_name) {
+            $completedMatchesQuery->where('level_name', $request->level_name);
+        } else {
+            $completedMatchesQuery->whereNull('level_name');
+        }
+        
+        $completedMatches = $completedMatchesQuery->count();
 
         \Log::info("Round completion check", [
             'total_matches' => $totalMatches,
@@ -215,27 +227,43 @@ class TournamentProgressionController extends Controller
         ]);
         
         // Get all completed matches in this round
-        $matches = PoolMatch::where('tournament_id', $tournament->id)
+        $matchesQuery = PoolMatch::where('tournament_id', $tournament->id)
             ->where('level', $level)
-            ->where('level_name', $levelName)
             ->where('round_name', $roundName)
-            ->where('status', 'completed')
-            ->get();
+            ->where('status', 'completed');
+            
+        if ($levelName) {
+            $matchesQuery->where('level_name', $levelName);
+        } else {
+            $matchesQuery->whereNull('level_name');
+        }
+        
+        $matches = $matchesQuery->get();
             
         \Log::info("Found completed matches", [
             'match_count' => $matches->count(),
             'match_ids' => $matches->pluck('id')->toArray()
         ]);
 
-        // Count winners from current round (not initial player count)
-        $winnerCount = $matches->count();
+        // Count actual unique winners from current round
+        $winners = $matches->pluck('winner_id')->filter()->unique();
+        $winnerCount = $winners->count();
 
         \Log::info("Analyzing winner count and round", [
             'winner_count' => $winnerCount,
             'round_name' => $roundName,
-            'winners' => $matches->pluck('winner_id')->toArray()
+            'winners' => $winners->toArray(),
+            'total_matches' => $matches->count()
         ]);
 
+        // Determine if this is the first round (various naming patterns)
+        $isFirstRound = in_array($roundName, [
+            'round_1', 
+            'Special Tournament Round 1',
+            ucfirst($level) . ' Tournament Round 1',
+            $level . '_round_1'
+        ]);
+        
         // Handle different scenarios based on winner count and current round
         switch ($winnerCount) {
             case 1:
@@ -250,37 +278,43 @@ class TournamentProgressionController extends Controller
                 
             case 2:
                 \Log::info("Processing 2 winner scenario");
-                if ($roundName === 'round_1') {
-                    \Log::info("Generating 4-player semifinals (winners and losers brackets)");
+                if ($isFirstRound) {
+                    \Log::info("Generating semifinals from first round with 2 winners");
                     $this->generate4PlayerSemifinals($tournament, $level, $levelName, $matches);
-                } elseif ($roundName === 'semifinal') {
-                    \Log::info("Generating 4-player final from semifinals");
+                } elseif ($roundName === 'semifinal' || strpos($roundName, 'SF') !== false) {
+                    \Log::info("Generating final from semifinals");
                     $this->generate4PlayerFinal($tournament, $level, $levelName);
                 } else {
-                    \Log::info("2 winners but not in expected round - no action needed");
+                    \Log::info("2 winners but not in expected round", [
+                        'round_name' => $roundName,
+                        'is_first_round' => $isFirstRound
+                    ]);
                 }
                 break;
                 
             case 3:
                 \Log::info("Processing 3 winner scenario");
-                if ($roundName === 'round_1') {
+                if ($isFirstRound) {
                     \Log::info("Generating 3-winner semifinal match");
                     $this->generate3WinnerSemifinal($tournament, $level, $levelName, $matches);
                 } else {
-                    \Log::info("3 winners but not in round_1 - no action needed");
+                    \Log::info("3 winners but not in first round - no action needed");
                 }
                 break;
                 
             case 4:
                 \Log::info("Processing 4 winner scenario");
-                if ($roundName === 'round_1') {
-                    \Log::info("Generating 4-player semifinals");
+                if ($isFirstRound) {
+                    \Log::info("Generating 4-player semifinals from first round");
                     $this->generate4PlayerSemifinals($tournament, $level, $levelName, $matches);
-                } elseif ($roundName === 'semifinal') {
-                    \Log::info("Generating 4-player final");
+                } elseif ($roundName === 'semifinal' || strpos($roundName, 'SF') !== false) {
+                    \Log::info("Generating 4-player final from semifinals");
                     $this->generate4PlayerFinal($tournament, $level, $levelName);
                 } else {
-                    \Log::info("4 winners but not in expected round - no action needed");
+                    \Log::info("4 winners but not in expected round", [
+                        'round_name' => $roundName,
+                        'is_first_round' => $isFirstRound
+                    ]);
                 }
                 break;
                 
@@ -288,7 +322,8 @@ class TournamentProgressionController extends Controller
                 \Log::warning("Unhandled winner count scenario", [
                     'winner_count' => $winnerCount,
                     'round_name' => $roundName,
-                    'expected_counts' => [1, 3, 4]
+                    'is_first_round' => $isFirstRound,
+                    'expected_counts' => [1, 2, 3, 4]
                 ]);
                 break;
         }

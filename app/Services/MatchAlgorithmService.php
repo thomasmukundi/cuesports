@@ -1651,7 +1651,7 @@ class MatchAlgorithmService
     /**
      * Create random matches with same-origin avoidance
      */
-    private function createRandomMatches(Tournament $tournament, Collection $players, string $level, $groupId, string $roundName, string $levelName = null)
+    private function createRandomMatches(Tournament $tournament, Collection $players, string $level, $groupId, string $roundName, ?string $levelName = null)
     {
         if ($level === 'community') {
             // For community level, just pair randomly
@@ -1667,7 +1667,7 @@ class MatchAlgorithmService
     /**
      * Pair players and create matches with proper bye handling
      */
-    private function pairPlayers(Collection $players, Tournament $tournament, string $level, $groupId, string $roundName, string $suffix = '', string $levelName = null)
+    private function pairPlayers(Collection $players, Tournament $tournament, string $level, $groupId, string $roundName, string $suffix = '', ?string $levelName = null)
     {
         $shuffled = $players->shuffle();
         $matchNumber = 1;
