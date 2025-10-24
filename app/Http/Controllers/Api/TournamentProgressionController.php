@@ -934,20 +934,25 @@ class TournamentProgressionController extends Controller
     /**
      * Get group ID from level name
      */
-    private function getGroupIdFromLevelName(string $level, string $levelName)
+    private function getGroupIdFromLevelName(string $level, ?string $levelName)
     {
+        // For special tournaments or when level_name is null, return a default group ID
+        if (!$levelName) {
+            return 1; // Default group ID for special tournaments
+        }
+        
         switch ($level) {
             case 'community':
                 $community = \App\Models\Community::where('name', $levelName)->first();
-                return $community ? $community->id : null;
+                return $community ? $community->id : 1;
             case 'county':
                 $county = \App\Models\County::where('name', $levelName)->first();
-                return $county ? $county->id : null;
+                return $county ? $county->id : 1;
             case 'regional':
                 $region = \App\Models\Region::where('name', $levelName)->first();
-                return $region ? $region->id : null;
+                return $region ? $region->id : 1;
             default:
-                return null;
+                return 1; // Default group ID
         }
     }
 
