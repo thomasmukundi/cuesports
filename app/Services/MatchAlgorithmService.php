@@ -198,18 +198,35 @@ class MatchAlgorithmService
             'group_id' => $groupId
         ]);
         
-        // Get all matches from current round
-        $currentRoundMatches = PoolMatch::where('tournament_id', $tournament->id)
+        // Get matches from the latest completed round
+        $allMatches = PoolMatch::where('tournament_id', $tournament->id)
             ->where('level', $level)
-            ->whereNotNull('winner_id')
-            ->get();
+            ->whereNotNull('winner_id');
+            
+        // Get all distinct round names and find the highest round number
+        $allRounds = $allMatches->distinct('round_name')->pluck('round_name');
+        
+        $latestRoundName = $allRounds->sortByDesc(function($roundName) {
+            if (str_contains($roundName, 'round_')) {
+                return (int) str_replace('round_', '', $roundName);
+            }
+            return 0;
+        })->first();
+        
+        \Log::info("Special tournament - determined current round", [
+            'tournament_id' => $tournament->id,
+            'all_rounds' => $allRounds->toArray(),
+            'selected_round' => $latestRoundName
+        ]);
+        
+        $currentRoundMatches = $allMatches->where('round_name', $latestRoundName)->get();
             
         if ($currentRoundMatches->isEmpty()) {
-            throw new \Exception("No completed matches found for special tournament");
+            throw new \Exception("No completed matches found for latest round: {$latestRoundName}");
         }
         
         // Get current round name
-        $currentRoundName = $currentRoundMatches->first()->round_name;
+        $currentRoundName = $latestRoundName;
         $nextRoundName = $this->getNextRoundName($currentRoundName);
         
         // Get all winners from current round
