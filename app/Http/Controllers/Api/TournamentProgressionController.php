@@ -671,24 +671,30 @@ class TournamentProgressionController extends Controller
         if ($sfMatch && $finalMatch) {
             $sfWinner = $sfMatch->winner_id;
             $sfLoser = ($sfMatch->player_1_id === $sfWinner) ? $sfMatch->player_2_id : $sfMatch->player_1_id;
+            $byePlayer = $sfMatch->bye_player_id; // Get the bye player from semifinal
             $finalWinner = $finalMatch->winner_id;
             $finalLoser = ($finalMatch->player_1_id === $finalWinner) ? $finalMatch->player_2_id : $finalMatch->player_1_id;
 
             \Log::info("3-player tournament position determination", [
                 'sf_winner' => $sfWinner,
                 'sf_loser' => $sfLoser,
+                'bye_player' => $byePlayer,
                 'final_winner' => $finalWinner,
-                'final_loser' => $finalLoser
+                'final_loser' => $finalLoser,
+                'final_participants' => 'SF loser vs bye player'
             ]);
 
-            // Check if tie-breaker is needed
+            // CORRECT LOGIC: Final is SF loser vs bye player
+            // If SF loser wins final → SF winner=1st, SF loser=2nd, bye player=3rd
+            // If bye player wins final → Tie-breaker needed between SF winner and bye player
             if ($finalWinner === $sfLoser) {
-                // SF loser beat bye player - standard positioning applies
+                // SF loser won final - standard positioning applies
                 \Log::info("Standard 3-player positioning: SF loser won final");
                 
+                // Create positions directly
                 Winner::create([
                     'tournament_id' => $tournament->id,
-                    'player_id' => $sfWinner,
+                    'player_id' => $sfWinner, // SF winner gets 1st (never lost)
                     'level' => $level,
                     'level_name' => $levelName,
                     'position' => 1,
@@ -697,7 +703,7 @@ class TournamentProgressionController extends Controller
 
                 Winner::create([
                     'tournament_id' => $tournament->id,
-                    'player_id' => $finalWinner, // SF loser who won final
+                    'player_id' => $finalWinner, // SF loser who won final gets 2nd
                     'level' => $level,
                     'level_name' => $levelName,
                     'position' => 2,
@@ -706,7 +712,7 @@ class TournamentProgressionController extends Controller
 
                 Winner::create([
                     'tournament_id' => $tournament->id,
-                    'player_id' => $finalLoser, // Bye player who lost final
+                    'player_id' => $byePlayer, // Bye player who lost final gets 3rd
                     'level' => $level,
                     'level_name' => $levelName,
                     'position' => 3,
@@ -717,7 +723,7 @@ class TournamentProgressionController extends Controller
                 $this->sendPositionNotifications($tournament, $level, $levelName, [
                     ['player_id' => $sfWinner, 'position' => 1],
                     ['player_id' => $finalWinner, 'position' => 2],
-                    ['player_id' => $finalLoser, 'position' => 3]
+                    ['player_id' => $byePlayer, 'position' => 3]
                 ]);
             } else {
                 // Bye player won final - need tie-breaker between SF winner and bye player
@@ -735,7 +741,7 @@ class TournamentProgressionController extends Controller
                     PoolMatch::create([
                         'match_name' => '3_break_tie_final_match',
                         'player_1_id' => $sfWinner,
-                        'player_2_id' => $finalWinner, // This is the bye player who won
+                        'player_2_id' => $byePlayer, // Bye player who won final
                         'level' => $level,
                         'level_name' => $levelName,
                         'round_name' => '3_break_tie_final',
@@ -747,51 +753,23 @@ class TournamentProgressionController extends Controller
                     
                     \Log::info("Tie-breaker match created successfully");
                 } else {
-                    \Log::info("Tie-breaker match already exists, checking if completed");
-                    
-                    // If tie-breaker is completed, create final positions
-                    if ($tieBreakerMatch->status === 'completed') {
-                        $tieBreakerWinner = $tieBreakerMatch->winner_id;
-                        $tieBreakerLoser = ($tieBreakerMatch->player_1_id === $tieBreakerWinner) ? 
-                            $tieBreakerMatch->player_2_id : $tieBreakerMatch->player_1_id;
-                        
-                        Winner::create([
-                            'tournament_id' => $tournament->id,
-                            'player_id' => $tieBreakerWinner,
-                            'level' => $level,
-                            'level_name' => $levelName,
-                            'position' => 1,
-                            'points' => 3,
-                        ]);
-
-                        Winner::create([
-                            'tournament_id' => $tournament->id,
-                            'player_id' => $tieBreakerLoser,
-                            'level' => $level,
-                            'level_name' => $levelName,
-                            'position' => 2,
-                            'points' => 2,
-                        ]);
-
-                        Winner::create([
-                            'tournament_id' => $tournament->id,
-                            'player_id' => $sfLoser, // SF loser gets 3rd place
-                            'level' => $level,
-                            'level_name' => $levelName,
-                            'position' => 3,
-                            'points' => 1,
-                        ]);
-                        
-                        // Send notifications to winners
-                        $this->sendPositionNotifications($tournament, $level, $levelName, [
-                            ['player_id' => $tieBreakerWinner, 'position' => 1],
-                            ['player_id' => $tieBreakerLoser, 'position' => 2],
-                            ['player_id' => $sfLoser, 'position' => 3]
-                        ]);
-                        
-                        \Log::info("Final positions created after tie-breaker completion");
-                    }
+                    \Log::info("Tie-breaker match already exists");
                 }
+                
+                // Create position for SF loser (guaranteed 3rd place)
+                Winner::create([
+                    'tournament_id' => $tournament->id,
+                    'player_id' => $sfLoser,
+                    'level' => $level,
+                    'level_name' => $levelName,
+                    'position' => 3,
+                    'points' => 1,
+                ]);
+                
+                // Send notification to SF loser about 3rd place
+                $this->sendPositionNotifications($tournament, $level, $levelName, [
+                    ['player_id' => $sfLoser, 'position' => 3]
+                ]);
             }
         }
     }

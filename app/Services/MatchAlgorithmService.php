@@ -2699,19 +2699,34 @@ class MatchAlgorithmService
         $matches = $this->createMatchPairs($playersArray);
 
         foreach ($matches as $match) {
-            PoolMatch::create([
+            $matchData = [
                 'tournament_id' => $tournament->id,
                 'player_1_id' => $match['player1']['id'],
                 'player_2_id' => $match['player2']['id'],
                 'level' => 'special', // Use 'special' as the level
-                'round_name' => 'Special Tournament Round 1',
-                'match_name' => 'Special Match #' . ($matchesCreated + 1),
+                'round_name' => $match['round_name'] ?? 'Special Tournament Round 1',
+                'match_name' => $match['match_name'] ?? 'Special Match #' . ($matchesCreated + 1),
                 'status' => 'pending',
                 'group_id' => 1, // Single group for special tournaments
                 'group_name' => 'Special Tournament',
                 'proposed_dates' => \App\Services\ProposedDatesService::generateProposedDates($tournament->id),
-            ]);
+            ];
+            
+            // Add bye player if present (for 3-player tournaments)
+            if (isset($match['bye_player_id'])) {
+                $matchData['bye_player_id'] = $match['bye_player_id'];
+            }
+            
+            PoolMatch::create($matchData);
             $matchesCreated++;
+            
+            \Log::info("Created special tournament match", [
+                'match_name' => $matchData['match_name'],
+                'round_name' => $matchData['round_name'],
+                'player_1_id' => $matchData['player_1_id'],
+                'player_2_id' => $matchData['player_2_id'],
+                'bye_player_id' => $matchData['bye_player_id'] ?? null
+            ]);
         }
 
         return $matchesCreated;
@@ -2725,31 +2740,81 @@ class MatchAlgorithmService
         $matches = [];
         $playerCount = count($players);
 
-        if ($playerCount % 2 === 0) {
-            // Even number of players - pair them up
-            for ($i = 0; $i < $playerCount; $i += 2) {
+        \Log::info("Creating match pairs for special tournament", [
+            'player_count' => $playerCount,
+            'players' => array_column($players, 'name')
+        ]);
+
+        // Handle specific player counts properly
+        switch ($playerCount) {
+            case 2:
+                // Simple 1v1 final
                 $matches[] = [
-                    'player1' => $players[$i],
-                    'player2' => $players[$i + 1]
+                    'player1' => $players[0],
+                    'player2' => $players[1],
+                    'round_name' => '2_final',
+                    'match_name' => '2_final'
                 ];
-            }
-        } else {
-            // Odd number of players - one player gets a bye (plays twice)
-            for ($i = 0; $i < $playerCount - 1; $i += 2) {
+                break;
+
+            case 3:
+                // 3-player tournament: semifinal + final
+                // Semifinal: Player 1 vs Player 2 (Player 3 gets bye to final)
                 $matches[] = [
-                    'player1' => $players[$i],
-                    'player2' => $players[$i + 1]
+                    'player1' => $players[0],
+                    'player2' => $players[1],
+                    'bye_player_id' => $players[2]['id'],
+                    'round_name' => '3_SF',
+                    'match_name' => '3_SF'
                 ];
-            }
-            
-            // Last player gets paired with first player for second match
-            if ($playerCount > 2) {
+                break;
+
+            case 4:
+                // 4-player tournament: 2 semifinals
                 $matches[] = [
-                    'player1' => $players[$playerCount - 1],
-                    'player2' => $players[0]
+                    'player1' => $players[0],
+                    'player2' => $players[1],
+                    'round_name' => '4_SF_winners',
+                    'match_name' => '4_SF_winners'
                 ];
-            }
+                $matches[] = [
+                    'player1' => $players[2],
+                    'player2' => $players[3],
+                    'round_name' => '4_SF_losers',
+                    'match_name' => '4_SF_losers'
+                ];
+                break;
+
+            default:
+                if ($playerCount % 2 === 0) {
+                    // Even number of players - pair them up for first round
+                    for ($i = 0; $i < $playerCount; $i += 2) {
+                        $matches[] = [
+                            'player1' => $players[$i],
+                            'player2' => $players[$i + 1],
+                            'round_name' => 'Round 1',
+                            'match_name' => 'Match #' . (($i / 2) + 1)
+                        ];
+                    }
+                } else {
+                    // Odd number of players - create pairs and give one player a bye
+                    for ($i = 0; $i < $playerCount - 1; $i += 2) {
+                        $matches[] = [
+                            'player1' => $players[$i],
+                            'player2' => $players[$i + 1],
+                            'round_name' => 'Round 1',
+                            'match_name' => 'Match #' . (($i / 2) + 1)
+                        ];
+                    }
+                    // Last player gets a bye - will be handled in next round generation
+                }
+                break;
         }
+
+        \Log::info("Match pairs created", [
+            'matches_count' => count($matches),
+            'matches' => $matches
+        ]);
 
         return $matches;
     }
