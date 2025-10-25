@@ -2348,9 +2348,31 @@ class MatchAlgorithmService
             $query->where('group_id', $groupId);
         }
         
-        $latestRound = $query->orderBy('created_at', 'desc')->first();
+        // Get all distinct round names and find the highest round number
+        $allRounds = $query->distinct('round_name')->pluck('round_name');
         
-        return $query->where('round_name', $latestRound->round_name)->get();
+        $latestRoundName = $allRounds->sortByDesc(function($roundName) {
+            if (str_contains($roundName, 'round_')) {
+                return (int) str_replace('round_', '', $roundName);
+            }
+            // Handle other round naming patterns
+            return match($roundName) {
+                'quarter_final' => 100,
+                'semi_final' => 200,
+                'final' => 300,
+                default => 0
+            };
+        })->first();
+        
+        \Log::info("Determined current round for progression", [
+            'tournament_id' => $tournament->id,
+            'level' => $level,
+            'group_id' => $groupId,
+            'all_rounds' => $allRounds->toArray(),
+            'selected_round' => $latestRoundName
+        ]);
+        
+        return $query->where('round_name', $latestRoundName)->get();
     }
 
     /**
