@@ -508,21 +508,25 @@ class TournamentProgressionController extends Controller
     /**
      * Check if tie-breaker is needed for 3-player tournament
      */
-    private function checkIfTieBreakerNeeded(int $tournamentId, string $level, string $levelName): bool
+    private function checkIfTieBreakerNeeded(int $tournamentId, string $level, ?string $levelName): bool
     {
-        $sfMatch = PoolMatch::where('tournament_id', $tournamentId)
+        $sfMatchQuery = PoolMatch::where('tournament_id', $tournamentId)
             ->where('level', $level)
-            ->where('level_name', $levelName)
             ->where('round_name', '3_SF')
-            ->where('status', 'completed')
-            ->first();
+            ->where('status', 'completed');
+            
+        // Apply level_name filter
+        $this->applyLevelNameFilter($sfMatchQuery, $levelName);
+        $sfMatch = $sfMatchQuery->first();
 
-        $finalMatch = PoolMatch::where('tournament_id', $tournamentId)
+        $finalMatchQuery = PoolMatch::where('tournament_id', $tournamentId)
             ->where('level', $level)
-            ->where('level_name', $levelName)
             ->where('round_name', '3_final')
-            ->where('status', 'completed')
-            ->first();
+            ->where('status', 'completed');
+            
+        // Apply level_name filter
+        $this->applyLevelNameFilter($finalMatchQuery, $levelName);
+        $finalMatch = $finalMatchQuery->first();
 
         if ($sfMatch && $finalMatch) {
             $sfWinner = $sfMatch->winner_id;
@@ -1086,23 +1090,27 @@ class TournamentProgressionController extends Controller
     /**
      * Generate tie-breaker match for 3-player tournament when bye player wins 3_final
      */
-    private function generateTieBreakerMatch(int $tournamentId, string $level, string $levelName)
+    private function generateTieBreakerMatch(int $tournamentId, string $level, ?string $levelName)
     {
         $tournament = Tournament::find($tournamentId);
         
-        $sfMatch = PoolMatch::where('tournament_id', $tournamentId)
+        $sfMatchQuery = PoolMatch::where('tournament_id', $tournamentId)
             ->where('level', $level)
-            ->where('level_name', $levelName)
             ->where('round_name', '3_SF')
-            ->where('status', 'completed')
-            ->first();
+            ->where('status', 'completed');
+            
+        // Apply level_name filter
+        $this->applyLevelNameFilter($sfMatchQuery, $levelName);
+        $sfMatch = $sfMatchQuery->first();
 
-        $finalMatch = PoolMatch::where('tournament_id', $tournamentId)
+        $finalMatchQuery = PoolMatch::where('tournament_id', $tournamentId)
             ->where('level', $level)
-            ->where('level_name', $levelName)
             ->where('round_name', '3_final')
-            ->where('status', 'completed')
-            ->first();
+            ->where('status', 'completed');
+            
+        // Apply level_name filter
+        $this->applyLevelNameFilter($finalMatchQuery, $levelName);
+        $finalMatch = $finalMatchQuery->first();
 
         if ($sfMatch && $finalMatch) {
             $sfWinner = $sfMatch->winner_id;
