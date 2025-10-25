@@ -1496,7 +1496,7 @@ class AdminController extends Controller
         ];
         
         // Check if tournament start date is today or has passed
-        $canStart = $tournament->start_date && $tournament->start_date->isToday();
+        $canStart = $tournament->start_date && $tournament->start_date <= now()->startOfDay();
         $hasStarted = $tournament->start_date && $tournament->start_date <= now();
         
         // Community level
@@ -1611,11 +1611,11 @@ class AdminController extends Controller
             // Handle special tournaments
             if ($tournament->special && $level === 'special') {
                 // Check if tournament can start
-                $canStart = $tournament->start_date && $tournament->start_date->isToday();
+                $canStart = $tournament->start_date && $tournament->start_date <= now()->startOfDay();
                 $hasMatches = \App\Models\PoolMatch::where('tournament_id', $tournament->id)->exists();
                 
                 if (!$canStart) {
-                    return back()->withErrors(['error' => 'Special tournament can only be initialized on the start date.']);
+                    return back()->withErrors(['error' => 'Special tournament can only be initialized on or after the start date.']);
                 }
                 
                 if ($hasMatches) {
