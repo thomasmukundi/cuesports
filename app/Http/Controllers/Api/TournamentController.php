@@ -61,17 +61,15 @@ class TournamentController extends Controller
                     'will_filter' => ($user->community_id || $user->county_id || $user->region_id)
                 ]);
                 
-                // TEMPORARY: Completely disable filtering to debug
-                \Log::info('Filtering disabled for debugging - showing all tournaments');
+                // Apply proper location filtering
+                \Log::info('Applying location filtering for tournaments');
                 
                 // Filter tournaments based on user location and tournament scope
-                // Only apply filtering if user has location data, otherwise show all tournaments
-                // if ($user->community_id || $user->county_id || $user->region_id) {
-                //     $this->applyLocationFilter($query, $user);
-                // } else {
-                //     \Log::info('User has no location data, showing all tournaments');
-                // }
-                // If user has no location data, show all tournaments
+                if ($user->community_id || $user->county_id || $user->region_id) {
+                    $this->applyLocationFilter($query, $user);
+                } else {
+                    \Log::info('User has no location data, showing all tournaments');
+                }
             }
             
             // Log all tournaments before filtering
@@ -175,6 +173,11 @@ class TournamentController extends Controller
                     $subQ->where('area_scope', 'community')
                          ->where('area_name', $userCommunity->name);
                 });
+                
+                \Log::info('Added community filter', [
+                    'user_community' => $userCommunity->name,
+                    'filter' => "area_scope='community' AND area_name='{$userCommunity->name}'"
+                ]);
             }
 
             // Show county tournaments if user is in that county (match by name)
@@ -183,6 +186,11 @@ class TournamentController extends Controller
                     $subQ->where('area_scope', 'county')
                          ->where('area_name', $userCounty->name);
                 });
+                
+                \Log::info('Added county filter', [
+                    'user_county' => $userCounty->name,
+                    'filter' => "area_scope='county' AND area_name='{$userCounty->name}'"
+                ]);
             }
 
             // Show regional tournaments if user is in that region (match by name)
@@ -191,6 +199,11 @@ class TournamentController extends Controller
                     $subQ->where('area_scope', 'regional')
                          ->where('area_name', $userRegion->name);
                 });
+                
+                \Log::info('Added regional filter', [
+                    'user_region' => $userRegion->name,
+                    'filter' => "area_scope='regional' AND area_name='{$userRegion->name}'"
+                ]);
             }
         });
     }
