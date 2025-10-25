@@ -1395,10 +1395,21 @@ class MatchAlgorithmService
         if ($winners->count() > 3 && $winners->count() % 2 === 1) {
             $losers = $this->getLosersFromMatches($currentRoundMatches);
             if ($losers->count() > 0) {
-                // Add one loser to make even number for pairing
-                $selectedLoser = $losers->first();
+                // Randomly select one loser to make even number for pairing
+                $selectedLoser = $losers->random();
                 $winners->push($selectedLoser);
-                \Log::info("Added loser player {$selectedLoser->id} to make even number: {$winners->count()} total players");
+                \Log::info("Added RANDOM loser player {$selectedLoser->id} ({$selectedLoser->name}) to make even number", [
+                    'total_losers_available' => $losers->count(),
+                    'selected_loser_id' => $selectedLoser->id,
+                    'selected_loser_name' => $selectedLoser->name,
+                    'final_player_count' => $winners->count(),
+                    'logic' => 'PROGRESSION: Random loser added for odd winner count'
+                ]);
+            } else {
+                \Log::warning("No losers available to add for odd winner count", [
+                    'winner_count' => $winners->count(),
+                    'matches_checked' => $currentRoundMatches->count()
+                ]);
             }
         }
         
@@ -1579,7 +1590,10 @@ class MatchAlgorithmService
         // Handle odd number of players by having one player play twice
         $matchNumber = 1;
         if ($playerCount % 2 == 1 && $playerCount > 3) {
-            \Log::info("Odd number of players ({$playerCount}), one player will play twice");
+            \Log::info("INITIALIZATION: Odd number of players ({$playerCount}), one player will play twice", [
+                'player_count' => $playerCount,
+                'logic' => 'INITIALIZATION: One player plays twice for odd counts'
+            ]);
             
             // Pick the first player to play twice (smart pairing already optimized the order)
             $doublePlayer = $pairedPlayers[0];

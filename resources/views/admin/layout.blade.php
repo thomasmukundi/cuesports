@@ -484,7 +484,7 @@
                             <h6>Match Information</h6>
                             <p><strong>Match Name:</strong> <span id="modalMatchName"></span></p>
                             <p><strong>Tournament:</strong> <span id="modalTournament"></span></p>
-                            <p><strong>Status:</strong> <span id="modalStatus"></span></p>
+                            <p><strong>Current Status:</strong> <span id="modalStatus"></span></p>
                         </div>
                         <div class="col-md-6">
                             <h6>Players</h6>
@@ -493,9 +493,36 @@
                             <p><strong>Winner:</strong> <span id="modalWinner"></span></p>
                         </div>
                     </div>
+                    
+                    <hr>
+                    
+                    <div class="row">
+                        <div class="col-md-12">
+                            <h6>Change Status</h6>
+                            <div class="mb-3">
+                                <label for="newStatus" class="form-label">New Status:</label>
+                                <select class="form-select" id="newStatus">
+                                    <option value="">-- Select New Status --</option>
+                                    <option value="pending">Pending</option>
+                                    <option value="scheduled">Scheduled</option>
+                                    <option value="in_progress">In Progress</option>
+                                    <option value="pending_confirmation">Pending Confirmation</option>
+                                    <option value="completed">Completed</option>
+                                    <option value="forfeit">Forfeit</option>
+                                </select>
+                            </div>
+                            <div class="alert alert-info">
+                                <i class="fas fa-info-circle"></i>
+                                <strong>Note:</strong> Changing status to "Pending Confirmation" will allow the match to trigger tournament progression when re-confirmed.
+                            </div>
+                        </div>
+                    </div>
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                    <button type="button" class="btn btn-primary" onclick="updateMatchStatus()" id="updateStatusBtn" disabled>
+                        <i class="fas fa-save"></i> Update Status
+                    </button>
                 </div>
             </div>
         </div>
@@ -511,14 +538,89 @@
             new bootstrap.Modal(document.getElementById('deleteConfirmModal')).show();
         }
 
+        let currentMatchId = null;
+        let currentMatchStatus = null;
+
         function showMatchDetails(matchId, matchName, tournament, player1, player2, status, winner) {
+            currentMatchId = matchId;
+            currentMatchStatus = status;
+            
             document.getElementById('modalMatchName').textContent = matchName;
             document.getElementById('modalTournament').textContent = tournament;
             document.getElementById('modalPlayer1').textContent = player1;
             document.getElementById('modalPlayer2').textContent = player2;
             document.getElementById('modalStatus').textContent = status.charAt(0).toUpperCase() + status.slice(1).replace('_', ' ');
             document.getElementById('modalWinner').textContent = winner;
+            
+            // Reset status dropdown
+            document.getElementById('newStatus').value = '';
+            document.getElementById('updateStatusBtn').disabled = true;
+            
             new bootstrap.Modal(document.getElementById('matchDetailsModal')).show();
+        }
+
+        // Enable/disable update button based on status selection
+        document.addEventListener('DOMContentLoaded', function() {
+            const statusSelect = document.getElementById('newStatus');
+            const updateBtn = document.getElementById('updateStatusBtn');
+            
+            if (statusSelect && updateBtn) {
+                statusSelect.addEventListener('change', function() {
+                    const selectedStatus = this.value;
+                    updateBtn.disabled = !selectedStatus || selectedStatus === currentMatchStatus;
+                });
+            }
+        });
+
+        function updateMatchStatus() {
+            const newStatus = document.getElementById('newStatus').value;
+            const updateBtn = document.getElementById('updateStatusBtn');
+            
+            if (!newStatus || !currentMatchId) {
+                alert('Please select a status');
+                return;
+            }
+            
+            if (newStatus === currentMatchStatus) {
+                alert('Status is already set to this value');
+                return;
+            }
+            
+            // Disable button and show loading
+            updateBtn.disabled = true;
+            updateBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Updating...';
+            
+            // Make AJAX request to update status
+            fetch(`/admin/matches/${currentMatchId}/update-status`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
+                },
+                body: JSON.stringify({
+                    status: newStatus
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    alert('Match status updated successfully!');
+                    // Close modal and refresh page
+                    bootstrap.Modal.getInstance(document.getElementById('matchDetailsModal')).hide();
+                    window.location.reload();
+                } else {
+                    alert('Error: ' + (data.message || 'Failed to update status'));
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('An error occurred while updating the status');
+            })
+            .finally(() => {
+                // Reset button
+                updateBtn.disabled = false;
+                updateBtn.innerHTML = '<i class="fas fa-save"></i> Update Status';
+            });
         }
 
         // Cascading dropdown functionality

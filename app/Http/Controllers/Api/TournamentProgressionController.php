@@ -1242,22 +1242,26 @@ class TournamentProgressionController extends Controller
 
     /**
      * Generate next round for large winner counts (5+)
+     * This is PROGRESSION logic - will add a loser if odd number of winners
      */
     private function generateLargeWinnerNextRound(Tournament $tournament, string $level, ?string $levelName, $matches)
     {
-        \Log::info("Generating next round for large winner count", [
+        \Log::info("Generating PROGRESSION round for large winner count", [
             'tournament_id' => $tournament->id,
             'level' => $level,
-            'level_name' => $levelName
+            'level_name' => $levelName,
+            'logic' => 'If odd winners >3, add one loser to make even pairs'
         ]);
 
         try {
             // Use the MatchAlgorithmService to generate the next round
+            // This will call handleLargeGroupProgression which adds a loser for odd winner counts
             $matchAlgorithmService = app(\App\Services\MatchAlgorithmService::class);
             $result = $matchAlgorithmService->generateNextRound($tournament->id, $level, null);
             
-            \Log::info("Large winner next round generation completed", [
-                'result' => $result
+            \Log::info("Large winner PROGRESSION round generation completed", [
+                'result' => $result,
+                'note' => 'Used handleLargeGroupProgression - adds loser for odd winners'
             ]);
             
         } catch (\Exception $e) {
@@ -1271,22 +1275,26 @@ class TournamentProgressionController extends Controller
 
     /**
      * Generate standard next round progression
+     * This is also PROGRESSION logic - will add a loser if odd number of winners
      */
     private function generateStandardNextRound(Tournament $tournament, string $level, ?string $levelName, $matches)
     {
-        \Log::info("Generating standard next round progression", [
+        \Log::info("Generating standard PROGRESSION round", [
             'tournament_id' => $tournament->id,
             'level' => $level,
-            'level_name' => $levelName
+            'level_name' => $levelName,
+            'logic' => 'Standard progression - adds loser for odd winners if >3'
         ]);
 
         try {
             // Use the MatchAlgorithmService to generate the next round
+            // This will call appropriate progression logic (handleLargeGroupProgression or handleSpecialProgression)
             $matchAlgorithmService = app(\App\Services\MatchAlgorithmService::class);
             $result = $matchAlgorithmService->generateNextRound($tournament->id, $level, null);
             
-            \Log::info("Standard next round generation completed", [
-                'result' => $result
+            \Log::info("Standard PROGRESSION round generation completed", [
+                'result' => $result,
+                'note' => 'Used appropriate progression logic based on winner count'
             ]);
             
         } catch (\Exception $e) {

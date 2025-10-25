@@ -19,8 +19,11 @@
                     <select class="form-select" name="status">
                         <option value="">All Status</option>
                         <option value="pending" {{ request('status') == 'pending' ? 'selected' : '' }}>Pending</option>
+                        <option value="scheduled" {{ request('status') == 'scheduled' ? 'selected' : '' }}>Scheduled</option>
                         <option value="in_progress" {{ request('status') == 'in_progress' ? 'selected' : '' }}>In Progress</option>
+                        <option value="pending_confirmation" {{ request('status') == 'pending_confirmation' ? 'selected' : '' }}>Pending Confirmation</option>
                         <option value="completed" {{ request('status') == 'completed' ? 'selected' : '' }}>Completed</option>
+                        <option value="forfeit" {{ request('status') == 'forfeit' ? 'selected' : '' }}>Forfeit</option>
                     </select>
                 </div>
                 <div class="col-md-3">
@@ -65,7 +68,18 @@
                         </td>
                         <td>{{ $match->round_name }}</td>
                         <td>
-                            <span class="badge bg-{{ $match->status === 'completed' ? 'success' : ($match->status === 'in_progress' ? 'primary' : 'warning') }}">
+                            @php
+                                $statusColors = [
+                                    'pending' => 'secondary',
+                                    'scheduled' => 'info',
+                                    'in_progress' => 'primary',
+                                    'pending_confirmation' => 'warning',
+                                    'completed' => 'success',
+                                    'forfeit' => 'danger'
+                                ];
+                                $color = $statusColors[$match->status] ?? 'secondary';
+                            @endphp
+                            <span class="badge bg-{{ $color }}">
                                 {{ ucfirst(str_replace('_', ' ', $match->status)) }}
                             </span>
                         </td>

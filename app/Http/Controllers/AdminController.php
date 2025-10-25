@@ -220,6 +220,74 @@ class AdminController extends Controller
         }
     }
 
+    /**
+     * Update match status
+     */
+    public function updateMatchStatus(Request $request, $matchId)
+    {
+        // Check admin privileges
+        if (!auth()->user() || !auth()->user()->is_admin) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Unauthorized access'
+            ], 403);
+        }
+
+        try {
+            $request->validate([
+                'status' => 'required|in:pending,scheduled,in_progress,pending_confirmation,completed,forfeit'
+            ]);
+
+            $match = PoolMatch::findOrFail($matchId);
+            $oldStatus = $match->status;
+            $newStatus = $request->status;
+
+            \Log::info('Admin updating match status', [
+                'match_id' => $match->id,
+                'admin_id' => auth()->id(),
+                'old_status' => $oldStatus,
+                'new_status' => $newStatus,
+                'match_name' => $match->match_name,
+                'tournament_id' => $match->tournament_id
+            ]);
+
+            // Update the status
+            $match->status = $newStatus;
+            $match->save();
+
+            \Log::info('Match status updated successfully', [
+                'match_id' => $match->id,
+                'status_changed_from' => $oldStatus,
+                'status_changed_to' => $newStatus
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Match status updated successfully',
+                'old_status' => $oldStatus,
+                'new_status' => $newStatus
+            ]);
+
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Invalid status provided',
+                'errors' => $e->errors()
+            ], 422);
+        } catch (\Exception $e) {
+            \Log::error('Failed to update match status', [
+                'match_id' => $matchId,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to update match status: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
     public function players(Request $request)
     {
         // Check admin privileges

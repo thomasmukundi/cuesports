@@ -97,6 +97,7 @@ Route::prefix('admin')->middleware(['auth'])->group(function () {
     Route::post('/communities/replace-with-wards', [AdminController::class, 'replaceCommunitiesWithWards'])->name('admin.communities.replace-with-wards');
     
     Route::get('/matches', [AdminController::class, 'matches'])->name('admin.matches');
+    Route::post('/matches/{match}/update-status', [AdminController::class, 'updateMatchStatus'])->name('admin.matches.update-status');
     Route::delete('/matches/{match}', [AdminController::class, 'deleteMatch'])->name('admin.matches.destroy');
     
     Route::get('/players', [AdminController::class, 'players'])->name('admin.players');
