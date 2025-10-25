@@ -21,14 +21,22 @@ class TournamentController extends Controller
             $user = auth()->user();
             $query = Tournament::withCount('registrations');
             
+            \Log::info('Base tournament query setup', [
+                'user_id' => $user->id,
+                'initial_query' => 'Tournament::withCount(registrations)',
+                'request_params' => $request->all()
+            ]);
+            
             // Filter by status if provided
             if ($request->has('status')) {
                 $query->where('status', $request->status);
+                \Log::info('Applied status filter', ['status' => $request->status]);
             }
             
             // Search by name if provided
             if ($request->has('search')) {
                 $query->where('name', 'like', '%' . $request->search . '%');
+                \Log::info('Applied search filter', ['search' => $request->search]);
             }
             
             // Filter for user's tournaments if requested
@@ -37,13 +45,42 @@ class TournamentController extends Controller
                     $q->where('player_id', $user->id);
                 });
             } else {
+                // TEMPORARY: Disable location filtering to debug
+                \Log::info('Tournament filtering decision', [
+                    'user_id' => $user->id,
+                    'has_community' => !empty($user->community_id),
+                    'has_county' => !empty($user->county_id),
+                    'has_region' => !empty($user->region_id),
+                    'will_filter' => ($user->community_id || $user->county_id || $user->region_id)
+                ]);
+                
+                // TEMPORARY: Completely disable filtering to debug
+                \Log::info('Filtering disabled for debugging - showing all tournaments');
+                
                 // Filter tournaments based on user location and tournament scope
                 // Only apply filtering if user has location data, otherwise show all tournaments
-                if ($user->community_id || $user->county_id || $user->region_id) {
-                    $this->applyLocationFilter($query, $user);
-                }
+                // if ($user->community_id || $user->county_id || $user->region_id) {
+                //     $this->applyLocationFilter($query, $user);
+                // } else {
+                //     \Log::info('User has no location data, showing all tournaments');
+                // }
                 // If user has no location data, show all tournaments
             }
+            
+            // Log all tournaments before filtering
+            $allTournaments = Tournament::select('id', 'name', 'area_scope', 'area_name', 'status')->get();
+            \Log::info('All tournaments in database', [
+                'total_count' => $allTournaments->count(),
+                'tournaments' => $allTournaments->map(function($t) {
+                    return [
+                        'id' => $t->id,
+                        'name' => $t->name,
+                        'area_scope' => $t->area_scope,
+                        'area_name' => $t->area_name,
+                        'status' => $t->status
+                    ];
+                })
+            ]);
             
             $tournaments = $query->orderBy('created_at', 'desc')->get();
             
@@ -111,18 +148,21 @@ class TournamentController extends Controller
 
         \Log::info('Tournament filtering for user', [
             'user_id' => $user->id,
-            'user_community' => $userCommunity ? $userCommunity->name : null,
-            'user_county' => $userCounty ? $userCounty->name : null,
-            'user_region' => $userRegion ? $userRegion->name : null
+            'user_community_id' => $user->community_id,
+            'user_community_name' => $userCommunity ? $userCommunity->name : null,
+            'user_county_id' => $user->county_id,
+            'user_county_name' => $userCounty ? $userCounty->name : null,
+            'user_region_id' => $user->region_id,
+            'user_region_name' => $userRegion ? $userRegion->name : null
         ]);
 
         $query->where(function ($q) use ($user, $userCommunity, $userCounty, $userRegion) {
-            // Show tournaments with no area scope (open to all) or national tournaments
+            // Always show tournaments with no area scope (open to all) or national tournaments
             $q->whereNull('area_scope')
               ->orWhere('area_scope', 'national')
               ->orWhere('area_scope', '');
 
-            // Show community tournaments if user is in that community
+            // Show community tournaments if user is in that community (match by name)
             if ($userCommunity) {
                 $q->orWhere(function ($subQ) use ($userCommunity) {
                     $subQ->where('area_scope', 'community')
@@ -130,7 +170,7 @@ class TournamentController extends Controller
                 });
             }
 
-            // Show county tournaments if user is in that county
+            // Show county tournaments if user is in that county (match by name)
             if ($userCounty) {
                 $q->orWhere(function ($subQ) use ($userCounty) {
                     $subQ->where('area_scope', 'county')
@@ -138,7 +178,7 @@ class TournamentController extends Controller
                 });
             }
 
-            // Show regional tournaments if user is in that region  
+            // Show regional tournaments if user is in that region (match by name)
             if ($userRegion) {
                 $q->orWhere(function ($subQ) use ($userRegion) {
                     $subQ->where('area_scope', 'regional')
