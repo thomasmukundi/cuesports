@@ -1498,7 +1498,8 @@ class MatchAlgorithmService
      */
     private function createStandardMatchesWithAvoidance(Tournament $tournament, Collection $players, string $level, $groupId, string $roundName, string $levelName)
     {
-        $playerArray = $players->toArray();
+        // Convert Collection to simple array with proper indexing
+        $playerArray = $players->values()->all();
         $playerCount = count($playerArray);
         $matchNumber = 1;
         
@@ -1510,7 +1511,7 @@ class MatchAlgorithmService
             'round_name' => $roundName,
             'player_count' => $playerCount,
             'players' => array_map(function($p) {
-                return ['id' => $p['id'], 'name' => $p['name']];
+                return ['id' => $p->id, 'name' => $p->name];
             }, $playerArray)
         ]);
         
@@ -1520,7 +1521,7 @@ class MatchAlgorithmService
             $doublePlayerIndex = array_rand($playerArray);
             $doublePlayer = $playerArray[$doublePlayerIndex];
             
-            \Log::info("Odd number ({$playerCount}) players - Player {$doublePlayer['id']} will play twice");
+            \Log::info("Odd number ({$playerCount}) players - Player {$doublePlayer->id} will play twice");
             
             // Create first match with the double player
             $firstOpponentIndex = ($doublePlayerIndex + 1) % $playerCount;
@@ -1531,8 +1532,8 @@ class MatchAlgorithmService
             
             $match1 = PoolMatch::create([
                 'match_name' => "{$roundName}_M{$matchNumber}",
-                'player_1_id' => $doublePlayer['id'],
-                'player_2_id' => $firstOpponent['id'],
+                'player_1_id' => $doublePlayer->id,
+                'player_2_id' => $firstOpponent->id,
                 'level' => $level,
                 'level_name' => $levelName,
                 'round_name' => $roundName,
@@ -1570,8 +1571,8 @@ class MatchAlgorithmService
                 if (isset($remainingPlayers[$i + 1])) {
                     $match = PoolMatch::create([
                         'match_name' => "{$roundName}_M{$matchNumber}",
-                        'player_1_id' => $remainingPlayers[$i]['id'],
-                        'player_2_id' => $remainingPlayers[$i + 1]['id'],
+                        'player_1_id' => $remainingPlayers[$i]->id,
+                        'player_2_id' => $remainingPlayers[$i + 1]->id,
                         'level' => $level,
                         'level_name' => $levelName,
                         'round_name' => $roundName,
@@ -1596,14 +1597,14 @@ class MatchAlgorithmService
             if (count($remainingPlayers) % 2 == 1) {
                 $lastPlayer = end($remainingPlayers);
                 \Log::info("Creating second match for double player with last remaining player", [
-                    'double_player_id' => $doublePlayer['id'],
-                    'last_player_id' => $lastPlayer['id']
+                    'double_player_id' => $doublePlayer->id,
+                    'last_player_id' => $lastPlayer->id
                 ]);
                 
                 $finalMatch = PoolMatch::create([
                     'match_name' => "{$roundName}_M{$matchNumber}",
-                    'player_1_id' => $doublePlayer['id'],
-                    'player_2_id' => $lastPlayer['id'],
+                    'player_1_id' => $doublePlayer->id,
+                    'player_2_id' => $lastPlayer->id,
                     'level' => $level,
                     'level_name' => $levelName,
                     'round_name' => $roundName,
@@ -1633,8 +1634,8 @@ class MatchAlgorithmService
                 if (isset($playerArray[$i + 1])) {
                     $match = PoolMatch::create([
                         'match_name' => "{$roundName}_M{$matchNumber}",
-                        'player_1_id' => $playerArray[$i]['id'],
-                        'player_2_id' => $playerArray[$i + 1]['id'],
+                        'player_1_id' => $playerArray[$i]->id,
+                        'player_2_id' => $playerArray[$i + 1]->id,
                         'level' => $level,
                         'level_name' => $levelName,
                         'round_name' => $roundName,
@@ -1648,16 +1649,16 @@ class MatchAlgorithmService
                         'match_id' => $match->id,
                         'match_name' => $match->match_name,
                         'player_1_id' => $match->player_1_id,
-                        'player_1_name' => $playerArray[$i]['name'],
+                        'player_1_name' => $playerArray[$i]->name,
                         'player_2_id' => $match->player_2_id,
-                        'player_2_name' => $playerArray[$i + 1]['name']
+                        'player_2_name' => $playerArray[$i + 1]->name
                     ]);
                     
                     $matchNumber++;
                 } else {
                     \Log::warning("Missing player for pairing", [
                         'index' => $i,
-                        'player_1' => $playerArray[$i]['name'] ?? 'Unknown',
+                        'player_1' => $playerArray[$i]->name ?? 'Unknown',
                         'player_2_missing' => true
                     ]);
                 }
