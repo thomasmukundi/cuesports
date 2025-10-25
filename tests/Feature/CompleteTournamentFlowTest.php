@@ -227,7 +227,7 @@ class CompleteTournamentFlowTest extends TestCase
                 
                 if ($winners->count() > 3) {
                     // Need another round
-                    $this->matchService->generateNextRound($this->tournament->id, $level, $groupId);
+                    $this->matchService->generateNextRound($this->tournament, $level, $groupId);
                     $currentRound++;
                 } else {
                     break;

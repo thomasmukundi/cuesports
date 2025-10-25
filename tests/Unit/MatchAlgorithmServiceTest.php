@@ -202,7 +202,7 @@ class MatchAlgorithmServiceTest extends TestCase
         $this->expectException(\Exception::class);
         $this->expectExceptionMessage('Current round is not yet completed');
         
-        $this->service->generateNextRound($this->tournament->id, 'community', $this->community->id);
+        $this->service->generateNextRound($this->tournament, 'community', $this->community->id);
     }
 
     public function test_check_level_completion_returns_correct_status()

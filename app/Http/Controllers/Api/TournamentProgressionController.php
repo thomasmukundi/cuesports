@@ -1257,7 +1257,7 @@ class TournamentProgressionController extends Controller
             // Use the MatchAlgorithmService to generate the next round
             // This will call handleLargeGroupProgression which adds a loser for odd winner counts
             $matchAlgorithmService = app(\App\Services\MatchAlgorithmService::class);
-            $result = $matchAlgorithmService->generateNextRound($tournament->id, $level, null);
+            $result = $matchAlgorithmService->generateNextRound($tournament, $level, null);
             
             \Log::info("Large winner PROGRESSION round generation completed", [
                 'result' => $result,

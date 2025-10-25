@@ -367,6 +367,13 @@
                 <i class="fas fa-trash"></i> Delete All Matches ({{ $tournament->matches()->count() }})
             </button>
         </form>
+        
+        <!-- Generate Next Round Button -->
+        <button type="button" class="btn btn-success btn-sm ms-2" 
+                onclick="showGenerateNextRoundModal()" 
+                title="Manually generate next round for this tournament">
+            <i class="fas fa-forward"></i> Generate Next Round
+        </button>
         @endif
     </div>
     <div class="card-body">
@@ -651,5 +658,117 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 });
+
+// Generate Next Round Modal Functions
+function showGenerateNextRoundModal() {
+    document.getElementById('generateNextRoundModal').style.display = 'block';
+}
+
+function closeGenerateNextRoundModal() {
+    document.getElementById('generateNextRoundModal').style.display = 'none';
+}
+
+function generateNextRound() {
+    const level = document.getElementById('nextRoundLevel').value;
+    const groupId = document.getElementById('nextRoundGroupId').value;
+    
+    if (!level) {
+        alert('Please select a level');
+        return;
+    }
+    
+    // Show loading state
+    const button = document.getElementById('generateNextRoundBtn');
+    const originalText = button.innerHTML;
+    button.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Generating...';
+    button.disabled = true;
+    
+    // Make API request
+    fetch(`/api/admin/tournaments/{{ $tournament->id }}/generate-next-round`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
+        },
+        body: JSON.stringify({
+            level: level,
+            group_id: groupId || null
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.status === 'success') {
+            alert('Next round generated successfully!\n\n' + data.message);
+            closeGenerateNextRoundModal();
+            // Refresh the page to show new matches
+            window.location.reload();
+        } else {
+            alert('Error: ' + (data.error || data.message || 'Failed to generate next round'));
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('An error occurred while generating the next round');
+    })
+    .finally(() => {
+        // Reset button
+        button.innerHTML = originalText;
+        button.disabled = false;
+    });
+}
+
+// Close modal when clicking outside
+window.onclick = function(event) {
+    const modal = document.getElementById('generateNextRoundModal');
+    if (event.target === modal) {
+        closeGenerateNextRoundModal();
+    }
+}
 </script>
+
+<!-- Generate Next Round Modal -->
+<div id="generateNextRoundModal" class="modal" style="display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.5);">
+    <div class="modal-dialog" style="position: relative; margin: 15% auto; width: 500px; background: white; border-radius: 8px; padding: 20px;">
+        <div class="modal-header" style="border-bottom: 1px solid #ddd; padding-bottom: 15px; margin-bottom: 20px;">
+            <h5 class="modal-title">Generate Next Round</h5>
+            <button type="button" onclick="closeGenerateNextRoundModal()" style="background: none; border: none; font-size: 24px; float: right; cursor: pointer;">&times;</button>
+        </div>
+        <div class="modal-body">
+            <div class="mb-3">
+                <label for="nextRoundLevel" class="form-label">Tournament Level:</label>
+                <select id="nextRoundLevel" class="form-control" required>
+                    <option value="">-- Select Level --</option>
+                    @if($isSpecial)
+                        <option value="special">Special Tournament</option>
+                    @else
+                        <option value="community">Community</option>
+                        <option value="county">County</option>
+                        <option value="regional">Regional</option>
+                        <option value="national">National</option>
+                    @endif
+                </select>
+            </div>
+            
+            @if(!$isSpecial)
+            <div class="mb-3">
+                <label for="nextRoundGroupId" class="form-label">Group ID (Optional):</label>
+                <input type="number" id="nextRoundGroupId" class="form-control" placeholder="Leave empty for all groups">
+                <small class="form-text text-muted">For community level, use community ID. For county level, use county ID, etc.</small>
+            </div>
+            @endif
+            
+            <div class="alert alert-warning">
+                <i class="fas fa-exclamation-triangle"></i>
+                <strong>Warning:</strong> This will generate the next round based on current completed matches. Make sure all matches in the current round are properly completed before proceeding.
+            </div>
+        </div>
+        <div class="modal-footer" style="border-top: 1px solid #ddd; padding-top: 15px; text-align: right;">
+            <button type="button" class="btn btn-secondary" onclick="closeGenerateNextRoundModal()">Cancel</button>
+            <button type="button" class="btn btn-success" id="generateNextRoundBtn" onclick="generateNextRound()">
+                <i class="fas fa-forward"></i> Generate Next Round
+            </button>
+        </div>
+    </div>
+</div>
+
 @endpush

@@ -236,8 +236,9 @@ class TournamentController extends Controller
         ]);
         
         try {
+            $tournament = Tournament::findOrFail($tournamentId);
             $result = $this->matchService->generateNextRound(
-                $tournamentId, 
+                $tournament, 
                 $validated['level'], 
                 $validated['group_id'] ?? null
             );
