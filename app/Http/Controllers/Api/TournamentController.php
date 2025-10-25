@@ -17,6 +17,13 @@ class TournamentController extends Controller
      */
     public function index(Request $request)
     {
+        \Log::info('=== TOURNAMENT API INDEX METHOD CALLED ===', [
+            'timestamp' => now(),
+            'user_id' => auth()->id(),
+            'request_url' => $request->fullUrl(),
+            'request_method' => $request->method()
+        ]);
+        
         try {
             $user = auth()->user();
             $query = Tournament::withCount('registrations');

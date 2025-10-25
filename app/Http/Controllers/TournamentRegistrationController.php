@@ -28,6 +28,12 @@ class TournamentRegistrationController extends Controller
      */
     public function available(Request $request)
     {
+        \Log::info('=== TOURNAMENT REGISTRATION AVAILABLE METHOD CALLED ===', [
+            'timestamp' => now(),
+            'user_id' => auth()->id(),
+            'request_url' => $request->fullUrl(),
+            'request_method' => $request->method()
+        ]);
         $user = Auth::user();
         $query = Tournament::where('status', 'upcoming')
             ->where(function($q) {
@@ -35,8 +41,26 @@ class TournamentRegistrationController extends Controller
                   ->orWhere('registration_deadline', '>', now());
             });
         
+        // Log all tournaments before filtering
+        $allTournaments = Tournament::select('id', 'name', 'area_scope', 'area_name', 'status')->get();
+        \Log::info('All tournaments in database (TournamentRegistrationController)', [
+            'total_count' => $allTournaments->count(),
+            'tournaments' => $allTournaments->map(function($t) {
+                return [
+                    'id' => $t->id,
+                    'name' => $t->name,
+                    'area_scope' => $t->area_scope,
+                    'area_name' => $t->area_name,
+                    'status' => $t->status
+                ];
+            })
+        ]);
+        
+        // TEMPORARY: Disable location filtering to debug
+        \Log::info('TournamentRegistrationController - Filtering disabled for debugging');
+        
         // Apply location-based filtering
-        $this->applyLocationFilter($query, $user);
+        // $this->applyLocationFilter($query, $user);
         
         // Filter by area scope if applicable
         if ($request->has('scope')) {
@@ -47,6 +71,20 @@ class TournamentRegistrationController extends Controller
         $tournaments = $query->with(['registeredUsers' => function($q) use ($user) {
             $q->where('player_id', $user->id);
         }])->paginate(10);
+        
+        \Log::info('Tournaments found (TournamentRegistrationController)', [
+            'user_id' => $user->id,
+            'tournament_count' => $tournaments->count(),
+            'tournaments' => $tournaments->map(function($t) {
+                return [
+                    'id' => $t->id,
+                    'name' => $t->name,
+                    'area_scope' => $t->area_scope,
+                    'area_name' => $t->area_name,
+                    'status' => $t->status
+                ];
+            })
+        ]);
         
         // Add registration status for each tournament
         $tournaments->getCollection()->transform(function($tournament) use ($user) {
