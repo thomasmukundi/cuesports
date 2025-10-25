@@ -141,6 +141,7 @@ Route::middleware('auth:api')->group(function () {
     Route::post('/matches/{match}/submit-points', [App\Http\Controllers\Api\MatchController::class, 'submitPointsResult']);
     Route::post('/matches/{match}/confirm-results', [App\Http\Controllers\Api\MatchController::class, 'confirmResults']);
     Route::post('/matches/{match}/forfeit', [App\Http\Controllers\Api\MatchController::class, 'forfeitMatch']);
+    Route::post('/matches/{match}/revert-to-pending', [App\Http\Controllers\Api\MatchController::class, 'revertToPendingConfirmation']);
     Route::get('/matches/{match}/messages', [App\Http\Controllers\Api\MatchController::class, 'getMessages']);
     Route::post('/matches/{match}/messages', [App\Http\Controllers\Api\MatchController::class, 'sendMessage']);
     

@@ -345,12 +345,29 @@ class TournamentProgressionController extends Controller
                 break;
                 
             default:
-                \Log::warning("Unhandled winner count scenario", [
-                    'winner_count' => $winnerCount,
-                    'round_name' => $roundName,
-                    'is_first_round' => $isFirstRound,
-                    'expected_counts' => [1, 2, 3, 4]
-                ]);
+                // Handle larger winner counts (5+)
+                if ($winnerCount >= 5) {
+                    \Log::info("Processing large winner count scenario", [
+                        'winner_count' => $winnerCount,
+                        'round_name' => $roundName,
+                        'is_first_round' => $isFirstRound
+                    ]);
+                    
+                    if ($isFirstRound) {
+                        \Log::info("Generating next round for large winner count from first round");
+                        $this->generateLargeWinnerNextRound($tournament, $level, $levelName, $matches);
+                    } else {
+                        \Log::info("Large winner count but not in first round - using standard progression");
+                        $this->generateStandardNextRound($tournament, $level, $levelName, $matches);
+                    }
+                } else {
+                    \Log::warning("Unhandled winner count scenario", [
+                        'winner_count' => $winnerCount,
+                        'round_name' => $roundName,
+                        'is_first_round' => $isFirstRound,
+                        'expected_counts' => [1, 2, 3, 4]
+                    ]);
+                }
                 break;
         }
         
@@ -1221,5 +1238,63 @@ class TournamentProgressionController extends Controller
         }
         
         \Log::info("=== FINAL POSITION CHECK COMPLETE ===");
+    }
+
+    /**
+     * Generate next round for large winner counts (5+)
+     */
+    private function generateLargeWinnerNextRound(Tournament $tournament, string $level, ?string $levelName, $matches)
+    {
+        \Log::info("Generating next round for large winner count", [
+            'tournament_id' => $tournament->id,
+            'level' => $level,
+            'level_name' => $levelName
+        ]);
+
+        try {
+            // Use the MatchAlgorithmService to generate the next round
+            $matchAlgorithmService = app(\App\Services\MatchAlgorithmService::class);
+            $result = $matchAlgorithmService->generateNextRound($tournament->id, $level, null);
+            
+            \Log::info("Large winner next round generation completed", [
+                'result' => $result
+            ]);
+            
+        } catch (\Exception $e) {
+            \Log::error("Failed to generate next round for large winner count", [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+            throw $e;
+        }
+    }
+
+    /**
+     * Generate standard next round progression
+     */
+    private function generateStandardNextRound(Tournament $tournament, string $level, ?string $levelName, $matches)
+    {
+        \Log::info("Generating standard next round progression", [
+            'tournament_id' => $tournament->id,
+            'level' => $level,
+            'level_name' => $levelName
+        ]);
+
+        try {
+            // Use the MatchAlgorithmService to generate the next round
+            $matchAlgorithmService = app(\App\Services\MatchAlgorithmService::class);
+            $result = $matchAlgorithmService->generateNextRound($tournament->id, $level, null);
+            
+            \Log::info("Standard next round generation completed", [
+                'result' => $result
+            ]);
+            
+        } catch (\Exception $e) {
+            \Log::error("Failed to generate standard next round", [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+            throw $e;
+        }
     }
 }

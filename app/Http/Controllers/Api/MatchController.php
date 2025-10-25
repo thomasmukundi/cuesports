@@ -1299,4 +1299,77 @@ class MatchController extends Controller
             })
         ]);
     }
+
+    /**
+     * Revert match status to pending confirmation for re-processing
+     */
+    public function revertToPendingConfirmation(Request $request, $matchId)
+    {
+        try {
+            $user = auth()->user();
+            $match = PoolMatch::findOrFail($matchId);
+
+            // Check if user is admin or one of the players
+            if (!$user->is_admin && $match->player_1_id !== $user->id && $match->player_2_id !== $user->id) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Unauthorized to modify this match'
+                ], 403);
+            }
+
+            // Only allow reverting completed matches
+            if ($match->status !== 'completed') {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Can only revert completed matches'
+                ], 400);
+            }
+
+            \Log::info('Reverting match to pending confirmation', [
+                'match_id' => $match->id,
+                'user_id' => $user->id,
+                'previous_status' => $match->status,
+                'tournament_id' => $match->tournament_id
+            ]);
+
+            // Revert match status to pending confirmation
+            $match->status = 'pending_confirmation';
+            
+            // Keep the existing results but mark as needing re-confirmation
+            // Don't clear winner_id, points, or submitted_by - just change status
+            
+            $match->save();
+
+            \Log::info('Match reverted to pending confirmation successfully', [
+                'match_id' => $match->id,
+                'new_status' => $match->status,
+                'winner_id' => $match->winner_id,
+                'submitted_by' => $match->submitted_by
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Match status reverted to pending confirmation',
+                'match' => [
+                    'id' => $match->id,
+                    'status' => $match->status,
+                    'player_1_points' => $match->player_1_points,
+                    'player_2_points' => $match->player_2_points,
+                    'winner_id' => $match->winner_id
+                ]
+            ]);
+
+        } catch (\Exception $e) {
+            \Log::error('Failed to revert match status', [
+                'match_id' => $matchId,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to revert match status: ' . $e->getMessage()
+            ], 500);
+        }
+    }
 }
