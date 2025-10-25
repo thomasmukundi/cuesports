@@ -1265,7 +1265,24 @@ class MatchAlgorithmService
     {
         $playerCount = $players->count();
         
+        \Log::info("=== CREATE COMMUNITY AWARE MATCHES START ===", [
+            'tournament_id' => $tournament->id,
+            'level' => $level,
+            'level_name' => $levelName,
+            'group_id' => $groupId,
+            'round_name' => $roundName,
+            'position' => $position,
+            'player_count' => $playerCount,
+            'players' => $players->map(function($p) {
+                return ['id' => $p->id, 'name' => $p->name];
+            })->toArray()
+        ]);
+        
         if ($playerCount === 1) {
+            \Log::info("Single player - creating winner automatically", [
+                'player_id' => $players->first()->id,
+                'player_name' => $players->first()->name
+            ]);
             // Single player automatically wins
             Winner::create([
                 'player_id' => $players->first()->id,
@@ -1278,14 +1295,19 @@ class MatchAlgorithmService
             return;
         }
         
+        \Log::info("Shuffling players with avoidance for level: {$level}");
         // Shuffle players to randomize pairings while avoiding same community/county
         $shuffledPlayers = $this->shuffleWithAvoidance($players, $level);
         
         if ($playerCount <= 4) {
+            \Log::info("Using handleSpecialCases for {$playerCount} players");
             $this->handleSpecialCases($tournament, $shuffledPlayers, $level, $groupId, $levelName);
         } else {
+            \Log::info("Using createStandardMatchesWithAvoidance for {$playerCount} players");
             $this->createStandardMatchesWithAvoidance($tournament, $shuffledPlayers, $level, $groupId, $roundName, $levelName);
         }
+        
+        \Log::info("=== CREATE COMMUNITY AWARE MATCHES END ===");
     }
 
     /**
@@ -1338,7 +1360,17 @@ class MatchAlgorithmService
         $playerCount = count($playerArray);
         $matchNumber = 1;
         
-        \Log::info("Creating standard matches for {$playerCount} players at {$level} level, group {$groupId}");
+        \Log::info("=== CREATE STANDARD MATCHES WITH AVOIDANCE START ===", [
+            'tournament_id' => $tournament->id,
+            'level' => $level,
+            'level_name' => $levelName,
+            'group_id' => $groupId,
+            'round_name' => $roundName,
+            'player_count' => $playerCount,
+            'players' => array_map(function($p) {
+                return ['id' => $p['id'], 'name' => $p['name']];
+            }, $playerArray)
+        ]);
         
         // Handle odd number of players - one player must play twice
         if ($playerCount % 2 == 1) {
@@ -1355,7 +1387,7 @@ class MatchAlgorithmService
             }
             $firstOpponent = $playerArray[$firstOpponentIndex];
             
-            PoolMatch::create([
+            $match1 = PoolMatch::create([
                 'match_name' => "{$level}_R1_M{$matchNumber}",
                 'player_1_id' => $doublePlayer['id'],
                 'player_2_id' => $firstOpponent['id'],
@@ -1367,6 +1399,16 @@ class MatchAlgorithmService
                 'status' => 'pending',
                 'proposed_dates' => \App\Services\ProposedDatesService::generateProposedDatesJson($tournament->id),
             ]);
+            
+            \Log::info("Created match #{$matchNumber}", [
+                'match_id' => $match1->id,
+                'match_name' => $match1->match_name,
+                'player_1_id' => $match1->player_1_id,
+                'player_2_id' => $match1->player_2_id,
+                'level' => $match1->level,
+                'round_name' => $match1->round_name
+            ]);
+            
             $matchNumber++;
             
             // Remove both players from the array for remaining pairings
@@ -1378,9 +1420,13 @@ class MatchAlgorithmService
             }
             
             // Create matches for remaining players
+            \Log::info("Creating matches for remaining players", [
+                'remaining_count' => count($remainingPlayers)
+            ]);
+            
             for ($i = 0; $i < count($remainingPlayers); $i += 2) {
                 if (isset($remainingPlayers[$i + 1])) {
-                    PoolMatch::create([
+                    $match = PoolMatch::create([
                         'match_name' => "{$level}_R1_M{$matchNumber}",
                         'player_1_id' => $remainingPlayers[$i]['id'],
                         'player_2_id' => $remainingPlayers[$i + 1]['id'],
@@ -1392,6 +1438,14 @@ class MatchAlgorithmService
                         'status' => 'pending',
                         'proposed_dates' => \App\Services\ProposedDatesService::generateProposedDatesJson($tournament->id),
                     ]);
+                    
+                    \Log::info("Created match #{$matchNumber}", [
+                        'match_id' => $match->id,
+                        'match_name' => $match->match_name,
+                        'player_1_id' => $match->player_1_id,
+                        'player_2_id' => $match->player_2_id
+                    ]);
+                    
                     $matchNumber++;
                 }
             }
@@ -1399,7 +1453,12 @@ class MatchAlgorithmService
             // Create second match for the double player with the remaining unpaired player
             if (count($remainingPlayers) % 2 == 1) {
                 $lastPlayer = end($remainingPlayers);
-                PoolMatch::create([
+                \Log::info("Creating second match for double player with last remaining player", [
+                    'double_player_id' => $doublePlayer['id'],
+                    'last_player_id' => $lastPlayer['id']
+                ]);
+                
+                $finalMatch = PoolMatch::create([
                     'match_name' => "{$level}_R1_M{$matchNumber}",
                     'player_1_id' => $doublePlayer['id'],
                     'player_2_id' => $lastPlayer['id'],
@@ -1411,6 +1470,14 @@ class MatchAlgorithmService
                     'status' => 'pending',
                     'proposed_dates' => \App\Services\ProposedDatesService::generateProposedDatesJson($tournament->id),
                 ]);
+                
+                \Log::info("Created final match #{$matchNumber}", [
+                    'match_id' => $finalMatch->id,
+                    'match_name' => $finalMatch->match_name,
+                    'player_1_id' => $finalMatch->player_1_id,
+                    'player_2_id' => $finalMatch->player_2_id
+                ]);
+                
                 $matchNumber++;
             }
         } else {
@@ -1434,7 +1501,25 @@ class MatchAlgorithmService
             }
         }
         
-        \Log::info("Created " . ($matchNumber - 1) . " matches for {$playerCount} players");
+        $totalMatches = $matchNumber - 1;
+        \Log::info("=== CREATE STANDARD MATCHES WITH AVOIDANCE END ===", [
+            'total_matches_created' => $totalMatches,
+            'player_count' => $playerCount,
+            'tournament_id' => $tournament->id,
+            'level' => $level,
+            'round_name' => $roundName
+        ]);
+        
+        // Verify matches were actually created in database
+        $createdMatches = PoolMatch::where('tournament_id', $tournament->id)
+            ->where('level', $level)
+            ->where('round_name', $roundName)
+            ->get();
+            
+        \Log::info("Database verification - matches found", [
+            'matches_in_db' => $createdMatches->count(),
+            'match_ids' => $createdMatches->pluck('id')->toArray()
+        ]);
     }
 
     /**
@@ -1445,11 +1530,24 @@ class MatchAlgorithmService
         $levelName = $this->getLevelName($level, $groupId);
         $nextRoundName = $this->getNextRoundName($currentRoundMatches->first()->round_name);
         
-        \Log::info("Large group progression: {$winners->count()} winners for next round at {$level} level");
+        \Log::info("=== LARGE GROUP PROGRESSION START ===", [
+            'tournament_id' => $tournament->id,
+            'level' => $level,
+            'level_name' => $levelName,
+            'next_round_name' => $nextRoundName,
+            'initial_winner_count' => $winners->count(),
+            'current_round_matches' => $currentRoundMatches->count()
+        ]);
         
         // If odd number of winners > 3, add a loser to make even pairs
         if ($winners->count() > 3 && $winners->count() % 2 === 1) {
             $losers = $this->getLosersFromMatches($currentRoundMatches);
+            \Log::info("Processing odd winner count", [
+                'winner_count' => $winners->count(),
+                'losers_available' => $losers->count(),
+                'loser_ids' => $losers->pluck('id')->toArray()
+            ]);
+            
             if ($losers->count() > 0) {
                 // Randomly select one loser to make even number for pairing
                 $selectedLoser = $losers->random();
@@ -1469,8 +1567,17 @@ class MatchAlgorithmService
             }
         }
         
+        \Log::info("About to create standard matches", [
+            'final_player_count' => $winners->count(),
+            'players' => $winners->map(function($w) {
+                return ['id' => $w->id, 'name' => $w->name];
+            })->toArray()
+        ]);
+        
         // For odd numbers ≤ 3, let one player play twice (handled in createStandardMatches)
         $this->createStandardMatches($tournament, $winners, $level, $groupId, $nextRoundName, $levelName);
+        
+        \Log::info("=== LARGE GROUP PROGRESSION END ===");
     }
 
     /**
@@ -1612,13 +1719,29 @@ class MatchAlgorithmService
      */
     private function createStandardMatches(Tournament $tournament, Collection $players, string $level, $groupId, string $roundName, string $levelName)
     {
+        \Log::info("=== CREATE STANDARD MATCHES START ===", [
+            'tournament_id' => $tournament->id,
+            'level' => $level,
+            'level_name' => $levelName,
+            'group_id' => $groupId,
+            'round_name' => $roundName,
+            'player_count' => $players->count(),
+            'players' => $players->map(function($p) {
+                return ['id' => $p->id, 'name' => $p->name];
+            })->toArray()
+        ]);
+        
         if ($level !== 'community' && $level !== 'special') {
+            \Log::info("Using smart pairing matches for level: {$level}");
             // For county/regional/national ALL rounds, use smart pairing with previous group tracking
             $this->createSmartPairingMatches($tournament, $players, $level, $groupId, $roundName, $levelName);
         } else {
+            \Log::info("Using random matches for level: {$level}");
             // Random pairing with same-origin avoidance for community level
             $this->createRandomMatches($tournament, $players, $level, $groupId, $roundName, $levelName);
         }
+        
+        \Log::info("=== CREATE STANDARD MATCHES END ===");
     }
 
     /**
@@ -1788,15 +1911,28 @@ class MatchAlgorithmService
      */
     private function createRandomMatches(Tournament $tournament, Collection $players, string $level, $groupId, string $roundName, ?string $levelName = null)
     {
+        \Log::info("=== CREATE RANDOM MATCHES START ===", [
+            'tournament_id' => $tournament->id,
+            'level' => $level,
+            'level_name' => $levelName,
+            'group_id' => $groupId,
+            'round_name' => $roundName,
+            'player_count' => $players->count()
+        ]);
+        
         if ($level === 'community') {
+            \Log::info("Using pairPlayers for community level");
             // For community level, just pair randomly
             $levelName = $levelName ?? $this->getLevelName($level, $groupId);
             $this->pairPlayers($players, $tournament, $level, $groupId, $roundName, '', $levelName);
         } else {
+            \Log::info("Using createCommunityAwareMatches for level: {$level}");
             // For higher levels, avoid same community pairings
             $levelName = $this->getLevelName($level, $groupId);
             $this->createCommunityAwareMatches($players, $tournament, $level, $groupId, $roundName, '', $levelName);
         }
+        
+        \Log::info("=== CREATE RANDOM MATCHES END ===");
     }
 
     /**
