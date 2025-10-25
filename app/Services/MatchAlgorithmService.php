@@ -141,20 +141,27 @@ class MatchAlgorithmService
     /**
      * Generate next round matches
      */
-    public function generateNextRound(int $tournamentId, string $level, ?int $groupId = null)
+    public function generateNextRound(Tournament $tournament, string $level, ?int $groupId = null): array
     {
-        $tournament = Tournament::findOrFail($tournamentId);
-        
         DB::beginTransaction();
         try {
-            // Check if current round is completed
-            if (!$this->isRoundCompleted($tournament, $level, $groupId)) {
-                throw new \Exception("Current round is not yet completed");
+            \Log::info("=== GENERATE NEXT ROUND START ===");
+            
+            // For special tournaments, use simplified logic
+            if ($level === 'special' || $tournament->special) {
+                return $this->generateSpecialTournamentNextRound($tournament, $level, $groupId);
             }
             
-            // Get winners from current round
+            // Get current round matches and winners
             $currentRoundMatches = $this->getCurrentRoundMatches($tournament, $level, $groupId);
             $winners = $this->getWinnersFromMatches($currentRoundMatches);
+            
+            \Log::info("Round completion check", [
+                'current_matches' => $currentRoundMatches->count(),
+                'winners_found' => $winners->count(),
+                'level' => $level,
+                'group_id' => $groupId
+            ]);
             
             if ($winners->count() <= 4) {
                 // Handle special progression cases (4, 3, 2 players)
@@ -176,6 +183,141 @@ class MatchAlgorithmService
             DB::rollBack();
             Log::error("Next round generation failed: " . $e->getMessage());
             throw $e;
+        }
+    }
+
+    /**
+     * Generate next round for special tournaments (simplified logic)
+     */
+    private function generateSpecialTournamentNextRound(Tournament $tournament, string $level, ?int $groupId = null): array
+    {
+        \Log::info("=== SPECIAL TOURNAMENT NEXT ROUND START ===", [
+            'tournament_id' => $tournament->id,
+            'tournament_name' => $tournament->name,
+            'level' => $level,
+            'group_id' => $groupId
+        ]);
+        
+        // Get all matches from current round
+        $currentRoundMatches = PoolMatch::where('tournament_id', $tournament->id)
+            ->where('level', $level)
+            ->whereNotNull('winner_id')
+            ->get();
+            
+        if ($currentRoundMatches->isEmpty()) {
+            throw new \Exception("No completed matches found for special tournament");
+        }
+        
+        // Get current round name
+        $currentRoundName = $currentRoundMatches->first()->round_name;
+        $nextRoundName = $this->getNextRoundName($currentRoundName);
+        
+        // Get all winners from current round
+        $winners = collect();
+        foreach ($currentRoundMatches as $match) {
+            if ($match->winner_id) {
+                $winner = User::find($match->winner_id);
+                if ($winner) {
+                    $winners->push($winner);
+                }
+            }
+        }
+        
+        $winners = $winners->unique('id'); // Remove duplicates (players who played twice)
+        
+        \Log::info("Special tournament progression analysis", [
+            'current_round' => $currentRoundName,
+            'next_round' => $nextRoundName,
+            'completed_matches' => $currentRoundMatches->count(),
+            'unique_winners' => $winners->count(),
+            'winner_ids' => $winners->pluck('id')->toArray()
+        ]);
+        
+        // Apply special tournament progression logic
+        $finalPlayers = $this->applySpecialTournamentLogic($winners, $currentRoundMatches);
+        
+        \Log::info("Final players for next round", [
+            'final_count' => $finalPlayers->count(),
+            'players' => $finalPlayers->map(function($p) {
+                return ['id' => $p->id, 'name' => $p->name];
+            })->toArray()
+        ]);
+        
+        // Create matches for next round
+        $this->createSpecialTournamentMatches($tournament, $finalPlayers, $level, $groupId, $nextRoundName);
+        
+        DB::commit();
+        
+        // Send notifications
+        $this->sendPairingNotifications($tournament, $level);
+        
+        \Log::info("=== SPECIAL TOURNAMENT NEXT ROUND END ===");
+        
+        return [
+            'status' => 'success', 
+            'message' => "Next round generated for special tournament",
+            'note' => "Used simplified special tournament logic"
+        ];
+    }
+
+    /**
+     * Apply special tournament progression logic
+     */
+    private function applySpecialTournamentLogic(Collection $winners, Collection $currentRoundMatches): Collection
+    {
+        $winnerCount = $winners->count();
+        
+        \Log::info("Applying special tournament logic", [
+            'winner_count' => $winnerCount,
+            'is_odd' => $winnerCount % 2 === 1,
+            'is_greater_than_3' => $winnerCount > 3
+        ]);
+        
+        // If odd number of winners > 3, add one random loser
+        if ($winnerCount > 3 && $winnerCount % 2 === 1) {
+            $losers = $this->getLosersFromMatches($currentRoundMatches);
+            
+            \Log::info("Adding random loser for odd winner count", [
+                'winner_count' => $winnerCount,
+                'available_losers' => $losers->count()
+            ]);
+            
+            if ($losers->count() > 0) {
+                $selectedLoser = $losers->random();
+                $winners->push($selectedLoser);
+                
+                \Log::info("Added random loser", [
+                    'loser_id' => $selectedLoser->id,
+                    'loser_name' => $selectedLoser->name,
+                    'final_count' => $winners->count()
+                ]);
+            }
+        }
+        
+        return $winners;
+    }
+
+    /**
+     * Create matches for special tournament next round
+     */
+    private function createSpecialTournamentMatches(Tournament $tournament, Collection $players, string $level, ?int $groupId, string $roundName)
+    {
+        $levelName = $this->getLevelName($level, $groupId);
+        $playerCount = $players->count();
+        
+        \Log::info("Creating special tournament matches", [
+            'tournament_id' => $tournament->id,
+            'level' => $level,
+            'round_name' => $roundName,
+            'player_count' => $playerCount
+        ]);
+        
+        if ($playerCount <= 4) {
+            // Handle special cases (4→2, 3→2, 2→1)
+            $this->handleSpecialCases($tournament, $players, $level, $groupId, $levelName, $roundName);
+        } else {
+            // Standard pairing for >4 players
+            $this->createStandardMatchesWithAvoidance($tournament, $players, $level, $groupId, $roundName, $levelName);
         }
     }
 
@@ -1622,7 +1764,7 @@ class MatchAlgorithmService
     /**
      * Handle special cases for 2, 3, and 4 player tournaments
      */
-    private function handleSpecialCases(Tournament $tournament, Collection $players, string $level, $groupId, $levelName)
+    private function handleSpecialCases(Tournament $tournament, Collection $players, string $level, $groupId, $levelName, ?string $roundName = null)
     {
         $playerCount = $players->count();
         
@@ -1644,13 +1786,14 @@ class MatchAlgorithmService
                 
             case 2:
                 // Create final match
+                $finalRoundName = $roundName ?? '2_final';
                 PoolMatch::create([
-                    'match_name' => '2_final_match',
+                    'match_name' => $finalRoundName . '_match',
                     'player_1_id' => $players->first()->id,
                     'player_2_id' => $players->last()->id,
                     'level' => $level,
                     'level_name' => $levelName,
-                    'round_name' => '2_final',
+                    'round_name' => $finalRoundName,
                     'tournament_id' => $tournament->id,
                     'group_id' => $groupId,
                     'status' => 'pending',
@@ -1660,15 +1803,16 @@ class MatchAlgorithmService
                 
             case 3:
                 // Create semifinal with one bye
+                $sfRoundName = $roundName ?? '3_SF';
                 $shuffledPlayers = $players->shuffle();
                 PoolMatch::create([
-                    'match_name' => '3_SF_match',
+                    'match_name' => $sfRoundName . '_match',
                     'player_1_id' => $shuffledPlayers[0]->id,
                     'player_2_id' => $shuffledPlayers[1]->id,
                     'bye_player_id' => $shuffledPlayers[2]->id,
                     'level' => $level,
                     'level_name' => $levelName,
-                    'round_name' => '3_SF',
+                    'round_name' => $sfRoundName,
                     'tournament_id' => $tournament->id,
                     'group_id' => $groupId,
                     'status' => 'pending',
@@ -1678,33 +1822,37 @@ class MatchAlgorithmService
                 
             case 4:
                 // Create two first round matches
+                $r1RoundName = $roundName ?? 'round_1';
                 $shuffledPlayers = $players->shuffle();
                 
-                // Debug: Log the exact values being passed to PoolMatch::create
-                \Log::info("Creating match 4_R1_M1 with level_name = '{$levelName}' (length: " . strlen($levelName) . ")");
+                \Log::info("Creating 4-player matches", [
+                    'round_name' => $r1RoundName,
+                    'level_name' => $levelName,
+                    'players' => $shuffledPlayers->map(function($p) {
+                        return ['id' => $p->id, 'name' => $p->name];
+                    })->toArray()
+                ]);
                 
                 PoolMatch::create([
-                    'match_name' => '4_R1_M1',
+                    'match_name' => $r1RoundName . '_M1',
                     'player_1_id' => $shuffledPlayers[0]->id,
                     'player_2_id' => $shuffledPlayers[1]->id,
                     'level' => $level,
                     'level_name' => $levelName,
-                    'round_name' => 'round_1',
+                    'round_name' => $r1RoundName,
                     'tournament_id' => $tournament->id,
                     'group_id' => $groupId,
                     'status' => 'pending',
                     'proposed_dates' => \App\Services\ProposedDatesService::generateProposedDatesJson($tournament->id),
                 ]);
                 
-                \Log::info("Creating match 4_R1_M2 with level_name = '{$levelName}' (length: " . strlen($levelName) . ")");
-                
                 PoolMatch::create([
-                    'match_name' => '4_R1_M2',
+                    'match_name' => $r1RoundName . '_M2',
                     'player_1_id' => $shuffledPlayers[2]->id,
                     'player_2_id' => $shuffledPlayers[3]->id,
                     'level' => $level,
                     'level_name' => $levelName,
-                    'round_name' => 'round_1',
+                    'round_name' => $r1RoundName,
                     'tournament_id' => $tournament->id,
                     'group_id' => $groupId,
                     'status' => 'pending',
@@ -2916,7 +3064,7 @@ class MatchAlgorithmService
 
             // For special tournaments, create matches without level-based grouping
             // All players compete in a single pool
-            $matchesCreated = $this->createSpecialTournamentMatches($tournament, $players);
+            $matchesCreated = $this->createSpecialTournamentMatchesLegacy($tournament, $players);
 
             DB::commit();
 
@@ -2948,9 +3096,9 @@ class MatchAlgorithmService
     }
 
     /**
-     * Create matches for special tournament
+     * Create matches for special tournament (legacy method)
      */
-    private function createSpecialTournamentMatches(Tournament $tournament, $players): int
+    private function createSpecialTournamentMatchesLegacy(Tournament $tournament, $players): int
     {
         $playersArray = $players->toArray();
         $playerCount = count($playersArray);
