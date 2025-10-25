@@ -320,27 +320,26 @@ class TournamentProgressionController extends Controller
                 
             case 3:
                 \Log::info("Processing 3 winner scenario");
-                if ($isFirstRound) {
-                    \Log::info("Generating 3-winner semifinal match");
-                    $this->generate3WinnerSemifinal($tournament, $level, $levelName, $matches);
-                } else {
-                    \Log::info("3 winners but not in first round - no action needed");
-                }
+                \Log::info("Generating 3-winner semifinal match", [
+                    'round_name' => $roundName,
+                    'is_first_round' => $isFirstRound,
+                    'winner_count' => $winnerCount
+                ]);
+                $this->generate3WinnerSemifinal($tournament, $level, $levelName, $matches);
                 break;
                 
             case 4:
                 \Log::info("Processing 4 winner scenario");
-                if ($isFirstRound) {
-                    \Log::info("Generating 4-player semifinals from first round");
-                    $this->generate4PlayerSemifinals($tournament, $level, $levelName, $matches);
-                } elseif ($roundName === 'semifinal' || strpos($roundName, 'SF') !== false) {
+                if ($roundName === 'semifinal' || strpos($roundName, 'SF') !== false) {
                     \Log::info("Generating 4-player final from semifinals");
                     $this->generate4PlayerFinal($tournament, $level, $levelName);
                 } else {
-                    \Log::info("4 winners but not in expected round", [
+                    \Log::info("Generating 4-player semifinals", [
                         'round_name' => $roundName,
-                        'is_first_round' => $isFirstRound
+                        'is_first_round' => $isFirstRound,
+                        'winner_count' => $winnerCount
                     ]);
+                    $this->generate4PlayerSemifinals($tournament, $level, $levelName, $matches);
                 }
                 break;
                 
