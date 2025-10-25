@@ -348,6 +348,9 @@ class MatchAlgorithmService
     {
         if ($level === 'community') {
             return $tournament->approvedPlayers->where('community_id', $groupId);
+        } elseif ($level === 'special') {
+            // For special tournaments, get all approved players (no previous level)
+            return $tournament->approvedPlayers;
         } else {
             // For higher levels, get winners from previous level
             return Winner::where('tournament_id', $tournament->id)
@@ -385,6 +388,9 @@ class MatchAlgorithmService
         
         if ($level === 'community') {
             return $this->initializeCommunityLevel($tournamentId, $groupId, $playerIds);
+        } elseif ($level === 'special') {
+            // For special tournaments, use approved players directly
+            return $this->initializeSpecialLevel($tournamentId, $playerIds);
         }
 
         // Get winners from previous level
@@ -487,6 +493,56 @@ class MatchAlgorithmService
         } catch (\Exception $e) {
             DB::rollBack();
             Log::error("Community level initialization failed: " . $e->getMessage());
+            throw $e;
+        }
+    }
+
+    /**
+     * Initialize special level tournament
+     */
+    public function initializeSpecialLevel(int $tournamentId, ?array $playerIds = null): array
+    {
+        $tournament = Tournament::findOrFail($tournamentId);
+        
+        DB::beginTransaction();
+        try {
+            if ($playerIds) {
+                // Use provided player IDs
+                $players = User::whereIn('id', $playerIds)->get();
+            } else {
+                // Get all approved players for special tournament
+                $players = $tournament->approvedPlayers;
+            }
+
+            if ($players->isEmpty()) {
+                throw new \Exception("No eligible players found for special tournament");
+            }
+
+            \Log::info("Initializing special tournament", [
+                'tournament_id' => $tournamentId,
+                'player_count' => $players->count(),
+                'tournament_name' => $tournament->name
+            ]);
+
+            // Create matches for all players in one group (no grouping for special tournaments)
+            $this->createMatchesForGroup($tournament, $players, 'special', null);
+            $totalMatches = $this->calculateMatchesCreated($players->count());
+
+            DB::commit();
+            
+            // Send notifications to all players
+            $this->sendPairingNotifications($tournament, 'special');
+            
+            return [
+                'level' => 'special',
+                'groups_created' => 1,
+                'matches_created' => $totalMatches,
+                'message' => "Successfully initialized special tournament with {$totalMatches} matches for {$players->count()} players"
+            ];
+            
+        } catch (\Exception $e) {
+            DB::rollBack();
+            Log::error("Special level initialization failed: " . $e->getMessage());
             throw $e;
         }
     }
@@ -1678,11 +1734,16 @@ class MatchAlgorithmService
     private function createPositionBasedMatchesForLevel(Tournament $tournament, Collection $players, string $level, $groupId, string $roundName)
     {
         // Get winner records to know positions
-        $winnerRecords = Winner::whereIn('player_id', $players->pluck('id'))
-            ->where('tournament_id', $tournament->id)
-            ->where('level', $this->getPreviousLevel($level))
-            ->get()
-            ->keyBy('player_id');
+        if ($level === 'special') {
+            // For special tournaments, no previous level - all players start equal
+            $winnerRecords = collect();
+        } else {
+            $winnerRecords = Winner::whereIn('player_id', $players->pluck('id'))
+                ->where('tournament_id', $tournament->id)
+                ->where('level', $this->getPreviousLevel($level))
+                ->get()
+                ->keyBy('player_id');
+        }
         
         // Group by position and avoid same community pairings
         $position1Players = collect();
@@ -2020,6 +2081,7 @@ class MatchAlgorithmService
             'county' => 'community',
             'regional' => 'county',
             'national' => 'regional',
+            'special' => throw new \Exception("Special tournaments don't have previous levels - use approved players directly"),
             default => throw new \Exception("No previous level for {$level}")
         };
     }
