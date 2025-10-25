@@ -747,7 +747,7 @@ class MatchController extends Controller
             
             Notification::create([
                 'player_id' => $submitter->id,
-                'type' => 'match_result_rejected',
+                'type' => 'match_rejected',
                 'message' => "{$user->name} has rejected the match results. Please resubmit the correct scores.",
                 'data' => ['match_id' => $match->id]
             ]);

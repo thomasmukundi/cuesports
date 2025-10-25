@@ -64,11 +64,12 @@ class ChatController extends Controller
             
             Notification::create([
                 'player_id' => $otherPlayerId,
-                'type' => 'chat',
-                'message' => "{$user->username} sent you a message",
+                'type' => 'other',
+                'message' => "{$user->name} sent you a message: " . substr($validated['message'], 0, 50) . (strlen($validated['message']) > 50 ? '...' : ''),
                 'data' => [
                     'match_id' => $matchId,
-                    'message_id' => $message->id
+                    'message_id' => $message->id,
+                    'chat_message' => $validated['message']
                 ]
             ]);
             

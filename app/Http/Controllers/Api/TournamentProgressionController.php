@@ -357,6 +357,9 @@ class TournamentProgressionController extends Controller
         // After generating next round, check if we should determine final positions
         $this->checkAndDetermineFinalPositions($tournament, $level, $levelName);
         
+        // Send notifications to players about new matches
+        $this->sendNextRoundNotifications($tournament, $level, $levelName);
+        
         \Log::info("=== GENERATE NEXT ROUND END ===");
     }
 
@@ -993,9 +996,83 @@ class TournamentProgressionController extends Controller
     }
 
     /**
+     * Send notifications to players about new next round matches
+     */
+    private function sendNextRoundNotifications(Tournament $tournament, string $level, ?string $levelName)
+    {
+        // Get the most recent matches created for this tournament/level
+        $recentMatchesQuery = PoolMatch::where('tournament_id', $tournament->id)
+            ->where('level', $level)
+            ->where('status', 'pending')
+            ->where('created_at', '>=', now()->subMinutes(5)) // Recent matches within last 5 minutes
+            ->with(['player1', 'player2']);
+            
+        // Apply level_name filter
+        $this->applyLevelNameFilter($recentMatchesQuery, $levelName);
+        
+        $recentMatches = $recentMatchesQuery->get();
+        
+        if ($recentMatches->isEmpty()) {
+            \Log::info("No recent matches found for next round notifications");
+            return;
+        }
+        
+        \Log::info("Sending next round notifications", [
+            'tournament_id' => $tournament->id,
+            'level' => $level,
+            'level_name' => $levelName,
+            'match_count' => $recentMatches->count()
+        ]);
+        
+        // Collect players to avoid duplicate notifications
+        $notifiedPlayers = [];
+        
+        foreach ($recentMatches as $match) {
+            // Notify player 1
+            if ($match->player1 && !in_array($match->player_1_id, $notifiedPlayers)) {
+                \App\Models\Notification::create([
+                    'player_id' => $match->player_1_id,
+                    'type' => 'pairing',
+                    'message' => "You've advanced to the next round! New match created in {$tournament->name}.",
+                    'data' => [
+                        'tournament_id' => $tournament->id,
+                        'match_id' => $match->id,
+                        'level' => $level,
+                        'level_name' => $levelName,
+                        'opponent_name' => $match->player2->name ?? 'TBD'
+                    ]
+                ]);
+                $notifiedPlayers[] = $match->player_1_id;
+            }
+            
+            // Notify player 2
+            if ($match->player2 && !in_array($match->player_2_id, $notifiedPlayers)) {
+                \App\Models\Notification::create([
+                    'player_id' => $match->player_2_id,
+                    'type' => 'pairing',
+                    'message' => "You've advanced to the next round! New match created in {$tournament->name}.",
+                    'data' => [
+                        'tournament_id' => $tournament->id,
+                        'match_id' => $match->id,
+                        'level' => $level,
+                        'level_name' => $levelName,
+                        'opponent_name' => $match->player1->name ?? 'TBD'
+                    ]
+                ]);
+                $notifiedPlayers[] = $match->player_2_id;
+            }
+        }
+        
+        \Log::info("Next round notifications sent", [
+            'players_notified' => count($notifiedPlayers),
+            'player_ids' => $notifiedPlayers
+        ]);
+    }
+
+    /**
      * Send notifications to players who achieved positions
      */
-    private function sendPositionNotifications(Tournament $tournament, string $level, string $levelName, array $winners)
+    private function sendPositionNotifications(Tournament $tournament, string $level, ?string $levelName, array $winners)
     {
         foreach ($winners as $winner) {
             $position = $winner['position'];
@@ -1011,9 +1088,11 @@ class TournamentProgressionController extends Controller
             $nextLevel = $this->getNextLevel($level);
             $nextLevelText = $nextLevel ? " You qualify for the {$nextLevel} level!" : " Congratulations on completing the tournament!";
             
+            $levelText = $levelName ? "{$levelName} {$level}" : $level;
+            
             \App\Models\Notification::create([
                 'player_id' => $playerId,
-                'message' => "Congratulations! You finished in {$positionText} in the {$levelName} {$level} tournament.{$nextLevelText}",
+                'message' => "Congratulations! You finished in {$positionText} in the {$levelText} tournament.{$nextLevelText}",
                 'type' => 'tournament_position',
                 'data' => [
                     'tournament_id' => $tournament->id,

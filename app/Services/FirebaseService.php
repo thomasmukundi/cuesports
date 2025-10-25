@@ -139,14 +139,29 @@ class FirebaseService
         switch ($type) {
             case 'match_created':
                 return 'New Match Created';
+            case 'pairing':
+                // Check if this is a next round notification
+                if (isset($data['opponent_name']) && strpos($data['message'] ?? '', 'advanced to the next round') !== false) {
+                    return 'Next Round Match';
+                }
+                return 'New Match Pairing';
             case 'match_scheduled':
                 return 'Match Scheduled';
             case 'match_result_submitted':
                 return 'Match Result Submitted';
+            case 'result_confirmation':
+                return 'Match Result Confirmation';
             case 'match_result_confirmed':
                 return 'Match Result Confirmed';
+            case 'match_result_rejected':
+            case 'match_rejected':
+                return 'Match Result Rejected';
             case 'match_forfeit':
                 return 'Match Forfeit';
+            case 'next_round_match':
+                return 'Next Round Match';
+            case 'tournament_position':
+                return 'Tournament Position';
             case 'tournament_created':
             case 'tournament_announcement':
                 return 'New Tournament Available';
@@ -156,6 +171,12 @@ class FirebaseService
                 return 'Tournament Completed';
             case 'chat_message':
                 return 'New Message';
+            case 'other':
+                // Check if this is a chat message
+                if (isset($data['chat_message']) || isset($data['message_id'])) {
+                    return 'New Message';
+                }
+                return 'Notification';
             case 'admin_message':
                 // Check if this is a tournament announcement
                 if (isset($data['tournament_id']) || isset($data['tournament_name'])) {
@@ -175,14 +196,38 @@ class FirebaseService
         switch ($type) {
             case 'match_created':
                 return "You have a new match in {$data['tournament_name']} tournament";
+            case 'pairing':
+                // Check if this is a next round notification
+                if (isset($data['opponent_name']) && strpos($data['message'] ?? '', 'advanced to the next round') !== false) {
+                    $tournamentName = $data['tournament_name'] ?? 'tournament';
+                    return "You've advanced to the next round! New match created in {$tournamentName}.";
+                }
+                return $data['message'] ?? "You have been paired for a new match";
             case 'match_scheduled':
                 return "Your match has been scheduled for {$data['scheduled_date']}";
             case 'match_result_submitted':
                 return "Match result submitted. Please confirm the result.";
+            case 'result_confirmation':
+                return "Your opponent has submitted match results. Please confirm or dispute.";
             case 'match_result_confirmed':
                 return "Match result has been confirmed. Check your tournament progress.";
+            case 'match_result_rejected':
+            case 'match_rejected':
+                return "Match results were rejected. Please resubmit the correct scores.";
             case 'match_forfeit':
                 return "A match has been forfeited. Check your tournament status.";
+            case 'next_round_match':
+                $tournamentName = $data['tournament_name'] ?? ($data['tournament_id'] ? 'tournament' : 'tournament');
+                return "You've advanced to the next round! New match created in {$tournamentName}.";
+            case 'tournament_position':
+                $position = $data['position'] ?? 'a position';
+                $positionText = match($position) {
+                    1 => '1st place',
+                    2 => '2nd place', 
+                    3 => '3rd place',
+                    default => is_numeric($position) ? "{$position}th place" : $position
+                };
+                return "Congratulations! You finished in {$positionText}!";
             case 'tournament_created':
             case 'tournament_announcement':
                 $tournamentName = $data['tournament_name'] ?? 'tournament';
@@ -193,6 +238,12 @@ class FirebaseService
                 return "Tournament {$data['tournament_name']} has been completed. Check results!";
             case 'chat_message':
                 return $data['message'] ?? 'You have a new message';
+            case 'other':
+                // Check if this is a chat message
+                if (isset($data['chat_message']) || isset($data['message_id'])) {
+                    return $data['chat_message'] ?? ($data['message'] ?? 'You have a new message');
+                }
+                return $data['message'] ?? 'You have a new notification';
             case 'admin_message':
                 return $data['message'] ?? 'You have a new announcement';
             default:
