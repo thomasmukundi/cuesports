@@ -119,16 +119,22 @@ class TournamentProgressionController extends Controller
         $request->validate([
             'tournament_id' => 'required|exists:tournaments,id',
             'level' => 'required|string',
-            'level_name' => 'required|string',
+            'level_name' => 'nullable|string',
         ]);
 
         $tournament = Tournament::find($request->tournament_id);
         
         // Check for existing positions first to avoid duplicates
-        $existingPositions = Winner::where('tournament_id', $request->tournament_id)
-            ->where('level', $request->level)
-            ->where('level_name', $request->level_name)
-            ->exists();
+        $existingPositionsQuery = Winner::where('tournament_id', $request->tournament_id)
+            ->where('level', $request->level);
+            
+        if ($request->level_name) {
+            $existingPositionsQuery->where('level_name', $request->level_name);
+        } else {
+            $existingPositionsQuery->whereNull('level_name');
+        }
+        
+        $existingPositions = $existingPositionsQuery->exists();
             
         if ($existingPositions) {
             return response()->json([
@@ -138,11 +144,17 @@ class TournamentProgressionController extends Controller
         }
         
         // Check for 1-player scenario (automatic winner created during initialization)
-        $singleWinner = Winner::where('tournament_id', $request->tournament_id)
+        $singleWinnerQuery = Winner::where('tournament_id', $request->tournament_id)
             ->where('level', $request->level)
-            ->where('level_name', $request->level_name)
-            ->where('position', 1)
-            ->first();
+            ->where('position', 1);
+            
+        if ($request->level_name) {
+            $singleWinnerQuery->where('level_name', $request->level_name);
+        } else {
+            $singleWinnerQuery->whereNull('level_name');
+        }
+        
+        $singleWinner = $singleWinnerQuery->first();
             
         if ($singleWinner) {
             return response()->json([
@@ -153,12 +165,18 @@ class TournamentProgressionController extends Controller
         }
         
         // Check for tie-breaker match first (highest priority)
-        $tieBreakerMatch = PoolMatch::where('tournament_id', $request->tournament_id)
+        $tieBreakerMatchQuery = PoolMatch::where('tournament_id', $request->tournament_id)
             ->where('level', $request->level)
-            ->where('level_name', $request->level_name)
             ->where('round_name', '3_break_tie_final')
-            ->where('status', 'completed')
-            ->first();
+            ->where('status', 'completed');
+            
+        if ($request->level_name) {
+            $tieBreakerMatchQuery->where('level_name', $request->level_name);
+        } else {
+            $tieBreakerMatchQuery->whereNull('level_name');
+        }
+        
+        $tieBreakerMatch = $tieBreakerMatchQuery->first();
             
         if ($tieBreakerMatch) {
             \Log::info("Tie-breaker match completed, creating final positions");
@@ -175,12 +193,18 @@ class TournamentProgressionController extends Controller
         $finalRounds = ['4_final', '3_final', '2_final'];
         
         foreach ($finalRounds as $finalRound) {
-            $finalMatch = PoolMatch::where('tournament_id', $request->tournament_id)
+            $finalMatchQuery = PoolMatch::where('tournament_id', $request->tournament_id)
                 ->where('level', $request->level)
-                ->where('level_name', $request->level_name)
                 ->where('round_name', $finalRound)
-                ->where('status', 'completed')
-                ->first();
+                ->where('status', 'completed');
+                
+            if ($request->level_name) {
+                $finalMatchQuery->where('level_name', $request->level_name);
+            } else {
+                $finalMatchQuery->whereNull('level_name');
+            }
+            
+            $finalMatch = $finalMatchQuery->first();
 
             if ($finalMatch) {
                 // For 3_final, check if tie-breaker is needed and generate it
@@ -460,7 +484,7 @@ class TournamentProgressionController extends Controller
     /**
      * Create final positions based on completed final rounds
      */
-    private function createPositionsFromFinalRound(Tournament $tournament, string $level, string $levelName, string $finalRound)
+    private function createPositionsFromFinalRound(Tournament $tournament, string $level, ?string $levelName, string $finalRound)
     {
         switch ($finalRound) {
             case '2_final':
@@ -512,7 +536,7 @@ class TournamentProgressionController extends Controller
     /**
      * Create positions for 3-player tournament from tie-breaker match
      */
-    private function create3PlayerPositionsFromTieBreaker(Tournament $tournament, string $level, string $levelName)
+    private function create3PlayerPositionsFromTieBreaker(Tournament $tournament, string $level, ?string $levelName)
     {
         $tieBreakerMatch = PoolMatch::where('tournament_id', $tournament->id)
             ->where('level', $level)
@@ -583,7 +607,7 @@ class TournamentProgressionController extends Controller
     /**
      * Create positions for 2-player tournament
      */
-    private function create2PlayerPositions(Tournament $tournament, string $level, string $levelName)
+    private function create2PlayerPositions(Tournament $tournament, string $level, ?string $levelName)
     {
         $finalMatch = PoolMatch::where('tournament_id', $tournament->id)
             ->where('level', $level)
@@ -625,7 +649,7 @@ class TournamentProgressionController extends Controller
     /**
      * Create positions for 3-player tournament
      */
-    private function create3PlayerPositions(Tournament $tournament, string $level, string $levelName)
+    private function create3PlayerPositions(Tournament $tournament, string $level, ?string $levelName)
     {
         $sfMatch = PoolMatch::where('tournament_id', $tournament->id)
             ->where('level', $level)
@@ -837,7 +861,7 @@ class TournamentProgressionController extends Controller
     /**
      * Create positions for 4-player tournament
      */
-    private function create4PlayerPositions(Tournament $tournament, string $level, string $levelName)
+    private function create4PlayerPositions(Tournament $tournament, string $level, ?string $levelName)
     {
         $winnersSF = PoolMatch::where('tournament_id', $tournament->id)
             ->where('level', $level)
@@ -929,6 +953,18 @@ class TournamentProgressionController extends Controller
         }
 
         return $playerIds->filter()->unique()->count();
+    }
+
+    /**
+     * Apply level_name filter to query (handles null values)
+     */
+    private function applyLevelNameFilter($query, ?string $levelName)
+    {
+        if ($levelName) {
+            return $query->where('level_name', $levelName);
+        } else {
+            return $query->whereNull('level_name');
+        }
     }
 
     /**
