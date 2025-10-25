@@ -543,9 +543,14 @@
                             @endif
                         </td>
                         <td>
-                            <button class="btn btn-sm btn-outline-primary" 
+                            <button class="btn btn-sm btn-outline-primary me-1" 
                                     onclick="showMatchDetails('{{ $match->id }}', '{{ $match->match_name ?? 'Match #' . $match->id }}', '{{ $tournament->name }}', '{{ $match->player1->name ?? 'TBD' }}', '{{ $match->player2->name ?? 'TBD' }}', '{{ $match->status }}', '{{ $match->winner_id ? ($match->winner_id == $match->player_1_id ? ($match->player1->name ?? 'TBD') : ($match->player2->name ?? 'TBD')) : 'No winner' }}')">
                                 <i class="fas fa-eye"></i> View
+                            </button>
+                            <button class="btn btn-sm btn-outline-danger" 
+                                    onclick="deleteMatch('{{ $match->id }}', '{{ $match->match_name ?? 'Match #' . $match->id }}', '{{ $match->player1->name ?? 'TBD' }}', '{{ $match->player2->name ?? 'TBD' }}')"
+                                    title="Delete this match">
+                                <i class="fas fa-trash"></i>
                             </button>
                         </td>
                     </tr>
@@ -722,6 +727,52 @@ window.onclick = function(event) {
     const modal = document.getElementById('generateNextRoundModal');
     if (event.target === modal) {
         closeGenerateNextRoundModal();
+    }
+}
+
+// Delete Match Function
+function deleteMatch(matchId, matchName, player1Name, player2Name) {
+    const message = `⚠️ DELETE MATCH\n\n` +
+                   `Match: ${matchName}\n` +
+                   `Players: ${player1Name} vs ${player2Name}\n\n` +
+                   `This action cannot be undone.\n\n` +
+                   `Are you sure you want to delete this match?`;
+    
+    if (confirm(message)) {
+        // Show loading state
+        const button = event.target.closest('button');
+        const originalHTML = button.innerHTML;
+        button.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+        button.disabled = true;
+        
+        // Make DELETE request
+        fetch(`/admin/tournaments/{{ $tournament->id }}/matches/${matchId}`, {
+            method: 'DELETE',
+            headers: {
+                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content'),
+                'Content-Type': 'application/json'
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                alert('Match deleted successfully!');
+                // Refresh the page to update the match list
+                window.location.reload();
+            } else {
+                alert('Error: ' + (data.message || 'Failed to delete match'));
+                // Reset button
+                button.innerHTML = originalHTML;
+                button.disabled = false;
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('An error occurred while deleting the match');
+            // Reset button
+            button.innerHTML = originalHTML;
+            button.disabled = false;
+        });
     }
 }
 </script>

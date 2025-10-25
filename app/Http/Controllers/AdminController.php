@@ -1987,4 +1987,77 @@ class AdminController extends Controller
         }
     }
 
+    public function deleteMatch(Request $request, Tournament $tournament, PoolMatch $match)
+    {
+        // Check admin privileges
+        if (!auth()->user() || !auth()->user()->is_admin) {
+            return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
+        }
+
+        try {
+            DB::beginTransaction();
+
+            // Verify the match belongs to this tournament
+            if ($match->tournament_id !== $tournament->id) {
+                return response()->json(['success' => false, 'message' => 'Match does not belong to this tournament'], 400);
+            }
+
+            // Log the deletion for audit purposes
+            \Log::info("Admin deleting individual match", [
+                'admin_id' => auth()->user()->id,
+                'admin_email' => auth()->user()->email,
+                'tournament_id' => $tournament->id,
+                'tournament_name' => $tournament->name,
+                'match_id' => $match->id,
+                'match_name' => $match->match_name,
+                'player_1_id' => $match->player_1_id,
+                'player_2_id' => $match->player_2_id,
+                'match_status' => $match->status,
+                'timestamp' => now()
+            ]);
+
+            // Delete any related winner records if this match had a winner
+            if ($match->winner_id) {
+                Winner::where('tournament_id', $tournament->id)
+                    ->where('player_id', $match->winner_id)
+                    ->where('level', $match->level)
+                    ->delete();
+                
+                \Log::info("Deleted related winner record", [
+                    'winner_id' => $match->winner_id,
+                    'match_id' => $match->id
+                ]);
+            }
+
+            // Delete the match
+            $match->delete();
+
+            DB::commit();
+
+            \Log::info("Individual match deleted successfully", [
+                'match_id' => $match->id,
+                'tournament_id' => $tournament->id
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Match deleted successfully'
+            ]);
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            \Log::error("Failed to delete individual match", [
+                'match_id' => $match->id ?? 'unknown',
+                'tournament_id' => $tournament->id,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to delete match: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
 }

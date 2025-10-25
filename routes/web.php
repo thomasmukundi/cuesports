@@ -85,6 +85,7 @@ Route::prefix('admin')->middleware(['auth'])->group(function () {
     Route::delete('/tournaments/{tournament}', [AdminController::class, 'deleteTournament'])->name('admin.tournaments.destroy');
     Route::post('/tournaments/{tournament}/initialize/{level}', [AdminController::class, 'initializeTournamentLevel'])->name('admin.tournaments.initialize');
     Route::delete('/tournaments/{tournament}/matches', [AdminController::class, 'deleteAllMatches'])->name('admin.tournaments.delete-matches');
+    Route::delete('/tournaments/{tournament}/matches/{match}', [AdminController::class, 'deleteMatch'])->name('admin.tournaments.delete-match');
     
     // Community routes
     Route::get('/communities', [AdminController::class, 'communities'])->name('admin.communities');

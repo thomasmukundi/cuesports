@@ -1530,7 +1530,7 @@ class MatchAlgorithmService
             $firstOpponent = $playerArray[$firstOpponentIndex];
             
             $match1 = PoolMatch::create([
-                'match_name' => "{$level}_R1_M{$matchNumber}",
+                'match_name' => "{$roundName}_M{$matchNumber}",
                 'player_1_id' => $doublePlayer['id'],
                 'player_2_id' => $firstOpponent['id'],
                 'level' => $level,
@@ -1569,7 +1569,7 @@ class MatchAlgorithmService
             for ($i = 0; $i < count($remainingPlayers); $i += 2) {
                 if (isset($remainingPlayers[$i + 1])) {
                     $match = PoolMatch::create([
-                        'match_name' => "{$level}_R1_M{$matchNumber}",
+                        'match_name' => "{$roundName}_M{$matchNumber}",
                         'player_1_id' => $remainingPlayers[$i]['id'],
                         'player_2_id' => $remainingPlayers[$i + 1]['id'],
                         'level' => $level,
@@ -1601,7 +1601,7 @@ class MatchAlgorithmService
                 ]);
                 
                 $finalMatch = PoolMatch::create([
-                    'match_name' => "{$level}_R1_M{$matchNumber}",
+                    'match_name' => "{$roundName}_M{$matchNumber}",
                     'player_1_id' => $doublePlayer['id'],
                     'player_2_id' => $lastPlayer['id'],
                     'level' => $level,
@@ -1624,10 +1624,15 @@ class MatchAlgorithmService
             }
         } else {
             // Even number - normal pairing
+            \Log::info("Even number of players - creating normal pairs", [
+                'player_count' => $playerCount,
+                'expected_matches' => $playerCount / 2
+            ]);
+            
             for ($i = 0; $i < $playerCount; $i += 2) {
                 if (isset($playerArray[$i + 1])) {
-                    PoolMatch::create([
-                        'match_name' => "{$level}_R1_M{$matchNumber}",
+                    $match = PoolMatch::create([
+                        'match_name' => "{$roundName}_M{$matchNumber}",
                         'player_1_id' => $playerArray[$i]['id'],
                         'player_2_id' => $playerArray[$i + 1]['id'],
                         'level' => $level,
@@ -1638,7 +1643,23 @@ class MatchAlgorithmService
                         'status' => 'pending',
                         'proposed_dates' => \App\Services\ProposedDatesService::generateProposedDatesJson($tournament->id),
                     ]);
+                    
+                    \Log::info("Created even-pairing match #{$matchNumber}", [
+                        'match_id' => $match->id,
+                        'match_name' => $match->match_name,
+                        'player_1_id' => $match->player_1_id,
+                        'player_1_name' => $playerArray[$i]['name'],
+                        'player_2_id' => $match->player_2_id,
+                        'player_2_name' => $playerArray[$i + 1]['name']
+                    ]);
+                    
                     $matchNumber++;
+                } else {
+                    \Log::warning("Missing player for pairing", [
+                        'index' => $i,
+                        'player_1' => $playerArray[$i]['name'] ?? 'Unknown',
+                        'player_2_missing' => true
+                    ]);
                 }
             }
         }
