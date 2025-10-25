@@ -1574,24 +1574,84 @@ class MatchAlgorithmService
         
         // Use our smart pairing algorithm
         $pairedPlayers = $this->smartPairPlayers($enhancedPlayers, $level);
+        $playerCount = count($pairedPlayers);
         
-        // Create matches from paired players
+        // Handle odd number of players by having one player play twice
         $matchNumber = 1;
-        for ($i = 0; $i < count($pairedPlayers); $i += 2) {
-            if (isset($pairedPlayers[$i + 1])) {
-                $matchName = $roundName . '__match' . $matchNumber;
-                $this->createMatch(
-                    $tournament,
-                    $pairedPlayers[$i],
-                    $pairedPlayers[$i + 1],
-                    $roundName,
-                    $level,
-                    $groupId,
-                    $levelName,
-                    null,
-                    $matchName
-                );
-                $matchNumber++;
+        if ($playerCount % 2 == 1 && $playerCount > 3) {
+            \Log::info("Odd number of players ({$playerCount}), one player will play twice");
+            
+            // Pick the first player to play twice (smart pairing already optimized the order)
+            $doublePlayer = $pairedPlayers[0];
+            
+            // Create first match with double player
+            $opponent1 = $pairedPlayers[1];
+            $matchName = $roundName . '__match' . $matchNumber;
+            $this->createMatch(
+                $tournament,
+                $doublePlayer,
+                $opponent1,
+                $roundName,
+                $level,
+                $groupId,
+                $levelName,
+                null,
+                $matchName
+            );
+            $matchNumber++;
+            
+            // Create second match with double player and another opponent
+            $opponent2 = $pairedPlayers[2];
+            $matchName = $roundName . '__match' . $matchNumber;
+            $this->createMatch(
+                $tournament,
+                $doublePlayer,
+                $opponent2,
+                $roundName,
+                $level,
+                $groupId,
+                $levelName,
+                null,
+                $matchName
+            );
+            $matchNumber++;
+            
+            // Create matches for remaining paired players (skip first 3 players)
+            for ($i = 3; $i < $playerCount - 1; $i += 2) {
+                if (isset($pairedPlayers[$i + 1])) {
+                    $matchName = $roundName . '__match' . $matchNumber;
+                    $this->createMatch(
+                        $tournament,
+                        $pairedPlayers[$i],
+                        $pairedPlayers[$i + 1],
+                        $roundName,
+                        $level,
+                        $groupId,
+                        $levelName,
+                        null,
+                        $matchName
+                    );
+                    $matchNumber++;
+                }
+            }
+        } else {
+            // Even number or special cases (≤3), create normal pairs
+            for ($i = 0; $i < $playerCount - 1; $i += 2) {
+                if (isset($pairedPlayers[$i + 1])) {
+                    $matchName = $roundName . '__match' . $matchNumber;
+                    $this->createMatch(
+                        $tournament,
+                        $pairedPlayers[$i],
+                        $pairedPlayers[$i + 1],
+                        $roundName,
+                        $level,
+                        $groupId,
+                        $levelName,
+                        null,
+                        $matchName
+                    );
+                    $matchNumber++;
+                }
             }
         }
         
@@ -2792,21 +2852,44 @@ class MatchAlgorithmService
                         $matches[] = [
                             'player1' => $players[$i],
                             'player2' => $players[$i + 1],
-                            'round_name' => 'Round 1',
-                            'match_name' => 'Match #' . (($i / 2) + 1)
+                            'round_name' => 'round_1',
+                            'match_name' => 'round_1_match' . (($i / 2) + 1)
                         ];
                     }
                 } else {
-                    // Odd number of players - create pairs and give one player a bye
-                    for ($i = 0; $i < $playerCount - 1; $i += 2) {
+                    // Odd number of players (>3) - one player plays twice
+                    \Log::info("Odd number of players ({$playerCount}), one player will play twice");
+                    
+                    // Pick first player to play twice
+                    $doublePlayer = $players[0];
+                    
+                    // Create first match with double player
+                    $matches[] = [
+                        'player1' => $doublePlayer,
+                        'player2' => $players[1],
+                        'round_name' => 'round_1',
+                        'match_name' => 'round_1_match1'
+                    ];
+                    
+                    // Create second match with double player
+                    $matches[] = [
+                        'player1' => $doublePlayer,
+                        'player2' => $players[2],
+                        'round_name' => 'round_1',
+                        'match_name' => 'round_1_match2'
+                    ];
+                    
+                    // Create matches for remaining paired players (skip first 3 players)
+                    $matchNumber = 3;
+                    for ($i = 3; $i < $playerCount - 1; $i += 2) {
                         $matches[] = [
                             'player1' => $players[$i],
                             'player2' => $players[$i + 1],
-                            'round_name' => 'Round 1',
-                            'match_name' => 'Match #' . (($i / 2) + 1)
+                            'round_name' => 'round_1',
+                            'match_name' => 'round_1_match' . $matchNumber
                         ];
+                        $matchNumber++;
                     }
-                    // Last player gets a bye - will be handled in next round generation
                 }
                 break;
         }

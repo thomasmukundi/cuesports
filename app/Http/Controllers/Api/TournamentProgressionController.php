@@ -917,16 +917,20 @@ class TournamentProgressionController extends Controller
     /**
      * Get player count for a specific level and level name
      */
-    private function getPlayerCountForLevel(Tournament $tournament, string $level, string $levelName)
+    private function getPlayerCountForLevel(Tournament $tournament, string $level, ?string $levelName)
     {
         // Count unique players in first round matches for this level/level_name
-        $matches = PoolMatch::where('tournament_id', $tournament->id)
+        $matchesQuery = PoolMatch::where('tournament_id', $tournament->id)
             ->where('level', $level)
-            ->where('level_name', $levelName)
-            ->where('round_name', 'round_1')
-            ->orWhere('round_name', '3_SF')
-            ->orWhere('round_name', '2_final')
-            ->get();
+            ->where(function($query) {
+                $query->where('round_name', 'round_1')
+                      ->orWhere('round_name', '3_SF')
+                      ->orWhere('round_name', '2_final');
+            });
+            
+        // Apply level_name filter
+        $this->applyLevelNameFilter($matchesQuery, $levelName);
+        $matches = $matchesQuery->get();
 
         $playerIds = collect();
         foreach ($matches as $match) {

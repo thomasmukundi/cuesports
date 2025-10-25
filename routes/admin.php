@@ -98,19 +98,57 @@ Route::post('create-tournament', function(\Illuminate\Http\Request $request) {
 
         // Automatically send tournament announcement emails
         try {
-            // Get all users for tournament announcements
+            // Get users based on tournament area scope
             $recipients = [];
             
-            $users = \App\Models\User::where('is_admin', '!=', true)
-                ->orWhereNull('is_admin')
-                ->select('id', 'name', 'email')
-                ->get();
+            $usersQuery = \App\Models\User::where('is_admin', '!=', true)
+                ->orWhereNull('is_admin');
+            
+            // Apply area scoping based on tournament scope
+            if ($tournament->area_scope && $tournament->area_name) {
+                switch ($tournament->area_scope) {
+                    case 'community':
+                        $usersQuery->whereHas('community', function($q) use ($tournament) {
+                            $q->where('name', $tournament->area_name);
+                        });
+                        break;
+                    case 'county':
+                        $usersQuery->whereHas('county', function($q) use ($tournament) {
+                            $q->where('name', $tournament->area_name);
+                        });
+                        break;
+                    case 'region':
+                        $usersQuery->whereHas('region', function($q) use ($tournament) {
+                            $q->where('name', $tournament->area_name);
+                        });
+                        break;
+                    case 'national':
+                    default:
+                        // National tournaments - send to all users (no filtering)
+                        break;
+                }
+            }
+            
+            $users = $usersQuery->select('id', 'name', 'email')->get();
             
             foreach ($users as $user) {
                 $recipients[] = [
                     'email' => $user->email,
                     'name' => $user->name
                 ];
+                
+                // Also create push notification for each user
+                \App\Models\Notification::create([
+                    'player_id' => $user->id,
+                    'type' => 'tournament_created',
+                    'message' => "New tournament '{$tournament->name}' is now open for registration!",
+                    'data' => [
+                        'tournament_id' => $tournament->id,
+                        'tournament_name' => $tournament->name,
+                        'area_scope' => $tournament->area_scope,
+                        'area_name' => $tournament->area_name
+                    ]
+                ]);
             }
 
             // Use the EmailService to send tournament announcements
@@ -260,20 +298,57 @@ Route::middleware(['auth:sanctum'])->group(function () {
 
             // Automatically send tournament announcement emails
             try {
-                // Get all users for national/special tournaments, or scoped users for regional tournaments
+                // Get users based on tournament area scope
                 $recipients = [];
                 
-                // For now, send to all users (can be enhanced later for area scoping)
-                $users = \App\Models\User::where('is_admin', '!=', true)
-                    ->orWhereNull('is_admin')
-                    ->select('id', 'name', 'email')
-                    ->get();
+                $usersQuery = \App\Models\User::where('is_admin', '!=', true)
+                    ->orWhereNull('is_admin');
+                
+                // Apply area scoping based on tournament scope
+                if ($tournament->area_scope && $tournament->area_name) {
+                    switch ($tournament->area_scope) {
+                        case 'community':
+                            $usersQuery->whereHas('community', function($q) use ($tournament) {
+                                $q->where('name', $tournament->area_name);
+                            });
+                            break;
+                        case 'county':
+                            $usersQuery->whereHas('county', function($q) use ($tournament) {
+                                $q->where('name', $tournament->area_name);
+                            });
+                            break;
+                        case 'region':
+                            $usersQuery->whereHas('region', function($q) use ($tournament) {
+                                $q->where('name', $tournament->area_name);
+                            });
+                            break;
+                        case 'national':
+                        default:
+                            // National tournaments - send to all users (no filtering)
+                            break;
+                    }
+                }
+                
+                $users = $usersQuery->select('id', 'name', 'email')->get();
                 
                 foreach ($users as $user) {
                     $recipients[] = [
                         'email' => $user->email,
                         'name' => $user->name
                     ];
+                    
+                    // Also create push notification for each user
+                    \App\Models\Notification::create([
+                        'player_id' => $user->id,
+                        'type' => 'tournament_created',
+                        'message' => "New tournament '{$tournament->name}' is now open for registration!",
+                        'data' => [
+                            'tournament_id' => $tournament->id,
+                            'tournament_name' => $tournament->name,
+                            'area_scope' => $tournament->area_scope,
+                            'area_name' => $tournament->area_name
+                        ]
+                    ]);
                 }
 
                 // Use the EmailService to send tournament announcements
