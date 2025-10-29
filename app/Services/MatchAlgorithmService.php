@@ -294,19 +294,20 @@ class MatchAlgorithmService
         if ($winnerCount > 3 && $winnerCount % 2 === 1) {
             $losers = $this->getLosersFromMatches($currentRoundMatches);
             
-            \Log::info("Adding random loser for odd winner count", [
+            \Log::info("Adding best performing loser for odd winner count", [
                 'winner_count' => $winnerCount,
                 'available_losers' => $losers->count()
             ]);
             
             if ($losers->count() > 0) {
-                $selectedLoser = $losers->random();
+                $selectedLoser = $this->selectBestLoser($losers, $tournament, $level, $groupId, $currentRoundMatches);
                 $winners->push($selectedLoser);
                 
-                \Log::info("Added random loser", [
+                \Log::info("Added best performing loser", [
                     'loser_id' => $selectedLoser->id,
                     'loser_name' => $selectedLoser->name,
-                    'final_count' => $winners->count()
+                    'final_count' => $winners->count(),
+                    'selection_method' => 'performance_based'
                 ]);
             }
         }
@@ -1730,15 +1731,15 @@ class MatchAlgorithmService
             ]);
             
             if ($losers->count() > 0) {
-                // Randomly select one loser to make even number for pairing
-                $selectedLoser = $losers->random();
+                // Select best performing loser based on metrics
+                $selectedLoser = $this->selectBestLoser($losers, $tournament, $level, $groupId, $currentRoundMatches);
                 $winners->push($selectedLoser);
-                \Log::info("Added RANDOM loser player {$selectedLoser->id} ({$selectedLoser->name}) to make even number", [
+                \Log::info("Added BEST PERFORMING loser player {$selectedLoser->id} ({$selectedLoser->name}) to make even number", [
                     'total_losers_available' => $losers->count(),
                     'selected_loser_id' => $selectedLoser->id,
                     'selected_loser_name' => $selectedLoser->name,
                     'final_player_count' => $winners->count(),
-                    'logic' => 'PROGRESSION: Random loser added for odd winner count'
+                    'logic' => 'PROGRESSION: Best performing loser added for odd winner count'
                 ]);
             } else {
                 \Log::warning("No losers available to add for odd winner count", [
@@ -1774,6 +1775,121 @@ class MatchAlgorithmService
             }
         }
         return User::whereIn('id', $loserIds)->get();
+    }
+    
+    /**
+     * Select the best performing loser based on performance metrics
+     */
+    private function selectBestLoser($losers, Tournament $tournament, string $level, ?int $groupId, $roundMatches)
+    {
+        if ($losers->count() === 1) {
+            return $losers->first();
+        }
+        
+        \Log::info("Selecting best loser from candidates", [
+            'tournament_id' => $tournament->id,
+            'level' => $level,
+            'candidate_count' => $losers->count(),
+            'candidate_ids' => $losers->pluck('id')->toArray()
+        ]);
+        
+        $loserMetrics = [];
+        
+        foreach ($losers as $loser) {
+            // Get points from the current round match where they lost
+            $currentRoundPoints = 0;
+            foreach ($roundMatches as $match) {
+                if ($match->player_1_id == $loser->id) {
+                    $currentRoundPoints = $match->player_1_points ?? 0;
+                    break;
+                } elseif ($match->player_2_id == $loser->id) {
+                    $currentRoundPoints = $match->player_2_points ?? 0;
+                    break;
+                }
+            }
+            
+            // Get total tournament stats
+            $tournamentMatches = PoolMatch::where('tournament_id', $tournament->id)
+                ->where('level', $level)
+                ->where('group_id', $groupId)
+                ->where(function($q) use ($loser) {
+                    $q->where('player_1_id', $loser->id)->orWhere('player_2_id', $loser->id);
+                })
+                ->where('status', 'completed')
+                ->get();
+            
+            $totalTournamentPoints = 0;
+            $wins = 0;
+            $totalMatches = $tournamentMatches->count();
+            
+            foreach ($tournamentMatches as $match) {
+                if ($match->player_1_id == $loser->id) {
+                    $totalTournamentPoints += $match->player_1_points ?? 0;
+                    if ($match->winner_id == $loser->id) $wins++;
+                } else {
+                    $totalTournamentPoints += $match->player_2_points ?? 0;
+                    if ($match->winner_id == $loser->id) $wins++;
+                }
+            }
+            
+            $winRate = $totalMatches > 0 ? ($wins / $totalMatches) * 100 : 0;
+            
+            $loserMetrics[$loser->id] = [
+                'player' => $loser,
+                'current_round_points' => $currentRoundPoints,
+                'total_tournament_points' => $totalTournamentPoints,
+                'wins' => $wins,
+                'total_matches' => $totalMatches,
+                'win_rate' => $winRate,
+                'name' => $loser->name
+            ];
+        }
+        
+        // Sort by: 1) Current round points (desc), 2) Total tournament points (desc), 3) Win rate (desc)
+        $sortedLosers = collect($loserMetrics)->sortByDesc(function($metrics) {
+            return [
+                $metrics['current_round_points'],
+                $metrics['total_tournament_points'], 
+                $metrics['win_rate']
+            ];
+        })->values();
+        
+        // Check for ties at the top
+        $topMetrics = $sortedLosers->first();
+        $tiedLosers = $sortedLosers->filter(function($metrics) use ($topMetrics) {
+            return $metrics['current_round_points'] == $topMetrics['current_round_points'] &&
+                   $metrics['total_tournament_points'] == $topMetrics['total_tournament_points'] &&
+                   $metrics['win_rate'] == $topMetrics['win_rate'];
+        });
+        
+        if ($tiedLosers->count() > 1) {
+            // Multiple losers tied - random selection from tied group
+            $selectedMetrics = $tiedLosers->random();
+            \Log::info("Multiple losers tied for best performance - random selection from tied group", [
+                'tied_count' => $tiedLosers->count(),
+                'tied_players' => $tiedLosers->pluck('name')->toArray(),
+                'selected_player' => $selectedMetrics['name'],
+                'tie_metrics' => [
+                    'current_round_points' => $topMetrics['current_round_points'],
+                    'total_tournament_points' => $topMetrics['total_tournament_points'],
+                    'win_rate' => $topMetrics['win_rate']
+                ]
+            ]);
+        } else {
+            // Clear best performer
+            $selectedMetrics = $topMetrics;
+            \Log::info("Clear best performing loser selected", [
+                'selected_player' => $selectedMetrics['name'],
+                'metrics' => [
+                    'current_round_points' => $selectedMetrics['current_round_points'],
+                    'total_tournament_points' => $selectedMetrics['total_tournament_points'],
+                    'win_rate' => $selectedMetrics['win_rate']
+                ],
+                'beat_count' => $sortedLosers->count() - 1
+            ]);
+        }
+        
+        return $selectedMetrics['player'];
     }
 
     /**
@@ -2275,9 +2391,9 @@ class MatchAlgorithmService
             }
         }
         
-        // Pick random loser and add to winners
+        // Pick best performing loser and add to winners
         if ($losers->isNotEmpty()) {
-            $promotedLoser = $losers->random();
+            $promotedLoser = $this->selectBestLoser($losers, $tournament, $level, $groupId, $previousMatches);
             $winners->push($promotedLoser);
         }
         
@@ -2766,6 +2882,9 @@ class MatchAlgorithmService
                 $this->determineStandardWinners($tournament, $level, $groupId);
                 break;
         }
+        
+        // Check for losers tournament completion
+        $this->checkLosersTournamentCompletion($tournament, $level, $groupId);
     }
     
     /**
@@ -2882,34 +3001,429 @@ class MatchAlgorithmService
                 // Bye player won the final - this should trigger tie-breaker, but if not completed yet, don't assign positions
                 return;
             } else {
-                // SF loser won the final - no tie-breaker needed, they already played SF winner
-                // Position 1: SF winner (already beat the final winner in SF)
-                Winner::create([
-                    'player_id' => $sfWinner,
-                    'position' => 1,
-                    'level' => $level,
-                    'level_id' => $groupId,
-                    'tournament_id' => $tournament->id,
-                ]);
+                // SF loser won the final - Check for Fair_Chance match
+                $fairChanceMatch = PoolMatch::where('tournament_id', $tournament->id)
+                    ->where('level', $level)
+                    ->where('group_id', $groupId)
+                    ->where('round_name', 'Fair_Chance')
+                    ->where('status', 'completed')
+                    ->first();
                 
-                // Position 2: SF loser (who won the final)
-                Winner::create([
-                    'player_id' => $sfLoser,
-                    'position' => 2,
-                    'level' => $level,
-                    'level_id' => $groupId,
-                    'tournament_id' => $tournament->id,
-                ]);
-                
-                // Position 3: Bye player (who lost the final)
-                Winner::create([
-                    'player_id' => $finalLoser,
-                    'position' => 3,
-                    'level' => $level,
-                    'level_id' => $groupId,
-                    'tournament_id' => $tournament->id,
-                ]);
+                if ($fairChanceMatch) {
+                    // Fair chance match completed - determine positions based on result
+                    $this->handleFairChanceResult($tournament, $level, $groupId, $sfMatch, $finalMatch, $fairChanceMatch);
+                } else {
+                    // No fair chance match yet - create one between SF winner and bye player (final loser)
+                    \Log::info("Creating Fair_Chance match between SF winner and bye player", [
+                        'sf_winner' => $sfWinner,
+                        'bye_player' => $finalLoser,
+                        'tournament_id' => $tournament->id
+                    ]);
+                    
+                    PoolMatch::create([
+                        'match_name' => 'Fair_Chance_match',
+                        'player_1_id' => $sfWinner,
+                        'player_2_id' => $finalLoser, // This is the bye player who lost final
+                        'level' => $level,
+                        'level_name' => $this->getLevelName($level, $groupId),
+                        'round_name' => 'Fair_Chance',
+                        'tournament_id' => $tournament->id,
+                        'group_id' => $groupId,
+                        'status' => 'pending',
+                        'proposed_dates' => \App\Services\ProposedDatesService::generateProposedDatesJson($tournament->id),
+                    ]);
+                    
+                    return; // Wait for fair chance match to complete
+                }
             }
+        }
+        
+        // Check if we need losers tournament for additional positions (4-6)
+        $this->checkAndCreateLosersTournament($tournament, $level, $groupId);
+    }
+    
+    /**
+     * Check if losers tournament is needed for positions 4-6
+     */
+    private function checkAndCreateLosersTournament(Tournament $tournament, string $level, ?int $groupId)
+    {
+        $winnersNeeded = $tournament->winners ?? 3;
+        
+        // Only create losers tournament if we need 4, 5, or 6 winners AND we're at the tournament's target level
+        if ($winnersNeeded < 4 || $winnersNeeded > 6 || !$this->isAtTournamentTargetLevel($tournament, $level)) {
+            \Log::info("Skipping losers tournament creation", [
+                'winners_needed' => $winnersNeeded,
+                'level' => $level,
+                'tournament_area_scope' => $tournament->area_scope,
+                'tournament_area_name' => $tournament->area_name,
+                'is_special' => $tournament->special,
+                'is_target_level' => $this->isAtTournamentTargetLevel($tournament, $level),
+                'reason' => !$this->isAtTournamentTargetLevel($tournament, $level) ? 'Not at tournament target level' : 'Winners needed not in 4-6 range'
+            ]);
+            return;
+        }
+        
+        // Check if winners tournament is complete (positions 1-3 assigned)
+        $existingWinners = \App\Models\Winner::where('tournament_id', $tournament->id)
+            ->where('level', $level)
+            ->where('level_id', $groupId)
+            ->whereIn('position', [1, 2, 3])
+            ->count();
+            
+        if ($existingWinners < 3) {
+            return; // Winners tournament not complete yet
+        }
+        
+        // Check if losers tournament already exists or is complete
+        $existingLosersWinners = \App\Models\Winner::where('tournament_id', $tournament->id)
+            ->where('level', $level)
+            ->where('level_id', $groupId)
+            ->whereIn('position', [4, 5, 6])
+            ->count();
+            
+        if ($existingLosersWinners > 0) {
+            return; // Losers tournament already processed
+        }
+        
+        \Log::info("Creating losers tournament for additional positions", [
+            'tournament_id' => $tournament->id,
+            'level' => $level,
+            'winners_needed' => $winnersNeeded,
+            'positions_needed' => [4, 5, 6]
+        ]);
+        
+        // Get all losers from the main tournament matches
+        $allMatches = PoolMatch::where('tournament_id', $tournament->id)
+            ->where('level', $level)
+            ->where('group_id', $groupId)
+            ->where('status', 'completed')
+            ->whereNotIn('round_name', ['losers_SF', 'losers_final', 'losers_Fair_Chance', 'losers_semifinal', 'losers_winners_final'])
+            ->get();
+            
+        $losers = collect();
+        foreach ($allMatches as $match) {
+            if ($match->winner_id) {
+                $loserId = ($match->player_1_id === $match->winner_id) ? $match->player_2_id : $match->player_1_id;
+                $loser = User::find($loserId);
+                if ($loser) {
+                    $losers->push($loser);
+                }
+            }
+        }
+        
+        $losers = $losers->unique('id');
+        $loserCount = $losers->count();
+        
+        \Log::info("Found losers for losers tournament", [
+            'loser_count' => $loserCount,
+            'loser_ids' => $losers->pluck('id')->toArray()
+        ]);
+        
+        if ($loserCount === 3) {
+            $this->createLosers3PlayerTournament($tournament, $level, $groupId, $losers, $winnersNeeded);
+        } elseif ($loserCount === 4) {
+            $this->createLosers4PlayerTournament($tournament, $level, $groupId, $losers, $winnersNeeded);
+        }
+    }
+    
+    /**
+     * Create 3-player losers tournament (mirrors winners tournament)
+     */
+    private function createLosers3PlayerTournament(Tournament $tournament, string $level, ?int $groupId, $losers, int $winnersNeeded)
+    {
+        \Log::info("Creating 3-player losers tournament", [
+            'tournament_id' => $tournament->id,
+            'losers' => $losers->pluck('id')->toArray(),
+            'winners_needed' => $winnersNeeded
+        ]);
+        
+        // Create losers semifinal (2 players, 1 bye)
+        $shuffledLosers = $losers->shuffle();
+        
+        PoolMatch::create([
+            'match_name' => 'losers_SF_match',
+            'player_1_id' => $shuffledLosers[0]->id,
+            'player_2_id' => $shuffledLosers[1]->id,
+            'level' => $level,
+            'level_name' => $this->getLevelName($level, $groupId),
+            'round_name' => 'losers_SF',
+            'tournament_id' => $tournament->id,
+            'group_id' => $groupId,
+            'bye_player_id' => $shuffledLosers[2]->id,
+            'status' => 'pending',
+            'proposed_dates' => \App\Services\ProposedDatesService::generateProposedDatesJson($tournament->id),
+        ]);
+        
+        \Log::info("Created losers semifinal match with bye player", [
+            'player_1' => $shuffledLosers[0]->name,
+            'player_2' => $shuffledLosers[1]->name,
+            'bye_player' => $shuffledLosers[2]->name
+        ]);
+    }
+    
+    /**
+     * Create 4-player losers tournament (simplified bracket)
+     */
+    private function createLosers4PlayerTournament(Tournament $tournament, string $level, ?int $groupId, $losers, int $winnersNeeded)
+    {
+        // Only create if we need 5 or 6 winners (positions 5-6)
+        if ($winnersNeeded < 5) {
+            return;
+        }
+        
+        \Log::info("Creating 4-player losers tournament", [
+            'tournament_id' => $tournament->id,
+            'losers' => $losers->pluck('id')->toArray(),
+            'winners_needed' => $winnersNeeded
+        ]);
+        
+        // Create two initial matches for 4 losers
+        $shuffledLosers = $losers->shuffle()->values();
+        
+        PoolMatch::create([
+            'match_name' => 'losers_round_1_M1',
+            'player_1_id' => $shuffledLosers[0]->id,
+            'player_2_id' => $shuffledLosers[1]->id,
+            'level' => $level,
+            'level_name' => $this->getLevelName($level, $groupId),
+            'round_name' => 'losers_round_1',
+            'tournament_id' => $tournament->id,
+            'group_id' => $groupId,
+            'status' => 'pending',
+            'proposed_dates' => \App\Services\ProposedDatesService::generateProposedDatesJson($tournament->id),
+        ]);
+        
+        PoolMatch::create([
+            'match_name' => 'losers_round_1_M2',
+            'player_1_id' => $shuffledLosers[2]->id,
+            'player_2_id' => $shuffledLosers[3]->id,
+            'level' => $level,
+            'level_name' => $this->getLevelName($level, $groupId),
+            'round_name' => 'losers_round_1',
+            'tournament_id' => $tournament->id,
+            'group_id' => $groupId,
+            'status' => 'pending',
+            'proposed_dates' => \App\Services\ProposedDatesService::generateProposedDatesJson($tournament->id),
+        ]);
+        
+        \Log::info("Created 4-player losers initial matches", [
+            'match_1' => $shuffledLosers[0]->name . ' vs ' . $shuffledLosers[1]->name,
+            'match_2' => $shuffledLosers[2]->name . ' vs ' . $shuffledLosers[3]->name
+        ]);
+    }
+    
+    /**
+     * Handle Fair_Chance match result and determine final positions
+     */
+    private function handleFairChanceResult(Tournament $tournament, string $level, ?int $groupId, $sfMatch, $finalMatch, $fairChanceMatch)
+    {
+        $sfWinner = $sfMatch->winner_id;
+        $sfLoser = ($sfMatch->player_1_id === $sfWinner) ? $sfMatch->player_2_id : $sfMatch->player_1_id;
+        $byePlayer = ($finalMatch->player_1_id === $sfLoser) ? $finalMatch->player_2_id : $finalMatch->player_1_id;
+        $fairChanceWinner = $fairChanceMatch->winner_id;
+        
+        if ($fairChanceWinner === $sfWinner) {
+            // SF winner won Fair_Chance: A=1st, B=2nd, C=3rd
+            \Log::info("Fair_Chance: SF winner won - standard positioning");
+            
+            Winner::create(['player_id' => $sfWinner, 'position' => 1, 'level' => $level, 'level_id' => $groupId, 'tournament_id' => $tournament->id]);
+            Winner::create(['player_id' => $sfLoser, 'position' => 2, 'level' => $level, 'level_id' => $groupId, 'tournament_id' => $tournament->id]);
+            Winner::create(['player_id' => $byePlayer, 'position' => 3, 'level' => $level, 'level_id' => $groupId, 'tournament_id' => $tournament->id]);
+            
+        } else {
+            // Bye player won Fair_Chance: All players have 1 win, 1 loss - use metrics
+            \Log::info("Fair_Chance: Bye player won - all players tied, using metrics for positioning");
+            
+            $this->determinePositionsByMetrics($tournament, $level, $groupId, [$sfWinner, $sfLoser, $byePlayer]);
+        }
+    }
+    
+    /**
+     * Determine positions based on tournament metrics when all players are tied (1 win, 1 loss each)
+     */
+    private function determinePositionsByMetrics(Tournament $tournament, string $level, ?int $groupId, array $playerIds)
+    {
+        $playerMetrics = [];
+        
+        foreach ($playerIds as $playerId) {
+            $matches = PoolMatch::where('tournament_id', $tournament->id)
+                ->where('level', $level)
+                ->where('group_id', $groupId)
+                ->where(function($q) use ($playerId) {
+                    $q->where('player_1_id', $playerId)->orWhere('player_2_id', $playerId);
+                })
+                ->where('status', 'completed')
+                ->get();
+            
+            $totalPoints = 0;
+            $wins = 0;
+            $totalMatches = $matches->count();
+            
+            foreach ($matches as $match) {
+                if ($match->player_1_id == $playerId) {
+                    $totalPoints += $match->player_1_points ?? 0;
+                    if ($match->winner_id == $playerId) $wins++;
+                } else {
+                    $totalPoints += $match->player_2_points ?? 0;
+                    if ($match->winner_id == $playerId) $wins++;
+                }
+            }
+            
+            $winRate = $totalMatches > 0 ? ($wins / $totalMatches) * 100 : 0;
+            
+            $playerMetrics[$playerId] = [
+                'player_id' => $playerId,
+                'total_points' => $totalPoints,
+                'wins' => $wins,
+                'total_matches' => $totalMatches,
+                'win_rate' => $winRate,
+                'name' => User::find($playerId)->name ?? 'Unknown'
+            ];
+        }
+        
+        // Sort by total points (desc), then win rate (desc)
+        $sortedPlayers = collect($playerMetrics)->sortByDesc(function($player) {
+            return [$player['total_points'], $player['win_rate']];
+        })->values();
+        
+        // Check for ties and assign positions
+        $this->assignPositionsWithTieHandling($tournament, $level, $groupId, $sortedPlayers);
+    }
+    
+    /**
+     * Assign positions handling ties with run-off declarations
+     */
+    private function assignPositionsWithTieHandling(Tournament $tournament, string $level, ?int $groupId, $sortedPlayers)
+    {
+        $positions = [];
+        $currentPosition = 1;
+        $tieGroups = [];
+        
+        // Group players by identical metrics
+        for ($i = 0; $i < $sortedPlayers->count(); $i++) {
+            $current = $sortedPlayers[$i];
+            $tieGroup = [$current];
+            
+            // Check for ties with next players
+            for ($j = $i + 1; $j < $sortedPlayers->count(); $j++) {
+                $next = $sortedPlayers[$j];
+                if ($current['total_points'] == $next['total_points'] && 
+                    $current['win_rate'] == $next['win_rate']) {
+                    $tieGroup[] = $next;
+                    $i++; // Skip the tied player in outer loop
+                } else {
+                    break;
+                }
+            }
+            
+            if (count($tieGroup) > 1) {
+                // Handle tie - assign positions randomly but mark as run-off
+                $shuffledTie = collect($tieGroup)->shuffle();
+                foreach ($shuffledTie as $index => $player) {
+                    $positions[] = [
+                        'player_id' => $player['player_id'],
+                        'position' => $currentPosition + $index,
+                        'is_runoff' => true,
+                        'tied_with' => collect($tieGroup)->pluck('name')->implode(', '),
+                        'metrics' => $player
+                    ];
+                }
+                $currentPosition += count($tieGroup);
+            } else {
+                // No tie - assign position normally
+                $positions[] = [
+                    'player_id' => $tieGroup[0]['player_id'],
+                    'position' => $currentPosition,
+                    'is_runoff' => false,
+                    'tied_with' => null,
+                    'metrics' => $tieGroup[0]
+                ];
+                $currentPosition++;
+            }
+        }
+        
+        // Create winner records and send notifications
+        foreach ($positions as $positionData) {
+            Winner::create([
+                'player_id' => $positionData['player_id'],
+                'position' => $positionData['position'],
+                'level' => $level,
+                'level_id' => $groupId,
+                'tournament_id' => $tournament->id,
+                'is_runoff' => $positionData['is_runoff'] ?? false,
+                'runoff_reason' => $positionData['is_runoff'] ? 'Tied metrics after Fair_Chance round' : null,
+            ]);
+            
+            // Send detailed notification with metrics
+            $this->sendMetricsBasedPositionNotification($tournament, $positionData);
+        }
+        
+        \Log::info("3-player Fair_Chance positions assigned", [
+            'tournament_id' => $tournament->id,
+            'positions' => $positions
+        ]);
+    }
+    
+    /**
+     * Send notification with detailed metrics information
+     */
+    private function sendMetricsBasedPositionNotification(Tournament $tournament, array $positionData)
+    {
+        $player = User::find($positionData['player_id']);
+        $metrics = $positionData['metrics'];
+        
+        $message = "🏆 Tournament Complete: {$tournament->name}\n\n";
+        $message .= "Your Final Position: #{$positionData['position']}\n\n";
+        
+        if ($positionData['is_runoff']) {
+            $message .= "⚖️ FAIR PLAY RESULT\n";
+            $message .= "After Fair_Chance round, all players had equal wins/losses.\n";
+            $message .= "Position determined by tournament metrics:\n\n";
+        }
+        
+        $message .= "📊 Your Tournament Stats:\n";
+        $message .= "• Total Points: {$metrics['total_points']}\n";
+        $message .= "• Wins: {$metrics['wins']}/{$metrics['total_matches']}\n";
+        $message .= "• Win Rate: " . number_format($metrics['win_rate'], 1) . "%\n\n";
+        
+        if ($positionData['is_runoff']) {
+            $message .= "🎲 Tied with: {$positionData['tied_with']}\n";
+            $message .= "Position assigned by fair random selection.\n\n";
+        }
+        
+        $message .= "Congratulations on completing the tournament! 🎉";
+        
+        // Create notification
+        \App\Models\Notification::create([
+            'user_id' => $player->id,
+            'type' => 'tournament_position_metrics',
+            'title' => 'Tournament Complete - Position #' . $positionData['position'],
+            'message' => $message,
+            'data' => [
+                'tournament_id' => $tournament->id,
+                'tournament_name' => $tournament->name,
+                'position' => $positionData['position'],
+                'is_runoff' => $positionData['is_runoff'],
+                'metrics' => $metrics,
+                'tied_with' => $positionData['tied_with']
+            ]
+        ]);
+        
+        // Send push notification if FCM token exists
+        if ($player->fcm_token) {
+            $pushTitle = "Tournament Complete!";
+            $pushBody = "You finished #{$positionData['position']} in {$tournament->name}";
+            
+            app(\App\Services\PushNotificationService::class)->sendNotification(
+                $player->fcm_token,
+                $pushTitle,
+                $pushBody,
+                [
+                    'type' => 'tournament_position_metrics',
+                    'tournament_id' => $tournament->id,
+                    'position' => $positionData['position']
+                ]
+            );
         }
     }
     
@@ -2925,38 +3439,135 @@ class MatchAlgorithmService
             ->where('status', 'completed')
             ->get();
             
-        // For 4 players with round_1 matches, determine winners based on match results
+        // For 4 players with round_1 matches, check if additional matches are needed
         if ($matches->count() == 2 && $matches->every(fn($m) => $m->round_name == 'round_1')) {
-            // Two semi-final matches, need to determine final ranking
+            // Two initial matches completed - need to create winners final and losers semifinal
             $match1 = $matches->first();
             $match2 = $matches->last();
             
-            // Position 1 & 2: Winners of the two matches
+            $winner1 = $match1->winner_id;
+            $winner2 = $match2->winner_id;
+            $loser1 = $match1->winner_id == $match1->player_1_id ? $match1->player_2_id : $match1->player_1_id;
+            $loser2 = $match2->winner_id == $match2->player_1_id ? $match2->player_2_id : $match2->player_1_id;
+            
+            // Check if winners final exists
+            $winnersFinal = $matches->where('round_name', 'winners_final')->first();
+            $losersSemifinal = $matches->where('round_name', 'losers_semifinal')->first();
+            
+            if (!$winnersFinal) {
+                // Create winners final match
+                \Log::info("Creating 4-player winners final match", [
+                    'winner1' => $winner1,
+                    'winner2' => $winner2,
+                    'tournament_id' => $tournament->id
+                ]);
+                
+                PoolMatch::create([
+                    'match_name' => 'winners_final_match',
+                    'player_1_id' => $winner1,
+                    'player_2_id' => $winner2,
+                    'level' => $level,
+                    'level_name' => $this->getLevelName($level, $groupId),
+                    'round_name' => 'winners_final',
+                    'tournament_id' => $tournament->id,
+                    'group_id' => $groupId,
+                    'status' => 'pending',
+                    'proposed_dates' => \App\Services\ProposedDatesService::generateProposedDatesJson($tournament->id),
+                ]);
+            }
+            
+            if (!$losersSemifinal) {
+                // Create losers semifinal match
+                \Log::info("Creating 4-player losers semifinal match", [
+                    'loser1' => $loser1,
+                    'loser2' => $loser2,
+                    'tournament_id' => $tournament->id
+                ]);
+                
+                PoolMatch::create([
+                    'match_name' => 'losers_semifinal_match',
+                    'player_1_id' => $loser1,
+                    'player_2_id' => $loser2,
+                    'level' => $level,
+                    'level_name' => $this->getLevelName($level, $groupId),
+                    'round_name' => 'losers_semifinal',
+                    'tournament_id' => $tournament->id,
+                    'group_id' => $groupId,
+                    'status' => 'pending',
+                    'proposed_dates' => \App\Services\ProposedDatesService::generateProposedDatesJson($tournament->id),
+                ]);
+            }
+            
+            return; // Wait for additional matches to complete
+        }
+        
+        // Check for completed simplified 4-player tournament (3 matches total)
+        $round1Matches = $matches->where('round_name', 'round_1');
+        $winnersFinal = $matches->where('round_name', 'winners_final')->first();
+        $losersSemifinal = $matches->where('round_name', 'losers_semifinal')->first();
+        
+        if ($round1Matches->count() == 2 && $winnersFinal && $losersSemifinal) {
+            // All 3 matches completed - determine final positions
+            \Log::info("Determining 4-player simplified tournament positions", [
+                'tournament_id' => $tournament->id,
+                'winners_final_winner' => $winnersFinal->winner_id,
+                'losers_semifinal_winner' => $losersSemifinal->winner_id
+            ]);
+            
+            // Position 1: Winners final winner
             Winner::create([
-                'player_id' => $match1->winner_id,
+                'player_id' => $winnersFinal->winner_id,
                 'position' => 1,
                 'level' => $level,
                 'level_id' => $groupId,
                 'tournament_id' => $tournament->id,
             ]);
             
+            // Position 2: Winners final loser
+            $winnersLoser = $winnersFinal->winner_id == $winnersFinal->player_1_id 
+                ? $winnersFinal->player_2_id 
+                : $winnersFinal->player_1_id;
+                
             Winner::create([
-                'player_id' => $match2->winner_id,
+                'player_id' => $winnersLoser,
                 'position' => 2,
                 'level' => $level,
                 'level_id' => $groupId,
                 'tournament_id' => $tournament->id,
             ]);
             
-            // Position 3: One of the losers (pick first match loser)
-            $loser1 = $match1->winner_id == $match1->player_1_id ? $match1->player_2_id : $match1->player_1_id;
+            // Position 3: Losers semifinal winner
             Winner::create([
-                'player_id' => $loser1,
+                'player_id' => $losersSemifinal->winner_id,
                 'position' => 3,
                 'level' => $level,
                 'level_id' => $groupId,
                 'tournament_id' => $tournament->id,
             ]);
+            
+            // Position 4: Losers semifinal loser (if we need 4+ winners AND at tournament target level)
+            $winnersNeeded = $tournament->winners ?? 3;
+            if ($winnersNeeded >= 4 && $this->isAtTournamentTargetLevel($tournament, $level)) {
+                $losersLoser = $losersSemifinal->winner_id == $losersSemifinal->player_1_id 
+                    ? $losersSemifinal->player_2_id 
+                    : $losersSemifinal->player_1_id;
+                    
+                Winner::create([
+                    'player_id' => $losersLoser,
+                    'position' => 4,
+                    'level' => $level,
+                    'level_id' => $groupId,
+                    'tournament_id' => $tournament->id,
+                ]);
+                
+                \Log::info("Assigned position 4 at tournament target level", [
+                    'player_id' => $losersLoser,
+                    'tournament_id' => $tournament->id,
+                    'level' => $level,
+                    'tournament_area_scope' => $tournament->area_scope,
+                    'tournament_area_name' => $tournament->area_name
+                ]);
+            }
             
             return;
         }
@@ -3003,9 +3614,201 @@ class MatchAlgorithmService
     }
     
     /**
-     * Determine winners for standard tournaments (5+ players)
+     * Determine winners for standard tournaments (3-4 players at non-target levels, or any count at target level)
      */
     private function determineStandardWinners(Tournament $tournament, string $level, ?int $groupId)
+    {
+        $playerCount = $this->getTotalPlayersInTournament($tournament, $level, $groupId);
+        $isTargetLevel = $this->isAtTournamentTargetLevel($tournament, $level);
+        
+        \Log::info("Determining standard winners", [
+            'tournament_id' => $tournament->id,
+            'level' => $level,
+            'player_count' => $playerCount,
+            'is_target_level' => $isTargetLevel,
+            'tournament_area_scope' => $tournament->area_scope
+        ]);
+        
+        if ($playerCount === 3) {
+            $this->determineStandard3PlayerWinners($tournament, $level, $groupId, $isTargetLevel);
+        } elseif ($playerCount === 4) {
+            $this->determineStandard4PlayerWinners($tournament, $level, $groupId, $isTargetLevel);
+        } else {
+            // For 5+ players, use elimination bracket logic
+            $this->determineEliminationWinners($tournament, $level, $groupId);
+        }
+    }
+    
+    /**
+     * Determine winners for 3-player standard tournaments
+     */
+    private function determineStandard3PlayerWinners(Tournament $tournament, string $level, ?int $groupId, bool $isTargetLevel)
+    {
+        $sfMatch = PoolMatch::where('tournament_id', $tournament->id)
+            ->where('level', $level)
+            ->where('group_id', $groupId)
+            ->where('round_name', '3_SF')
+            ->where('status', 'completed')
+            ->first();
+            
+        $finalMatch = PoolMatch::where('tournament_id', $tournament->id)
+            ->where('level', $level)
+            ->where('group_id', $groupId)
+            ->where('round_name', '3_final')
+            ->where('status', 'completed')
+            ->first();
+        
+        if (!$sfMatch || !$finalMatch) {
+            return; // Matches not complete yet
+        }
+        
+        $sfWinner = $sfMatch->winner_id;
+        $sfLoser = ($sfMatch->player_1_id === $sfWinner) ? $sfMatch->player_2_id : $sfMatch->player_1_id;
+        $finalWinner = $finalMatch->winner_id;
+        $finalLoser = ($finalMatch->player_1_id === $finalWinner) ? $finalMatch->player_2_id : $finalMatch->player_1_id;
+        
+        if ($finalWinner === $sfLoser) {
+            // SF loser (B) beat bye player (C) - Simple progression logic
+            if (!$isTargetLevel) {
+                // Progression: A=1st, B=2nd, C=3rd (no tie-breaker needed)
+                Winner::create(['player_id' => $sfWinner, 'position' => 1, 'level' => $level, 'level_id' => $groupId, 'tournament_id' => $tournament->id]);
+                Winner::create(['player_id' => $sfLoser, 'position' => 2, 'level' => $level, 'level_id' => $groupId, 'tournament_id' => $tournament->id]);
+                Winner::create(['player_id' => $finalLoser, 'position' => 3, 'level' => $level, 'level_id' => $groupId, 'tournament_id' => $tournament->id]);
+                
+                \Log::info("3-player progression: SF loser won final - simple positioning", [
+                    'sf_winner' => $sfWinner, 'sf_loser' => $sfLoser, 'bye_player' => $finalLoser
+                ]);
+            } else {
+                // Target level: Create break_tie match between A and B
+                $breakTieMatch = PoolMatch::where('tournament_id', $tournament->id)
+                    ->where('level', $level)
+                    ->where('group_id', $groupId)
+                    ->where('round_name', '3_break_tie_final')
+                    ->where('status', 'completed')
+                    ->first();
+                
+                if ($breakTieMatch) {
+                    // Process break_tie result
+                    $breakTieWinner = $breakTieMatch->winner_id;
+                    $breakTieLoser = ($breakTieMatch->player_1_id === $breakTieWinner) ? $breakTieMatch->player_2_id : $breakTieMatch->player_1_id;
+                    
+                    Winner::create(['player_id' => $breakTieWinner, 'position' => 1, 'level' => $level, 'level_id' => $groupId, 'tournament_id' => $tournament->id]);
+                    Winner::create(['player_id' => $breakTieLoser, 'position' => 2, 'level' => $level, 'level_id' => $groupId, 'tournament_id' => $tournament->id]);
+                    Winner::create(['player_id' => $sfLoser, 'position' => 3, 'level' => $level, 'level_id' => $groupId, 'tournament_id' => $tournament->id]); // B is 3rd
+                } else {
+                    // Create break_tie match
+                    PoolMatch::create([
+                        'match_name' => '3_break_tie_final_match',
+                        'player_1_id' => $sfWinner,
+                        'player_2_id' => $finalLoser, // bye player who lost final
+                        'level' => $level,
+                        'level_name' => $this->getLevelName($level, $groupId),
+                        'round_name' => '3_break_tie_final',
+                        'tournament_id' => $tournament->id,
+                        'group_id' => $groupId,
+                        'status' => 'pending',
+                        'proposed_dates' => \App\Services\ProposedDatesService::generateProposedDatesJson($tournament->id),
+                    ]);
+                }
+            }
+        } else {
+            // Bye player (C) beat SF loser (B) in final
+            if (!$isTargetLevel) {
+                // Progression: C=1st, A=2nd, B=3rd (no Fair_Chance needed)
+                Winner::create(['player_id' => $finalWinner, 'position' => 1, 'level' => $level, 'level_id' => $groupId, 'tournament_id' => $tournament->id]);
+                Winner::create(['player_id' => $sfWinner, 'position' => 2, 'level' => $level, 'level_id' => $groupId, 'tournament_id' => $tournament->id]);
+                Winner::create(['player_id' => $sfLoser, 'position' => 3, 'level' => $level, 'level_id' => $groupId, 'tournament_id' => $tournament->id]);
+                
+                \Log::info("3-player progression: Bye player won final - simple positioning", [
+                    'bye_winner' => $finalWinner, 'sf_winner' => $sfWinner, 'sf_loser' => $sfLoser
+                ]);
+            } else {
+                // Target level: Check for Fair_Chance match or create it
+                $fairChanceMatch = PoolMatch::where('tournament_id', $tournament->id)
+                    ->where('level', $level)
+                    ->where('group_id', $groupId)
+                    ->where('round_name', 'Fair_Chance')
+                    ->where('status', 'completed')
+                    ->first();
+                
+                if ($fairChanceMatch) {
+                    // Process Fair_Chance result (same as special tournaments)
+                    $this->handleFairChanceResult($tournament, $level, $groupId, $sfMatch, $finalMatch, $fairChanceMatch);
+                } else {
+                    // Create Fair_Chance match between SF winner and bye player
+                    PoolMatch::create([
+                        'match_name' => 'Fair_Chance_match',
+                        'player_1_id' => $sfWinner,
+                        'player_2_id' => $finalLoser, // bye player who lost final
+                        'level' => $level,
+                        'level_name' => $this->getLevelName($level, $groupId),
+                        'round_name' => 'Fair_Chance',
+                        'tournament_id' => $tournament->id,
+                        'group_id' => $groupId,
+                        'status' => 'pending',
+                        'proposed_dates' => \App\Services\ProposedDatesService::generateProposedDatesJson($tournament->id),
+                    ]);
+                }
+            }
+        }
+    }
+    
+    /**
+     * Determine winners for 4-player standard tournaments
+     */
+    private function determineStandard4PlayerWinners(Tournament $tournament, string $level, ?int $groupId, bool $isTargetLevel)
+    {
+        // Simple 4-player logic: A vs B, C vs D → Winners final, Losers semifinal
+        $matches = PoolMatch::where('tournament_id', $tournament->id)
+            ->where('level', $level)
+            ->where('group_id', $groupId)
+            ->where('status', 'completed')
+            ->get();
+        
+        $winnersMatch = $matches->where('round_name', 'winners_final')->first();
+        $losersMatch = $matches->where('round_name', 'losers_semifinal')->first();
+        
+        if ($winnersMatch && $losersMatch) {
+            // Position 1: Winners final winner
+            Winner::create([
+                'player_id' => $winnersMatch->winner_id,
+                'position' => 1,
+                'level' => $level,
+                'level_id' => $groupId,
+                'tournament_id' => $tournament->id,
+            ]);
+            
+            // Position 2: Winners final loser
+            $winnersLoser = ($winnersMatch->player_1_id === $winnersMatch->winner_id) ? $winnersMatch->player_2_id : $winnersMatch->player_1_id;
+            Winner::create([
+                'player_id' => $winnersLoser,
+                'position' => 2,
+                'level' => $level,
+                'level_id' => $groupId,
+                'tournament_id' => $tournament->id,
+            ]);
+            
+            // Position 3: Losers semifinal winner
+            Winner::create([
+                'player_id' => $losersMatch->winner_id,
+                'position' => 3,
+                'level' => $level,
+                'level_id' => $groupId,
+                'tournament_id' => $tournament->id,
+            ]);
+            
+            \Log::info("4-player standard winners determined", [
+                'winners_final_winner' => $winnersMatch->winner_id,
+                'winners_final_loser' => $winnersLoser,
+                'losers_semifinal_winner' => $losersMatch->winner_id
+            ]);
+        }
+    }
+    
+    /**
+     * Determine winners for elimination tournaments (5+ players)
+     */
+    private function determineEliminationWinners(Tournament $tournament, string $level, ?int $groupId)
     {
         // Get all completed matches and determine final standings
         $matches = PoolMatch::where('tournament_id', $tournament->id)
@@ -3364,5 +4167,447 @@ class MatchAlgorithmService
                 ]
             ]);
         }
+    }
+    
+    /**
+     * Check and determine losers tournament completion for positions 4-6
+     */
+    private function checkLosersTournamentCompletion(Tournament $tournament, string $level, ?int $groupId)
+    {
+        $winnersNeeded = $tournament->winners ?? 3;
+        
+        // Only process if we need 4, 5, or 6 winners AND we're at the tournament's target level
+        if ($winnersNeeded < 4 || $winnersNeeded > 6 || !$this->isAtTournamentTargetLevel($tournament, $level)) {
+            return;
+        }
+        
+        // Check if main tournament positions 1-3 are complete
+        $mainWinners = \App\Models\Winner::where('tournament_id', $tournament->id)
+            ->where('level', $level)
+            ->where('level_id', $groupId)
+            ->whereIn('position', [1, 2, 3])
+            ->count();
+            
+        if ($mainWinners < 3) {
+            return; // Main tournament not complete
+        }
+        
+        // Check if losers positions already assigned
+        $losersWinners = \App\Models\Winner::where('tournament_id', $tournament->id)
+            ->where('level', $level)
+            ->where('level_id', $groupId)
+            ->whereIn('position', [4, 5, 6])
+            ->count();
+            
+        if ($losersWinners > 0) {
+            return; // Already processed
+        }
+        
+        // Get losers tournament matches
+        $losersMatches = PoolMatch::where('tournament_id', $tournament->id)
+            ->where('level', $level)
+            ->where('group_id', $groupId)
+            ->where('status', 'completed')
+            ->where(function($q) {
+                $q->where('round_name', 'LIKE', 'losers_%');
+            })
+            ->get();
+            
+        if ($losersMatches->isEmpty()) {
+            return; // No losers matches yet
+        }
+        
+        // Determine losers tournament type and process
+        $losersSF = $losersMatches->where('round_name', 'losers_SF')->first();
+        $losersFinal = $losersMatches->where('round_name', 'losers_final')->first();
+        $losersFairChance = $losersMatches->where('round_name', 'losers_Fair_Chance')->first();
+        $losersBreakTie = $losersMatches->where('round_name', 'losers_break_tie')->first();
+        $losersRound1 = $losersMatches->where('round_name', 'losers_round_1');
+        $losersWinnersFinal = $losersMatches->where('round_name', 'losers_winners_final')->first();
+        
+        if ($losersSF) {
+            // 3-player losers tournament
+            $this->determineLosers3PlayerPositions($tournament, $level, $groupId, $losersSF, $losersFinal, $losersFairChance, $losersBreakTie, $winnersNeeded);
+        } elseif ($losersRound1->count() === 2) {
+            // 4-player losers tournament
+            $this->determineLosers4PlayerPositions($tournament, $level, $groupId, $losersRound1, $losersWinnersFinal, $winnersNeeded);
+        }
+    }
+    
+    /**
+     * Determine positions 4-6 from 3-player losers tournament
+     */
+    private function determineLosers3PlayerPositions(Tournament $tournament, string $level, ?int $groupId, $losersSF, $losersFinal, $losersFairChance, $losersBreakTie, int $winnersNeeded)
+    {
+        // Handle case with only SF match (no final match created)
+        if ($losersSF && !$losersFinal) {
+            // Position 4: SF winner
+            \App\Models\Winner::create([
+                'player_id' => $losersSF->winner_id,
+                'position' => 4,
+                'level' => $level,
+                'level_id' => $groupId,
+                'tournament_id' => $tournament->id,
+            ]);
+            
+            // Position 5: SF loser
+            $sfLoser = $losersSF->winner_id == $losersSF->player_1_id ? $losersSF->player_2_id : $losersSF->player_1_id;
+            \App\Models\Winner::create([
+                'player_id' => $sfLoser,
+                'position' => 5,
+                'level' => $level,
+                'level_id' => $groupId,
+                'tournament_id' => $tournament->id,
+            ]);
+            
+            // Position 6: Bye player
+            \App\Models\Winner::create([
+                'player_id' => $losersSF->bye_player_id,
+                'position' => 6,
+                'level' => $level,
+                'level_id' => $groupId,
+                'tournament_id' => $tournament->id,
+            ]);
+            
+            $this->sendLosersTournamentNotifications($tournament, $level, $groupId, $winnersNeeded);
+            return;
+        }
+        
+        // Handle completed losers tournament with Fair_Chance logic
+        if ($losersSF && $losersFinal) {
+            $sfWinner = $losersSF->winner_id;
+            $sfLoser = ($losersSF->player_1_id === $sfWinner) ? $losersSF->player_2_id : $losersSF->player_1_id;
+            $finalWinner = $losersFinal->winner_id;
+            $finalLoser = ($losersFinal->player_1_id === $finalWinner) ? $losersFinal->player_2_id : $losersFinal->player_1_id;
+            
+            if ($finalWinner !== $sfLoser) {
+                // Bye player won - check for fair chance or create it
+                if (!$losersFairChance) {
+                    // Create Fair_Chance match
+                    PoolMatch::create([
+                        'match_name' => 'losers_Fair_Chance_match',
+                        'player_1_id' => $sfWinner,
+                        'player_2_id' => $finalLoser,
+                        'level' => $level,
+                        'level_name' => $this->getLevelName($level, $groupId),
+                        'round_name' => 'losers_Fair_Chance',
+                        'tournament_id' => $tournament->id,
+                        'group_id' => $groupId,
+                        'status' => 'pending',
+                        'proposed_dates' => \App\Services\ProposedDatesService::generateProposedDatesJson($tournament->id),
+                    ]);
+                    return;
+                } else {
+                    // Process Fair_Chance result
+                    $this->handleLosersFairChanceResult($tournament, $level, $groupId, $losersSF, $losersFinal, $losersFairChance, $winnersNeeded);
+                }
+            } else {
+                // SF loser won final - Check for tie-breaker match
+                $losersBreakTie = PoolMatch::where('tournament_id', $tournament->id)
+                    ->where('level', $level)
+                    ->where('group_id', $groupId)
+                    ->where('round_name', 'losers_break_tie')
+                    ->where('status', 'completed')
+                    ->first();
+                
+                if ($losersBreakTie) {
+                    // Process tie-breaker result
+                    $this->handleLosersBreakTieResult($tournament, $level, $groupId, $losersSF, $losersFinal, $losersBreakTie, $winnersNeeded);
+                } else {
+                    // Create tie-breaker match between SF winner and bye player (final loser)
+                    \Log::info("Creating losers tie-breaker match", [
+                        'sf_winner' => $sfWinner,
+                        'bye_player' => $finalLoser,
+                        'tournament_id' => $tournament->id
+                    ]);
+                    
+                    PoolMatch::create([
+                        'match_name' => 'losers_break_tie_match',
+                        'player_1_id' => $sfWinner,
+                        'player_2_id' => $finalLoser, // This is the bye player who lost final
+                        'level' => $level,
+                        'level_name' => $this->getLevelName($level, $groupId),
+                        'round_name' => 'losers_break_tie',
+                        'tournament_id' => $tournament->id,
+                        'group_id' => $groupId,
+                        'status' => 'pending',
+                        'proposed_dates' => \App\Services\ProposedDatesService::generateProposedDatesJson($tournament->id),
+                    ]);
+                    return; // Wait for tie-breaker match to complete
+                }
+            }
+        }
+    }
+    
+    /**
+     * Handle Fair_Chance result for losers tournament
+     */
+    private function handleLosersFairChanceResult(Tournament $tournament, string $level, ?int $groupId, $losersSF, $losersFinal, $losersFairChance, int $winnersNeeded)
+    {
+        $sfWinner = $losersSF->winner_id;
+        $sfLoser = ($losersSF->player_1_id === $sfWinner) ? $losersSF->player_2_id : $losersSF->player_1_id;
+        $byePlayer = ($losersFinal->player_1_id === $sfLoser) ? $losersFinal->player_2_id : $losersFinal->player_1_id;
+        $fairChanceWinner = $losersFairChance->winner_id;
+        
+        if ($fairChanceWinner === $sfWinner) {
+            // SF winner won Fair_Chance: standard positioning
+            \App\Models\Winner::create(['player_id' => $sfWinner, 'position' => 4, 'level' => $level, 'level_id' => $groupId, 'tournament_id' => $tournament->id]);
+            \App\Models\Winner::create(['player_id' => $sfLoser, 'position' => 5, 'level' => $level, 'level_id' => $groupId, 'tournament_id' => $tournament->id]);
+            \App\Models\Winner::create(['player_id' => $byePlayer, 'position' => 6, 'level' => $level, 'level_id' => $groupId, 'tournament_id' => $tournament->id]);
+        } else {
+            // Bye player won Fair_Chance: use metrics
+            $this->determineLosersPositionsByMetrics($tournament, $level, $groupId, [$sfWinner, $sfLoser, $byePlayer], [4, 5, 6], $winnersNeeded);
+        }
+        
+        $this->sendLosersTournamentNotifications($tournament, $level, $groupId, $winnersNeeded);
+    }
+    
+    /**
+     * Handle tie-breaker result for losers tournament
+     */
+    private function handleLosersBreakTieResult(Tournament $tournament, string $level, ?int $groupId, $losersSF, $losersFinal, $losersBreakTie, int $winnersNeeded)
+    {
+        $sfWinner = $losersSF->winner_id;
+        $sfLoser = ($losersSF->player_1_id === $sfWinner) ? $losersSF->player_2_id : $losersSF->player_1_id;
+        $byePlayer = ($losersFinal->player_1_id === $sfLoser) ? $losersFinal->player_2_id : $losersFinal->player_1_id;
+        $breakTieWinner = $losersBreakTie->winner_id;
+        
+        \Log::info("Processing losers tie-breaker result", [
+            'sf_winner' => $sfWinner,
+            'sf_loser' => $sfLoser,
+            'bye_player' => $byePlayer,
+            'break_tie_winner' => $breakTieWinner,
+            'tournament_id' => $tournament->id
+        ]);
+        
+        // Position 4: Tie-breaker winner
+        \App\Models\Winner::create([
+            'player_id' => $breakTieWinner,
+            'position' => 4,
+            'level' => $level,
+            'level_id' => $groupId,
+            'tournament_id' => $tournament->id,
+        ]);
+        
+        // Position 5: Tie-breaker loser
+        $breakTieLoser = ($losersBreakTie->player_1_id === $breakTieWinner) ? $losersBreakTie->player_2_id : $losersBreakTie->player_1_id;
+        \App\Models\Winner::create([
+            'player_id' => $breakTieLoser,
+            'position' => 5,
+            'level' => $level,
+            'level_id' => $groupId,
+            'tournament_id' => $tournament->id,
+        ]);
+        
+        // Position 6: SF loser (who won the final but is now in 3rd place)
+        \App\Models\Winner::create([
+            'player_id' => $sfLoser,
+            'position' => 6,
+            'level' => $level,
+            'level_id' => $groupId,
+            'tournament_id' => $tournament->id,
+        ]);
+        
+        $this->sendLosersTournamentNotifications($tournament, $level, $groupId, $winnersNeeded);
+    }
+    
+    /**
+     * Determine positions 5-6 from 4-player losers tournament
+     */
+    private function determineLosers4PlayerPositions(Tournament $tournament, string $level, ?int $groupId, $losersRound1, $losersWinnersFinal, int $winnersNeeded)
+    {
+        if ($losersRound1->count() === 2 && !$losersWinnersFinal) {
+            // Create winners final for 4-player losers
+            $match1 = $losersRound1->first();
+            $match2 = $losersRound1->last();
+            
+            PoolMatch::create([
+                'match_name' => 'losers_winners_final_match',
+                'player_1_id' => $match1->winner_id,
+                'player_2_id' => $match2->winner_id,
+                'level' => $level,
+                'level_name' => $this->getLevelName($level, $groupId),
+                'round_name' => 'losers_winners_final',
+                'tournament_id' => $tournament->id,
+                'group_id' => $groupId,
+                'status' => 'pending',
+                'proposed_dates' => \App\Services\ProposedDatesService::generateProposedDatesJson($tournament->id),
+            ]);
+            return;
+        }
+        
+        if ($losersRound1->count() === 2 && $losersWinnersFinal) {
+            // Determine final positions
+            $match1 = $losersRound1->first();
+            $match2 = $losersRound1->last();
+            
+            // Position 4: Loser of main tournament winners final (already assigned in 4-player logic)
+            
+            // Position 5: Winner of losers winners final
+            \App\Models\Winner::create([
+                'player_id' => $losersWinnersFinal->winner_id,
+                'position' => 5,
+                'level' => $level,
+                'level_id' => $groupId,
+                'tournament_id' => $tournament->id,
+            ]);
+            
+            // Position 6: Loser of losers winners final
+            $winnersLoser = $losersWinnersFinal->winner_id == $losersWinnersFinal->player_1_id 
+                ? $losersWinnersFinal->player_2_id 
+                : $losersWinnersFinal->player_1_id;
+                
+            \App\Models\Winner::create([
+                'player_id' => $winnersLoser,
+                'position' => 6,
+                'level' => $level,
+                'level_id' => $groupId,
+                'tournament_id' => $tournament->id,
+            ]);
+            
+            $this->sendLosersTournamentNotifications($tournament, $level, $groupId, $winnersNeeded);
+        }
+    }
+    
+    /**
+     * Determine losers positions by metrics (similar to main tournament)
+     */
+    private function determineLosersPositionsByMetrics(Tournament $tournament, string $level, ?int $groupId, array $playerIds, array $positions, int $winnersNeeded)
+    {
+        // Use same metrics logic as main tournament but assign to positions 4-6
+        $playerMetrics = [];
+        
+        foreach ($playerIds as $playerId) {
+            $matches = PoolMatch::where('tournament_id', $tournament->id)
+                ->where('level', $level)
+                ->where('group_id', $groupId)
+                ->where(function($q) use ($playerId) {
+                    $q->where('player_1_id', $playerId)->orWhere('player_2_id', $playerId);
+                })
+                ->where('status', 'completed')
+                ->get();
+            
+            $totalPoints = 0;
+            $wins = 0;
+            $totalMatches = $matches->count();
+            
+            foreach ($matches as $match) {
+                if ($match->player_1_id == $playerId) {
+                    $totalPoints += $match->player_1_points ?? 0;
+                    if ($match->winner_id == $playerId) $wins++;
+                } else {
+                    $totalPoints += $match->player_2_points ?? 0;
+                    if ($match->winner_id == $playerId) $wins++;
+                }
+            }
+            
+            $winRate = $totalMatches > 0 ? ($wins / $totalMatches) * 100 : 0;
+            
+            $playerMetrics[$playerId] = [
+                'player_id' => $playerId,
+                'total_points' => $totalPoints,
+                'wins' => $wins,
+                'total_matches' => $totalMatches,
+                'win_rate' => $winRate,
+                'name' => User::find($playerId)->name ?? 'Unknown'
+            ];
+        }
+        
+        // Sort and assign positions 4-6
+        $sortedPlayers = collect($playerMetrics)->sortByDesc(function($player) {
+            return [$player['total_points'], $player['win_rate']];
+        })->values();
+        
+        foreach ($sortedPlayers as $index => $player) {
+            $position = $positions[$index];
+            
+            \App\Models\Winner::create([
+                'player_id' => $player['player_id'],
+                'position' => $position,
+                'level' => $level,
+                'level_id' => $groupId,
+                'tournament_id' => $tournament->id,
+                'is_runoff' => false, // Could add tie detection here
+            ]);
+        }
+    }
+    
+    /**
+     * Send notifications for losers tournament completion (only to winners up to needed count)
+     */
+    private function sendLosersTournamentNotifications(Tournament $tournament, string $level, ?int $groupId, int $winnersNeeded)
+    {
+        $allWinners = \App\Models\Winner::where('tournament_id', $tournament->id)
+            ->where('level', $level)
+            ->where('level_id', $groupId)
+            ->where('position', '<=', $winnersNeeded)
+            ->orderBy('position')
+            ->get();
+            
+        foreach ($allWinners as $winner) {
+            $player = User::find($winner->player_id);
+            
+            $message = "🏆 Tournament Complete: {$tournament->name}\n\n";
+            $message .= "Your Final Position: #{$winner->position}\n\n";
+            
+            if ($winner->position >= 4) {
+                $message .= "🥉 LOSERS TOURNAMENT RESULT\n";
+                $message .= "You competed in the losers bracket for positions 4-6.\n\n";
+            }
+            
+            $message .= "Congratulations on completing the tournament! 🎉";
+            
+            \App\Models\Notification::create([
+                'user_id' => $player->id,
+                'type' => 'tournament_position_final',
+                'title' => 'Tournament Complete - Position #' . $winner->position,
+                'message' => $message,
+                'data' => [
+                    'tournament_id' => $tournament->id,
+                    'tournament_name' => $tournament->name,
+                    'position' => $winner->position,
+                    'is_losers_bracket' => $winner->position >= 4
+                ]
+            ]);
+            
+            // Send push notification
+            if ($player->fcm_token) {
+                app(\App\Services\PushNotificationService::class)->sendNotification(
+                    $player->fcm_token,
+                    "Tournament Complete!",
+                    "You finished #{$winner->position} in {$tournament->name}",
+                    [
+                        'type' => 'tournament_position_final',
+                        'tournament_id' => $tournament->id,
+                        'position' => $winner->position
+                    ]
+                );
+            }
+        }
+        
+        \Log::info("Sent losers tournament notifications", [
+            'tournament_id' => $tournament->id,
+            'winners_notified' => $allWinners->count(),
+            'winners_needed' => $winnersNeeded
+        ]);
+    }
+    
+    /**
+     * Check if we're at the tournament's target level (where final winners are determined)
+     */
+    private function isAtTournamentTargetLevel(Tournament $tournament, string $level): bool
+    {
+        // Special tournaments don't have multi-level progression
+        if ($tournament->special) {
+            return true;
+        }
+        
+        // If no area_scope is specified, default to national level
+        if (!$tournament->area_scope || $tournament->area_scope === 'national') {
+            return $level === 'national';
+        }
+        
+        // Check if current level matches tournament's area_scope
+        return $level === $tournament->area_scope;
     }
 }
