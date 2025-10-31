@@ -1762,7 +1762,7 @@ class TournamentProgressionController extends Controller
         ]);
         
         // For 3-player comprehensive tournament (when we need 4, 5, or 6 winners from 3 players)
-        if (count($winners) == 3 && $winnersNeeded >= 4 && $winnersNeeded <= 6) {
+        if (count($winners) == 3 && $winnersNeeded > 3 && $winnersNeeded <= 6) {
             $this->generateComprehensive3PlayerTournament($tournament, $level, $levelName, $winners, $winnersNeeded);
         } 
         // For 5-6 winners from 4+ players, use comprehensive semifinals
@@ -1871,8 +1871,8 @@ class TournamentProgressionController extends Controller
         // Generate winners tournament (A, B, C) - positions 1, 2, 3
         $this->generate3PlayerWinnersTournament($tournament, $level, $levelName, $winners, $groupId);
         
-        // Generate losers tournament (D, E, F) - positions 4, 5, 6 (if needed)
-        if ($winnersNeeded >= 4) {
+        // Generate losers tournament (D, E, F) - positions 4, 5, 6 (only if we need more than 3 winners)
+        if ($winnersNeeded > 3) {
             $this->generate3PlayerLosersTournament($tournament, $level, $levelName, $winnersNeeded, $groupId);
         }
         
@@ -2323,8 +2323,19 @@ class TournamentProgressionController extends Controller
      */
     private function handle3PlayerWinnersComplete(Tournament $tournament, string $level, ?string $levelName, $groupId)
     {
-        \Log::info("3-player winners tournament complete - generating positions 1-3");
-        // This will be handled by the MatchAlgorithmService when determining winners
+        \Log::info("3-player winners tournament complete - checking for triple tie scenario");
+        
+        // Check if this was a fair chance match completion
+        $fairChanceMatch = PoolMatch::where('tournament_id', $tournament->id)
+            ->where('level', $level)
+            ->where('group_id', $groupId)
+            ->where('round_name', '3_winners_fair_chance')
+            ->where('status', 'completed')
+            ->first();
+            
+        if ($fairChanceMatch) {
+            $this->handle3PlayerTripleTieScenario($tournament, $level, $levelName, $groupId, 'winners', $fairChanceMatch);
+        }
     }
 
     /**
@@ -2332,8 +2343,146 @@ class TournamentProgressionController extends Controller
      */
     private function handle3PlayerLosersComplete(Tournament $tournament, string $level, ?string $levelName, $groupId)
     {
-        \Log::info("3-player losers tournament complete - generating positions 4-6");
-        // This will be handled by the MatchAlgorithmService when determining winners
+        \Log::info("3-player losers tournament complete - checking for triple tie scenario");
+        
+        // Check if this was a fair chance match completion
+        $fairChanceMatch = PoolMatch::where('tournament_id', $tournament->id)
+            ->where('level', $level)
+            ->where('group_id', $groupId)
+            ->where('round_name', 'losers_3_fair_chance')
+            ->where('status', 'completed')
+            ->first();
+            
+        if ($fairChanceMatch) {
+            $this->handle3PlayerTripleTieScenario($tournament, $level, $levelName, $groupId, 'losers', $fairChanceMatch);
+        }
+    }
+
+    /**
+     * Handle triple tie scenario using win rate and total points
+     */
+    private function handle3PlayerTripleTieScenario(Tournament $tournament, string $level, ?string $levelName, $groupId, string $type, $fairChanceMatch)
+    {
+        \Log::info("Handling triple tie scenario", [
+            'type' => $type,
+            'tournament_id' => $tournament->id
+        ]);
+        
+        // Get all three players involved
+        $sfRound = $type === 'winners' ? '3_winners_SF' : 'losers_3_SF';
+        $sfMatch = PoolMatch::where('tournament_id', $tournament->id)
+            ->where('level', $level)
+            ->where('group_id', $groupId)
+            ->where('round_name', $sfRound)
+            ->where('status', 'completed')
+            ->first();
+            
+        if (!$sfMatch) {
+            \Log::error("SF match not found for triple tie scenario");
+            return;
+        }
+        
+        $fairChanceWinner = $fairChanceMatch->winner_id;
+        $byePlayer = $sfMatch->bye_player_id;
+        
+        // Check if bye player won fair chance (triple tie scenario)
+        if ($fairChanceWinner === $byePlayer) {
+            \Log::info("Bye player won fair chance - triple tie detected", [
+                'bye_player' => $byePlayer,
+                'type' => $type
+            ]);
+            
+            // Get all three players
+            $playerA = $sfMatch->winner_id; // SF winner
+            $playerB = ($sfMatch->player_1_id === $playerA) ? $sfMatch->player_2_id : $sfMatch->player_1_id; // SF loser
+            $playerC = $byePlayer; // Bye player who won fair chance
+            
+            // Calculate metrics for tie breaking
+            $positions = $this->calculate3PlayerTripleTiePositions($tournament, $level, $groupId, $playerA, $playerB, $playerC, $type);
+            
+            \Log::info("Triple tie positions calculated", [
+                'positions' => $positions,
+                'type' => $type
+            ]);
+            
+            // Positions will be handled by MatchAlgorithmService when it processes the completed matches
+        }
+    }
+
+    /**
+     * Calculate positions for triple tie using win rate and total points
+     */
+    private function calculate3PlayerTripleTiePositions(Tournament $tournament, string $level, $groupId, $playerA, $playerB, $playerC, string $type)
+    {
+        $players = [$playerA, $playerB, $playerC];
+        $playerMetrics = [];
+        
+        \Log::info("Calculating triple tie metrics", [
+            'players' => $players,
+            'type' => $type
+        ]);
+        
+        // Calculate metrics for each player in this tournament level
+        foreach ($players as $playerId) {
+            $matches = \App\Models\PoolMatch::where('tournament_id', $tournament->id)
+                ->where('level', $level)
+                ->where('group_id', $groupId)
+                ->where(function($q) use ($playerId) {
+                    $q->where('player_1_id', $playerId)->orWhere('player_2_id', $playerId);
+                })
+                ->where('status', 'completed')
+                ->get();
+            
+            $totalPoints = 0;
+            $wins = 0;
+            $totalMatches = $matches->count();
+            
+            foreach ($matches as $match) {
+                if ($match->player_1_id == $playerId) {
+                    $totalPoints += $match->player_1_points ?? 0;
+                    if ($match->winner_id == $playerId) $wins++;
+                } else {
+                    $totalPoints += $match->player_2_points ?? 0;
+                    if ($match->winner_id == $playerId) $wins++;
+                }
+            }
+            
+            $winRate = $totalMatches > 0 ? ($wins / $totalMatches) * 100 : 0;
+            
+            $playerMetrics[$playerId] = [
+                'player_id' => $playerId,
+                'total_points' => $totalPoints,
+                'wins' => $wins,
+                'total_matches' => $totalMatches,
+                'win_rate' => $winRate
+            ];
+            
+            \Log::info("Player metrics calculated", [
+                'player_id' => $playerId,
+                'win_rate' => $winRate,
+                'total_points' => $totalPoints,
+                'wins' => $wins,
+                'matches' => $totalMatches
+            ]);
+        }
+        
+        // Sort by win rate first, then total points
+        uasort($playerMetrics, function($a, $b) {
+            if ($a['win_rate'] != $b['win_rate']) {
+                return $b['win_rate'] <=> $a['win_rate']; // Higher win rate first
+            }
+            return $b['total_points'] <=> $a['total_points']; // Higher points first
+        });
+        
+        $sortedPlayers = array_keys($playerMetrics);
+        $basePosition = $type === 'winners' ? 1 : 4;
+        
+        return [
+            'position_' . $basePosition => $sortedPlayers[0],
+            'position_' . ($basePosition + 1) => $sortedPlayers[1],
+            'position_' . ($basePosition + 2) => $sortedPlayers[2],
+            'metrics' => $playerMetrics
+        ];
     }
 
     /**
