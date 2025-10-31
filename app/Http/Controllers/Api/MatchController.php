@@ -721,17 +721,14 @@ class MatchController extends Controller
             
             \Log::info("About to call checkRoundCompletionAndPositions", ['match_id' => $match->id]);
             
-            // Check if comprehensive semifinals are complete and generate winners
-            $this->checkComprehensiveSemifinalsForWinnerGeneration($match);
-            
             // Check if round robin should be triggered before normal progression
             $this->checkRoundRobinTrigger($match);
             
             // Check if round robin matches are completed and generate winners
             $this->checkRoundRobinCompletion($match);
             
-            // Check round completion and determine positions
-            $this->checkRoundCompletionAndPositions($match);
+            // Unified method: Check match completion and generate winners or next round
+            $this->checkMatchCompletionAndGenerateWinnersOrNextRound($match);
             
             \Log::info("checkRoundCompletionAndPositions call completed", ['match_id' => $match->id]);
             
@@ -1003,53 +1000,12 @@ class MatchController extends Controller
     }
 
     /**
-     * Check if comprehensive semifinals are complete and generate winners
+     * Unified method: Check match completion and generate winners or next round
      */
-    private function checkComprehensiveSemifinalsForWinnerGeneration($match)
+    private function checkMatchCompletionAndGenerateWinnersOrNextRound($match)
     {
         try {
-            // Only check for comprehensive semifinal rounds
-            $comprehensiveRounds = ['SF_winners', 'SF_losers', 'losers_SF_winners', 'winners_final', 'losers_semifinal'];
-            
-            if (!in_array($match->round_name, $comprehensiveRounds)) {
-                return;
-            }
-            
-            \Log::info("Checking comprehensive semifinals completion for winner generation", [
-                'match_id' => $match->id,
-                'round_name' => $match->round_name,
-                'tournament_id' => $match->tournament_id,
-                'level' => $match->level
-            ]);
-            
-            // Create progression controller to handle winner generation
-            $progressionController = new \App\Http\Controllers\Api\TournamentProgressionController(
-                new \App\Services\MatchAlgorithmService()
-            );
-            
-            // Call the comprehensive semifinals check method
-            $progressionController->checkComprehensiveSemifinalsComplete(
-                $match->tournament, 
-                $match->level, 
-                $match->level_name
-            );
-            
-        } catch (\Exception $e) {
-            \Log::error("Error checking comprehensive semifinals for winner generation", [
-                'match_id' => $match->id,
-                'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString()
-            ]);
-        }
-    }
-
-    /**
-     * Check round completion and determine positions
-     */
-    private function checkRoundCompletionAndPositions($match)
-    {
-        try {
-            \Log::info("=== MATCH CONFIRMATION PROGRESSION START ===", [
+            \Log::info("=== UNIFIED MATCH COMPLETION CHECK START ===", [
                 'match_id' => $match->id,
                 'match_name' => $match->match_name,
                 'tournament_id' => $match->tournament_id,
@@ -1073,14 +1029,40 @@ class MatchController extends Controller
                 return;
             }
             
+            // Handle comprehensive semifinals - generate winners when all complete
+            $comprehensiveRounds = ['SF_winners', 'SF_losers', 'losers_SF_winners', 'winners_final', 'losers_semifinal'];
+            if (in_array($match->round_name, $comprehensiveRounds)) {
+                \Log::info("Processing comprehensive semifinal for winner generation", [
+                    'match_id' => $match->id,
+                    'round_name' => $match->round_name,
+                    'tournament_id' => $match->tournament_id,
+                    'level' => $match->level
+                ]);
+                
+                // Create progression controller to handle winner generation
+                $progressionController = new \App\Http\Controllers\Api\TournamentProgressionController(
+                    new \App\Services\MatchAlgorithmService()
+                );
+                
+                // Call the comprehensive semifinals check method
+                $progressionController->checkComprehensiveSemifinalsComplete(
+                    $match->tournament, 
+                    $match->level, 
+                    $match->level_name
+                );
+                
+                \Log::info("Comprehensive semifinals check completed");
+                return;
+            }
+            
             // Create progression controller
             $progressionController = new \App\Http\Controllers\Api\TournamentProgressionController(
                 new \App\Services\MatchAlgorithmService()
             );
             
-            \Log::info("Progression controller created successfully");
+            \Log::info("Processing standard tournament progression");
             
-            // Check round completion
+            // Check round completion for standard tournaments
             $roundRequest = new \Illuminate\Http\Request([
                 'tournament_id' => $match->tournament_id,
                 'level' => $match->level,
@@ -1103,14 +1085,14 @@ class MatchController extends Controller
             
             \Log::info("Tournament progression: Round completion response", $roundData);
             
-            \Log::info("=== MATCH CONFIRMATION PROGRESSION SUCCESS ===");
+            \Log::info("=== UNIFIED MATCH COMPLETION CHECK SUCCESS ===");
             
         } catch (\Exception $e) {
-            \Log::error("Tournament progression check failed: " . $e->getMessage(), [
+            \Log::error("Unified match completion check failed: " . $e->getMessage(), [
                 'match_id' => $match->id,
                 'trace' => $e->getTraceAsString()
             ]);
-            \Log::error("=== MATCH CONFIRMATION PROGRESSION FAILED ===");
+            \Log::error("=== UNIFIED MATCH COMPLETION CHECK FAILED ===");
         }
     }
     
