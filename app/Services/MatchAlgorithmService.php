@@ -426,66 +426,58 @@ class MatchAlgorithmService
                     $winner2 = $match2->winner_id;
                     $loser2 = ($match2->player_1_id === $winner2) ? $match2->player_2_id : $match2->player_1_id;
                     
-                    // Create 4_SF_winners
+                    // Create winners final (SF winners)
                     PoolMatch::create([
-                        'match_name' => '4_SF_winners',
+                        'match_name' => 'winners_final_match',
                         'player_1_id' => $winner1,
                         'player_2_id' => $winner2,
                         'level' => $level,
                         'level_name' => $levelName,
-                        'round_name' => 'semifinal',
+                        'round_name' => 'winners_final',
                         'tournament_id' => $tournament->id,
                         'group_id' => $groupId,
                         'status' => 'pending',
+                        'proposed_dates' => \App\Services\ProposedDatesService::generateProposedDatesJson($tournament->id),
                     ]);
                     
-                    // Create 4_SF_losers
+                    // Create losers semifinal (SF losers)
                     PoolMatch::create([
-                        'match_name' => '4_SF_losers',
+                        'match_name' => 'losers_semifinal_match',
                         'player_1_id' => $loser1,
                         'player_2_id' => $loser2,
                         'level' => $level,
                         'level_name' => $levelName,
-                        'round_name' => 'semifinal',
+                        'round_name' => 'losers_semifinal',
                         'tournament_id' => $tournament->id,
                         'group_id' => $groupId,
                         'status' => 'pending',
+                        'proposed_dates' => \App\Services\ProposedDatesService::generateProposedDatesJson($tournament->id),
                     ]);
                     
-                } elseif ($currentRound === 'semifinal') {
-                    // Check if both SF matches are complete
-                    $winnersSF = PoolMatch::where('tournament_id', $tournament->id)
+                } elseif ($currentRound === 'winners_final' || $currentRound === 'losers_semifinal') {
+                    // Check if both winners final and losers semifinal matches are complete
+                    $winnersFinal = PoolMatch::where('tournament_id', $tournament->id)
                         ->where('level', $level)
                         ->where('level_name', $levelName)
-                        ->where('round_name', 'semifinal')
-                        ->where('match_name', '4_SF_winners')
+                        ->where('round_name', 'winners_final')
                         ->where('status', 'completed')
                         ->first();
                         
-                    $losersSF = PoolMatch::where('tournament_id', $tournament->id)
+                    $losersSemifinal = PoolMatch::where('tournament_id', $tournament->id)
                         ->where('level', $level)
                         ->where('level_name', $levelName)
-                        ->where('round_name', 'semifinal')
-                        ->where('match_name', '4_SF_losers')
+                        ->where('round_name', 'losers_semifinal')
                         ->where('status', 'completed')
                         ->first();
                     
-                    if ($winnersSF && $losersSF) {
-                        // Create 4_final: loser of winners_SF vs winner of losers_SF
-                        $winnersLoser = ($winnersSF->player_1_id === $winnersSF->winner_id) ? 
-                            $winnersSF->player_2_id : $winnersSF->player_1_id;
-                        $losersWinner = $losersSF->winner_id;
-                        
-                        PoolMatch::create([
-                            'match_name' => '4_final',
-                            'player_1_id' => $winnersLoser,
-                            'player_2_id' => $losersWinner,
-                            'level' => $level,
-                            'level_name' => $levelName,
-                            'round_name' => '4_final',
-                            'tournament_id' => $tournament->id,
-                            'group_id' => $groupId,
-                            'status' => 'pending',
+                    if ($winnersFinal && $losersSemifinal) {
+                        // Both matches complete - determine positions directly
+                        // No additional matches needed - positions determined from these two matches
+                        \Log::info("4-player tournament complete - determining final positions", [
+                            'winners_final_winner' => $winnersFinal->winner_id,
+                            'winners_final_loser' => ($winnersFinal->player_1_id === $winnersFinal->winner_id) ? $winnersFinal->player_2_id : $winnersFinal->player_1_id,
+                            'losers_semifinal_winner' => $losersSemifinal->winner_id,
+                            'losers_semifinal_loser' => ($losersSemifinal->player_1_id === $losersSemifinal->winner_id) ? $losersSemifinal->player_2_id : $losersSemifinal->player_1_id
                         ]);
                     }
                 }
