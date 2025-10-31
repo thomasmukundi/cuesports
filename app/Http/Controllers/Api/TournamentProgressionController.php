@@ -420,28 +420,28 @@ class TournamentProgressionController extends Controller
         $winner2 = $match2->winner_id;
         $loser2 = ($match2->player_1_id === $winner2) ? $match2->player_2_id : $match2->player_1_id;
         
-        // Create 4_SF_winners
+        // Create winners final (not semifinal)
         PoolMatch::create([
-            'match_name' => '4_SF_winners',
+            'match_name' => 'winners_final_match',
             'player_1_id' => $winner1,
             'player_2_id' => $winner2,
             'level' => $level,
             'level_name' => $levelName,
-            'round_name' => 'semifinal',
+            'round_name' => 'winners_final',
             'tournament_id' => $tournament->id,
             'group_id' => $this->getGroupIdFromLevelName($level, $levelName),
             'status' => 'pending',
             'proposed_dates' => \App\Services\ProposedDatesService::generateProposedDates($tournament->id),
         ]);
         
-        // Create 4_SF_losers
+        // Create losers semifinal
         PoolMatch::create([
-            'match_name' => '4_SF_losers',
+            'match_name' => 'losers_semifinal_match',
             'player_1_id' => $loser1,
             'player_2_id' => $loser2,
             'level' => $level,
             'level_name' => $levelName,
-            'round_name' => 'semifinal',
+            'round_name' => 'losers_semifinal',
             'tournament_id' => $tournament->id,
             'group_id' => $this->getGroupIdFromLevelName($level, $levelName),
             'status' => 'pending',
@@ -456,7 +456,7 @@ class TournamentProgressionController extends Controller
     {
         $winnersSFQuery = PoolMatch::where('tournament_id', $tournament->id)
             ->where('level', $level)
-            ->where('match_name', '4_SF_winners')
+            ->where('round_name', 'winners_final')
             ->where('status', 'completed');
             
         if ($levelName) {
@@ -469,7 +469,7 @@ class TournamentProgressionController extends Controller
             
         $losersSFQuery = PoolMatch::where('tournament_id', $tournament->id)
             ->where('level', $level)
-            ->where('match_name', '4_SF_losers')
+            ->where('round_name', 'losers_semifinal')
             ->where('status', 'completed');
             
         if ($levelName) {
@@ -867,14 +867,14 @@ class TournamentProgressionController extends Controller
         $winnersSF = PoolMatch::where('tournament_id', $tournament->id)
             ->where('level', $level)
             ->where('level_name', $levelName)
-            ->where('match_name', '4_SF_winners')
+            ->where('round_name', 'winners_final')
             ->where('status', 'completed')
             ->first();
 
         $losersSF = PoolMatch::where('tournament_id', $tournament->id)
             ->where('level', $level)
             ->where('level_name', $levelName)
-            ->where('match_name', '4_SF_losers')
+            ->where('round_name', 'losers_semifinal')
             ->where('status', 'completed')
             ->first();
 
