@@ -163,12 +163,24 @@ class MatchAlgorithmService
                 'group_id' => $groupId
             ]);
             
-            if ($winners->count() <= 4) {
-                // Handle special progression cases (4, 3, 2 players)
+            $originalPlayerCount = $this->getTotalPlayersInTournament($tournament, $level, $groupId);
+            
+            \Log::info("Progression decision analysis", [
+                'winners_count' => $winners->count(),
+                'original_player_count' => $originalPlayerCount,
+                'current_round' => $currentRoundMatches->first()->round_name ?? 'unknown',
+                'will_use_special_progression' => ($winners->count() <= 4 && $originalPlayerCount <= 4),
+                'tournament_id' => $tournament->id
+            ]);
+            
+            if ($winners->count() <= 4 && $originalPlayerCount <= 4) {
+                // Handle special progression cases (original 2, 3, 4 player tournaments)
                 $levelName = $this->getLevelName($level, $groupId);
+                \Log::info("Using SPECIAL progression for small original tournament");
                 $this->handleSpecialProgression($tournament, $winners, $level, $groupId, $currentRoundMatches, $levelName);
             } else {
-                // Handle odd number progression (>4 players)
+                // Handle large group progression (>4 original players or continuation from larger tournament)
+                \Log::info("Using LARGE GROUP progression for large tournament or continuation");
                 $this->handleLargeGroupProgression($tournament, $winners, $level, $groupId, $currentRoundMatches);
             }
             
