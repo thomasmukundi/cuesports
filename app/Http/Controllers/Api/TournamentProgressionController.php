@@ -998,16 +998,16 @@ class TournamentProgressionController extends Controller
                 
                 // Create position-specific messages
                 $messages = [
-                    1 => "🏆 Congratulations! You won 1st place in {$tournament->name}!",
-                    2 => "🥈 Great job! You finished 2nd place in {$tournament->name}!",
-                    3 => "🥉 Well done! You finished 3rd place in {$tournament->name}!"
+                    1 => "Congratulations! You won 1st place in {$tournament->name}!",
+                    2 => "Great job! You finished 2nd place in {$tournament->name}!",
+                    3 => "Well done! You finished 3rd place in {$tournament->name}!"
                 ];
                 
                 $message = $messages[$position] ?? "You finished position {$position} in {$tournament->name}!";
                 
                 // Create notification
                 \App\Models\Notification::create([
-                    'user_id' => $playerId,
+                    'player_id' => $playerId,
                     'type' => 'tournament_position',
                     'title' => 'Tournament Results',
                     'message' => $message,
@@ -1062,17 +1062,17 @@ class TournamentProgressionController extends Controller
                 
                 // Create position-specific messages
                 $messages = [
-                    1 => "🏆 Congratulations! You won 1st place in {$tournament->name}!",
-                    2 => "🥈 Great job! You finished 2nd place in {$tournament->name}!",
-                    3 => "🥉 Well done! You finished 3rd place in {$tournament->name}!",
-                    4 => "👏 You finished 4th place in {$tournament->name}. Great effort!"
+                    1 => "Congratulations! You won 1st place in {$tournament->name}!",
+                    2 => "Great job! You finished 2nd place in {$tournament->name}!",
+                    3 => "Well done! You finished 3rd place in {$tournament->name}!",
+                    4 => "You finished 4th place in {$tournament->name}. Great effort!"
                 ];
                 
                 $message = $messages[$position] ?? "You finished position {$position} in {$tournament->name}!";
                 
                 // Create notification
                 \App\Models\Notification::create([
-                    'user_id' => $playerId,
+                    'player_id' => $playerId,
                     'type' => 'tournament_position',
                     'title' => 'Tournament Results',
                     'message' => $message,
@@ -1214,19 +1214,19 @@ class TournamentProgressionController extends Controller
                 
                 // Create position-specific messages
                 $messages = [
-                    1 => "🏆 Congratulations! You won 1st place in {$tournament->name}!",
-                    2 => "🥈 Great job! You finished 2nd place in {$tournament->name}!",
-                    3 => "🥉 Well done! You finished 3rd place in {$tournament->name}!",
-                    4 => "👏 You finished 4th place in {$tournament->name}. Great effort!",
-                    5 => "💪 You finished 5th place in {$tournament->name}. Keep it up!",
-                    6 => "🎯 You finished 6th place in {$tournament->name}. Thanks for participating!"
+                    1 => "Congratulations! You won 1st place in {$tournament->name}!",
+                    2 => "Great job! You finished 2nd place in {$tournament->name}!",
+                    3 => "Well done! You finished 3rd place in {$tournament->name}!",
+                    4 => "You finished 4th place in {$tournament->name}. Great effort!",
+                    5 => "You finished 5th place in {$tournament->name}. Keep it up!",
+                    6 => "You finished 6th place in {$tournament->name}. Thanks for participating!"
                 ];
                 
                 $message = $messages[$position] ?? "You finished position {$position} in {$tournament->name}!";
                 
                 // Create notification
                 \App\Models\Notification::create([
-                    'user_id' => $playerId,
+                    'player_id' => $playerId,
                     'type' => 'tournament_position',
                     'title' => 'Tournament Results',
                     'message' => $message,
