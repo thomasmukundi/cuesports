@@ -324,14 +324,15 @@ class TournamentProgressionController extends Controller
                 break;
                 
             case 3:
-                \Log::info("Processing 3 winner scenario");
+                \Log::info("Processing 3 winner scenario from round");
+                $winnersNeeded = $tournament->winners ?? 3;
+                
                 // Check if this is part of comprehensive semifinals
                 if ($roundName === 'SF_winners' || $roundName === 'SF_losers' || $roundName === 'losers_SF_winners' || $roundName === 'losers_SF_losers') {
                     \Log::info("Three comprehensive semifinals complete - checking if all semifinals done");
                     $this->checkComprehensiveSemifinalsComplete($tournament, $level, $levelName);
                 } elseif ($roundName === 'winners_final' || $roundName === 'losers_semifinal') {
                     // Check if we need exactly 3 winners - if so, generate positions directly from semifinals
-                    $winnersNeeded = $tournament->winners ?? 3;
                     if ($winnersNeeded == 3) {
                         \Log::info("3 winners needed - checking if both semifinals complete for direct position generation");
                         $this->checkTwoSemifinalsCompleteFor3Winners($tournament, $level, $levelName);
@@ -340,12 +341,23 @@ class TournamentProgressionController extends Controller
                         // Handle other cases if needed
                     }
                 } else {
-                    \Log::info("Generating 3-winner semifinal match", [
-                        'round_name' => $roundName,
-                        'is_first_round' => $isFirstRound,
-                        'winner_count' => $winnerCount
-                    ]);
-                    $this->generate3WinnerSemifinal($tournament, $level, $levelName, $matches);
+                    // Only use 3-winner semifinal logic if we actually need exactly 3 winners
+                    if ($winnersNeeded == 3) {
+                        \Log::info("Generating 3-winner semifinal match (need exactly 3 winners)", [
+                            'round_name' => $roundName,
+                            'is_first_round' => $isFirstRound,
+                            'winner_count' => $winnerCount,
+                            'winners_needed' => $winnersNeeded
+                        ]);
+                        $this->generate3WinnerSemifinal($tournament, $level, $levelName, $matches);
+                    } else {
+                        \Log::info("Need more than 3 winners - using comprehensive tournament logic", [
+                            'winners_needed' => $winnersNeeded,
+                            'winner_count' => $winnerCount
+                        ]);
+                        // Use comprehensive logic for 4+ winners
+                        $this->generateComprehensiveTournament($tournament, $level, $levelName, $matches, $winnersNeeded);
+                    }
                 }
                 break;
                 
@@ -1715,6 +1727,273 @@ class TournamentProgressionController extends Controller
         }
         
         \Log::info("=== GENERATE 3-WINNER SEMIFINAL END ===");
+    }
+
+    /**
+     * Generate comprehensive tournament for 4+ winners
+     */
+    private function generateComprehensiveTournament(Tournament $tournament, string $level, ?string $levelName, $matches, int $winnersNeeded)
+    {
+        \Log::info("=== GENERATE COMPREHENSIVE TOURNAMENT START ===", [
+            'winners_needed' => $winnersNeeded,
+            'matches_count' => count($matches)
+        ]);
+        
+        // Extract winners from completed matches
+        $winners = [];
+        foreach ($matches as $match) {
+            if ($match->status === 'completed' && $match->winner_id) {
+                $winners[] = $match->winner_id;
+            }
+        }
+        
+        \Log::info("Extracted winners for comprehensive tournament", [
+            'winners' => $winners,
+            'winner_count' => count($winners)
+        ]);
+        
+        // For 3-player comprehensive tournament (when we need 4, 5, or 6 winners from 3 players)
+        if (count($winners) == 3 && $winnersNeeded >= 4 && $winnersNeeded <= 6) {
+            $this->generateComprehensive3PlayerTournament($tournament, $level, $levelName, $winners, $winnersNeeded);
+        } 
+        // For 5-6 winners from 4+ players, use comprehensive semifinals
+        elseif ($winnersNeeded >= 5 && $winnersNeeded <= 6) {
+            $this->generateComprehensiveSemifinals($tournament, $level, $levelName, $winners);
+        } else {
+            // For other cases, use standard progression
+            \Log::info("Using standard progression for winners needed: " . $winnersNeeded);
+            // Add logic for other winner counts if needed
+        }
+        
+        \Log::info("=== GENERATE COMPREHENSIVE TOURNAMENT END ===");
+    }
+
+    /**
+     * Generate comprehensive semifinals for 5-6 winners
+     */
+    private function generateComprehensiveSemifinals(Tournament $tournament, string $level, ?string $levelName, array $winners)
+    {
+        \Log::info("Generating comprehensive semifinals", [
+            'winners' => $winners,
+            'level' => $level
+        ]);
+        
+        $groupId = $this->getGroupIdFromLevelName($level, $levelName);
+        
+        // Check if comprehensive semifinals already exist
+        $existingSF = PoolMatch::where('tournament_id', $tournament->id)
+            ->where('level', $level)
+            ->where('group_id', $groupId)
+            ->whereIn('round_name', ['SF_winners', 'SF_losers', 'losers_SF_winners'])
+            ->exists();
+            
+        if ($existingSF) {
+            \Log::info("Comprehensive semifinals already exist - skipping creation");
+            return;
+        }
+        
+        // Create SF_winners (top 2 winners)
+        if (count($winners) >= 2) {
+            PoolMatch::create([
+                'match_name' => 'SF_winners_match',
+                'player_1_id' => $winners[0],
+                'player_2_id' => $winners[1],
+                'level' => $level,
+                'level_name' => $levelName,
+                'round_name' => 'SF_winners',
+                'tournament_id' => $tournament->id,
+                'group_id' => $groupId,
+                'status' => 'pending',
+                'proposed_dates' => \App\Services\ProposedDatesService::generateProposedDates($tournament->id),
+            ]);
+            
+            \Log::info("Created SF_winners match", [
+                'player_1' => $winners[0],
+                'player_2' => $winners[1]
+            ]);
+        }
+        
+        // Create SF_losers (next 2 winners)
+        if (count($winners) >= 4) {
+            PoolMatch::create([
+                'match_name' => 'SF_losers_match',
+                'player_1_id' => $winners[2],
+                'player_2_id' => $winners[3],
+                'level' => $level,
+                'level_name' => $levelName,
+                'round_name' => 'SF_losers',
+                'tournament_id' => $tournament->id,
+                'group_id' => $groupId,
+                'status' => 'pending',
+                'proposed_dates' => \App\Services\ProposedDatesService::generateProposedDates($tournament->id),
+            ]);
+            
+            \Log::info("Created SF_losers match", [
+                'player_1' => $winners[2],
+                'player_2' => $winners[3]
+            ]);
+        }
+        
+        // Create losers_SF_winners if we have a 5th winner
+        if (count($winners) >= 5) {
+            // 5th winner gets bye, will play against loser of SF_winners
+            \Log::info("5th winner gets bye to losers_SF_winners", [
+                'bye_player' => $winners[4]
+            ]);
+            
+            // The losers_SF_winners match will be created later when SF_winners completes
+        }
+    }
+
+    /**
+     * Generate comprehensive 3-player tournament for 4-6 winners
+     * A, B, C are winners; D, E, F are losers (if progression)
+     */
+    private function generateComprehensive3PlayerTournament(Tournament $tournament, string $level, ?string $levelName, array $winners, int $winnersNeeded)
+    {
+        \Log::info("=== GENERATE COMPREHENSIVE 3-PLAYER TOURNAMENT START ===", [
+            'winners' => $winners,
+            'winners_needed' => $winnersNeeded,
+            'level' => $level
+        ]);
+        
+        $groupId = $this->getGroupIdFromLevelName($level, $levelName);
+        
+        // Generate winners tournament (A, B, C) - positions 1, 2, 3
+        $this->generate3PlayerWinnersTournament($tournament, $level, $levelName, $winners, $groupId);
+        
+        // Generate losers tournament (D, E, F) - positions 4, 5, 6 (if needed)
+        if ($winnersNeeded >= 4) {
+            $this->generate3PlayerLosersTournament($tournament, $level, $levelName, $winnersNeeded, $groupId);
+        }
+        
+        \Log::info("=== GENERATE COMPREHENSIVE 3-PLAYER TOURNAMENT END ===");
+    }
+
+    /**
+     * Generate 3-player winners tournament (A, B, C) for positions 1, 2, 3
+     */
+    private function generate3PlayerWinnersTournament(Tournament $tournament, string $level, ?string $levelName, array $winners, $groupId)
+    {
+        \Log::info("Generating 3-player winners tournament", [
+            'winners' => $winners
+        ]);
+        
+        // Check if winners tournament already exists
+        $existingWinnersSF = PoolMatch::where('tournament_id', $tournament->id)
+            ->where('level', $level)
+            ->where('group_id', $groupId)
+            ->where('round_name', '3_winners_SF')
+            ->exists();
+            
+        if ($existingWinnersSF) {
+            \Log::info("3-player winners tournament already exists - skipping creation");
+            return;
+        }
+        
+        // Create winners semifinal: A vs B (C gets bye)
+        PoolMatch::create([
+            'match_name' => '3_winners_SF_match',
+            'player_1_id' => $winners[0], // A
+            'player_2_id' => $winners[1], // B
+            'bye_player_id' => $winners[2], // C gets bye
+            'level' => $level,
+            'level_name' => $levelName,
+            'round_name' => '3_winners_SF',
+            'tournament_id' => $tournament->id,
+            'group_id' => $groupId,
+            'status' => 'pending',
+            'proposed_dates' => \App\Services\ProposedDatesService::generateProposedDates($tournament->id),
+        ]);
+        
+        \Log::info("Created 3-player winners semifinal", [
+            'player_1' => $winners[0], // A
+            'player_2' => $winners[1], // B
+            'bye_player' => $winners[2] // C
+        ]);
+    }
+
+    /**
+     * Generate 3-player losers tournament (D, E, F) for positions 4, 5, 6
+     */
+    private function generate3PlayerLosersTournament(Tournament $tournament, string $level, ?string $levelName, int $winnersNeeded, $groupId)
+    {
+        \Log::info("Generating 3-player losers tournament", [
+            'winners_needed' => $winnersNeeded
+        ]);
+        
+        // Get losers from previous round
+        $losers = $this->getLoserPlayersForTournament($tournament, $level, $groupId);
+        
+        if ($losers->count() < 3) {
+            \Log::info("Not enough losers for 3-player losers tournament", [
+                'losers_count' => $losers->count()
+            ]);
+            return;
+        }
+        
+        // Check if losers tournament already exists
+        $existingLosersSF = PoolMatch::where('tournament_id', $tournament->id)
+            ->where('level', $level)
+            ->where('group_id', $groupId)
+            ->where('round_name', 'losers_3_SF')
+            ->exists();
+            
+        if ($existingLosersSF) {
+            \Log::info("3-player losers tournament already exists - skipping creation");
+            return;
+        }
+        
+        $losersList = $losers->take(3)->values();
+        
+        // Create losers semifinal: D vs E (F gets bye)
+        PoolMatch::create([
+            'match_name' => 'losers_3_SF_match',
+            'player_1_id' => $losersList[0]->id, // D
+            'player_2_id' => $losersList[1]->id, // E
+            'bye_player_id' => $losersList[2]->id, // F gets bye
+            'level' => $level,
+            'level_name' => $levelName,
+            'round_name' => 'losers_3_SF',
+            'tournament_id' => $tournament->id,
+            'group_id' => $groupId,
+            'status' => 'pending',
+            'proposed_dates' => \App\Services\ProposedDatesService::generateProposedDates($tournament->id),
+        ]);
+        
+        \Log::info("Created 3-player losers semifinal", [
+            'player_1' => $losersList[0]->id, // D
+            'player_2' => $losersList[1]->id, // E
+            'bye_player' => $losersList[2]->id // F
+        ]);
+    }
+
+    /**
+     * Get loser players for tournament level
+     */
+    private function getLoserPlayersForTournament(Tournament $tournament, string $level, $groupId)
+    {
+        // Get all matches from previous round
+        $previousMatches = PoolMatch::where('tournament_id', $tournament->id)
+            ->where('level', $level)
+            ->where('group_id', $groupId)
+            ->where('status', 'completed')
+            ->get();
+        
+        $losers = collect();
+        
+        foreach ($previousMatches as $match) {
+            if ($match->winner_id) {
+                // Add the loser to the collection
+                $loserId = ($match->winner_id == $match->player_1_id) ? $match->player_2_id : $match->player_1_id;
+                $loser = \App\Models\User::find($loserId);
+                if ($loser) {
+                    $losers->push($loser);
+                }
+            }
+        }
+        
+        return $losers;
     }
 
     /**
