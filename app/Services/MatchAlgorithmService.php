@@ -3637,8 +3637,14 @@ class MatchAlgorithmService
             $message .= " in {$tournament->name} ({$level} level)";
             
             // Create notification
+            \Log::info("Creating notification for player", [
+                'player_id' => $playerId,
+                'position' => $actualPosition,
+                'message' => $message
+            ]);
+            
             Notification::create([
-                'user_id' => $playerId,
+                'player_id' => $playerId,
                 'type' => 'tournament_position',
                 'data' => [
                     'tournament_id' => $tournament->id,
