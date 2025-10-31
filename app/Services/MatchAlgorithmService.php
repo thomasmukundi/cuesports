@@ -4117,18 +4117,18 @@ class MatchAlgorithmService
                 break;
 
             case 4:
-                // 4-player tournament: 2 semifinals
+                // 4-player tournament: Round 1 matches first
                 $matches[] = [
                     'player1' => $players[0],
                     'player2' => $players[1],
-                    'round_name' => '4_SF_winners',
-                    'match_name' => '4_SF_winners'
+                    'round_name' => 'round_1',
+                    'match_name' => 'round_1_match1'
                 ];
                 $matches[] = [
                     'player1' => $players[2],
                     'player2' => $players[3],
-                    'round_name' => '4_SF_losers',
-                    'match_name' => '4_SF_losers'
+                    'round_name' => 'round_1',
+                    'match_name' => 'round_1_match2'
                 ];
                 break;
 
