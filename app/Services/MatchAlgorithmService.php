@@ -1052,16 +1052,16 @@ class MatchAlgorithmService
         }
         
         if ($playerCount === 4) {
-            // Create 4-player tournament: 2 semifinals, then final
+            // Create 4-player tournament: Round 1 matches first
             $pairedPlayers = $this->smartPairPlayers($players, $level);
             
-            // Winners semifinal
-            $sfWinners = $this->createMatch($tournament, $pairedPlayers[0], $pairedPlayers[1], 'semifinal', $level, $groupId, $levelName);
-            $matches[] = $sfWinners;
+            // Round 1 Match 1: A vs B
+            $match1 = $this->createMatch($tournament, $pairedPlayers[0], $pairedPlayers[1], 'round_1', $level, $groupId, $levelName);
+            $matches[] = $match1;
             
-            // Losers semifinal  
-            $sfLosers = $this->createMatch($tournament, $pairedPlayers[2], $pairedPlayers[3], 'semifinal', $level, $groupId, $levelName);
-            $matches[] = $sfLosers;
+            // Round 1 Match 2: C vs D
+            $match2 = $this->createMatch($tournament, $pairedPlayers[2], $pairedPlayers[3], 'round_1', $level, $groupId, $levelName);
+            $matches[] = $match2;
         }
         
         return $matches;
