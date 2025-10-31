@@ -1758,7 +1758,7 @@ class TournamentProgressionController extends Controller
         } 
         // For 5-6 winners from 4+ players, use comprehensive semifinals
         elseif ($winnersNeeded >= 5 && $winnersNeeded <= 6) {
-            $this->generateComprehensiveSemifinals($tournament, $level, $levelName, $winners);
+            $this->generateComprehensiveFromWinners($tournament, $level, $levelName, $winners);
         } else {
             // For other cases, use standard progression
             \Log::info("Using standard progression for winners needed: " . $winnersNeeded);
@@ -1769,9 +1769,9 @@ class TournamentProgressionController extends Controller
     }
 
     /**
-     * Generate comprehensive semifinals for 5-6 winners
+     * Generate comprehensive semifinals for 5-6 winners from array
      */
-    private function generateComprehensiveSemifinals(Tournament $tournament, string $level, ?string $levelName, array $winners)
+    private function generateComprehensiveFromWinners(Tournament $tournament, string $level, ?string $levelName, array $winners)
     {
         \Log::info("Generating comprehensive semifinals", [
             'winners' => $winners,
