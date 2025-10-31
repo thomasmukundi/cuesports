@@ -295,6 +295,15 @@ class TournamentProgressionController extends Controller
                 if ($roundName === 'SF_winners' || $roundName === 'SF_losers' || $roundName === 'losers_SF_winners' || $roundName === 'losers_SF_losers') {
                     \Log::info("Single comprehensive semifinal complete - checking if all semifinals done");
                     $this->checkComprehensiveSemifinalsComplete($tournament, $level, $levelName);
+                } elseif ($roundName === '3_winners_SF' || $roundName === 'losers_3_SF' || 
+                         $roundName === '3_winners_final' || $roundName === 'losers_3_final' ||
+                         $roundName === '3_winners_tie_breaker' || $roundName === 'losers_3_tie_breaker' ||
+                         $roundName === '3_winners_fair_chance' || $roundName === 'losers_3_fair_chance') {
+                    \Log::info("3-player tournament match complete - checking progression", [
+                        'round_name' => $roundName,
+                        'tournament_id' => $tournament->id
+                    ]);
+                    $this->check3PlayerTournamentProgression($tournament, $level, $levelName, $roundName);
                 } else {
                     \Log::info("1 winner but not in comprehensive semifinals - no action needed", [
                         'winner_count' => $winnerCount,
@@ -1994,6 +2003,337 @@ class TournamentProgressionController extends Controller
         }
         
         return $losers;
+    }
+
+    /**
+     * Check 3-player tournament progression and generate next matches
+     */
+    private function check3PlayerTournamentProgression(Tournament $tournament, string $level, ?string $levelName, string $completedRound)
+    {
+        \Log::info("=== CHECK 3-PLAYER TOURNAMENT PROGRESSION START ===", [
+            'completed_round' => $completedRound,
+            'tournament_id' => $tournament->id
+        ]);
+        
+        $groupId = $this->getGroupIdFromLevelName($level, $levelName);
+        
+        if ($completedRound === '3_winners_SF') {
+            $this->handle3PlayerWinnersSFComplete($tournament, $level, $levelName, $groupId);
+        } elseif ($completedRound === 'losers_3_SF') {
+            $this->handle3PlayerLosersSFComplete($tournament, $level, $levelName, $groupId);
+        } elseif ($completedRound === '3_winners_final') {
+            $this->handle3PlayerWinnersFinalComplete($tournament, $level, $levelName, $groupId);
+        } elseif ($completedRound === 'losers_3_final') {
+            $this->handle3PlayerLosersFinalComplete($tournament, $level, $levelName, $groupId);
+        } elseif ($completedRound === '3_winners_tie_breaker' || $completedRound === '3_winners_fair_chance') {
+            $this->handle3PlayerWinnersComplete($tournament, $level, $levelName, $groupId);
+        } elseif ($completedRound === 'losers_3_tie_breaker' || $completedRound === 'losers_3_fair_chance') {
+            $this->handle3PlayerLosersComplete($tournament, $level, $levelName, $groupId);
+        }
+        
+        \Log::info("=== CHECK 3-PLAYER TOURNAMENT PROGRESSION END ===");
+    }
+
+    /**
+     * Handle 3-player winners semifinal completion
+     */
+    private function handle3PlayerWinnersSFComplete(Tournament $tournament, string $level, ?string $levelName, $groupId)
+    {
+        \Log::info("Handling 3-player winners semifinal completion");
+        
+        // Get the completed SF match
+        $sfMatch = PoolMatch::where('tournament_id', $tournament->id)
+            ->where('level', $level)
+            ->where('group_id', $groupId)
+            ->where('round_name', '3_winners_SF')
+            ->where('status', 'completed')
+            ->first();
+            
+        if (!$sfMatch) {
+            \Log::error("3-player winners SF match not found");
+            return;
+        }
+        
+        $sfWinner = $sfMatch->winner_id;
+        $sfLoser = ($sfMatch->player_1_id === $sfWinner) ? $sfMatch->player_2_id : $sfMatch->player_1_id;
+        $byePlayer = $sfMatch->bye_player_id;
+        
+        \Log::info("3-player winners SF results", [
+            'sf_winner' => $sfWinner,
+            'sf_loser' => $sfLoser,
+            'bye_player' => $byePlayer
+        ]);
+        
+        // Check if final already exists
+        $existingFinal = PoolMatch::where('tournament_id', $tournament->id)
+            ->where('level', $level)
+            ->where('group_id', $groupId)
+            ->where('round_name', '3_winners_final')
+            ->exists();
+            
+        if (!$existingFinal) {
+            // Create final match: SF loser vs bye player
+            PoolMatch::create([
+                'match_name' => '3_winners_final_match',
+                'player_1_id' => $sfLoser,
+                'player_2_id' => $byePlayer,
+                'level' => $level,
+                'level_name' => $levelName,
+                'round_name' => '3_winners_final',
+                'tournament_id' => $tournament->id,
+                'group_id' => $groupId,
+                'status' => 'pending',
+                'proposed_dates' => \App\Services\ProposedDatesService::generateProposedDates($tournament->id),
+            ]);
+            
+            \Log::info("Created 3-player winners final match", [
+                'sf_loser' => $sfLoser,
+                'bye_player' => $byePlayer
+            ]);
+        }
+    }
+
+    /**
+     * Handle 3-player losers semifinal completion
+     */
+    private function handle3PlayerLosersSFComplete(Tournament $tournament, string $level, ?string $levelName, $groupId)
+    {
+        \Log::info("Handling 3-player losers semifinal completion");
+        
+        // Get the completed SF match
+        $sfMatch = PoolMatch::where('tournament_id', $tournament->id)
+            ->where('level', $level)
+            ->where('group_id', $groupId)
+            ->where('round_name', 'losers_3_SF')
+            ->where('status', 'completed')
+            ->first();
+            
+        if (!$sfMatch) {
+            \Log::error("3-player losers SF match not found");
+            return;
+        }
+        
+        $sfWinner = $sfMatch->winner_id;
+        $sfLoser = ($sfMatch->player_1_id === $sfWinner) ? $sfMatch->player_2_id : $sfMatch->player_1_id;
+        $byePlayer = $sfMatch->bye_player_id;
+        
+        \Log::info("3-player losers SF results", [
+            'sf_winner' => $sfWinner,
+            'sf_loser' => $sfLoser,
+            'bye_player' => $byePlayer
+        ]);
+        
+        // Check if final already exists
+        $existingFinal = PoolMatch::where('tournament_id', $tournament->id)
+            ->where('level', $level)
+            ->where('group_id', $groupId)
+            ->where('round_name', 'losers_3_final')
+            ->exists();
+            
+        if (!$existingFinal) {
+            // Create final match: SF loser vs bye player
+            PoolMatch::create([
+                'match_name' => 'losers_3_final_match',
+                'player_1_id' => $sfLoser,
+                'player_2_id' => $byePlayer,
+                'level' => $level,
+                'level_name' => $levelName,
+                'round_name' => 'losers_3_final',
+                'tournament_id' => $tournament->id,
+                'group_id' => $groupId,
+                'status' => 'pending',
+                'proposed_dates' => \App\Services\ProposedDatesService::generateProposedDates($tournament->id),
+            ]);
+            
+            \Log::info("Created 3-player losers final match", [
+                'sf_loser' => $sfLoser,
+                'bye_player' => $byePlayer
+            ]);
+        }
+    }
+
+    /**
+     * Handle 3-player winners final completion
+     */
+    private function handle3PlayerWinnersFinalComplete(Tournament $tournament, string $level, ?string $levelName, $groupId)
+    {
+        \Log::info("Handling 3-player winners final completion");
+        
+        // Get matches
+        $sfMatch = PoolMatch::where('tournament_id', $tournament->id)
+            ->where('level', $level)
+            ->where('group_id', $groupId)
+            ->where('round_name', '3_winners_SF')
+            ->where('status', 'completed')
+            ->first();
+            
+        $finalMatch = PoolMatch::where('tournament_id', $tournament->id)
+            ->where('level', $level)
+            ->where('group_id', $groupId)
+            ->where('round_name', '3_winners_final')
+            ->where('status', 'completed')
+            ->first();
+            
+        if (!$sfMatch || !$finalMatch) {
+            \Log::error("Required matches not found for winners final completion");
+            return;
+        }
+        
+        $sfWinner = $sfMatch->winner_id;
+        $finalWinner = $finalMatch->winner_id;
+        $byePlayer = $sfMatch->bye_player_id;
+        
+        \Log::info("3-player winners final results", [
+            'sf_winner' => $sfWinner,
+            'final_winner' => $finalWinner,
+            'bye_player' => $byePlayer
+        ]);
+        
+        // Subcase 1a: Bye player wins final - create tie breaker
+        if ($finalWinner === $byePlayer) {
+            $this->create3PlayerTieBreaker($tournament, $level, $levelName, $groupId, $byePlayer, $sfWinner, 'winners');
+        } else {
+            // Subcase 1b: Bye player loses final - create fair chance
+            $this->create3PlayerFairChance($tournament, $level, $levelName, $groupId, $byePlayer, $sfWinner, 'winners');
+        }
+    }
+
+    /**
+     * Handle 3-player losers final completion
+     */
+    private function handle3PlayerLosersFinalComplete(Tournament $tournament, string $level, ?string $levelName, $groupId)
+    {
+        \Log::info("Handling 3-player losers final completion");
+        
+        // Get matches
+        $sfMatch = PoolMatch::where('tournament_id', $tournament->id)
+            ->where('level', $level)
+            ->where('group_id', $groupId)
+            ->where('round_name', 'losers_3_SF')
+            ->where('status', 'completed')
+            ->first();
+            
+        $finalMatch = PoolMatch::where('tournament_id', $tournament->id)
+            ->where('level', $level)
+            ->where('group_id', $groupId)
+            ->where('round_name', 'losers_3_final')
+            ->where('status', 'completed')
+            ->first();
+            
+        if (!$sfMatch || !$finalMatch) {
+            \Log::error("Required matches not found for losers final completion");
+            return;
+        }
+        
+        $sfWinner = $sfMatch->winner_id;
+        $finalWinner = $finalMatch->winner_id;
+        $byePlayer = $sfMatch->bye_player_id;
+        
+        \Log::info("3-player losers final results", [
+            'sf_winner' => $sfWinner,
+            'final_winner' => $finalWinner,
+            'bye_player' => $byePlayer
+        ]);
+        
+        // Subcase 1a: Bye player wins final - create tie breaker
+        if ($finalWinner === $byePlayer) {
+            $this->create3PlayerTieBreaker($tournament, $level, $levelName, $groupId, $byePlayer, $sfWinner, 'losers');
+        } else {
+            // Subcase 1b: Bye player loses final - create fair chance
+            $this->create3PlayerFairChance($tournament, $level, $levelName, $groupId, $byePlayer, $sfWinner, 'losers');
+        }
+    }
+
+    /**
+     * Create 3-player tie breaker match
+     */
+    private function create3PlayerTieBreaker(Tournament $tournament, string $level, ?string $levelName, $groupId, $byePlayer, $sfWinner, string $type)
+    {
+        $roundName = $type === 'winners' ? '3_winners_tie_breaker' : 'losers_3_tie_breaker';
+        $matchName = $type === 'winners' ? '3_winners_tie_breaker_match' : 'losers_3_tie_breaker_match';
+        
+        // Check if tie breaker already exists
+        $existing = PoolMatch::where('tournament_id', $tournament->id)
+            ->where('level', $level)
+            ->where('group_id', $groupId)
+            ->where('round_name', $roundName)
+            ->exists();
+            
+        if (!$existing) {
+            PoolMatch::create([
+                'match_name' => $matchName,
+                'player_1_id' => $byePlayer,
+                'player_2_id' => $sfWinner,
+                'level' => $level,
+                'level_name' => $levelName,
+                'round_name' => $roundName,
+                'tournament_id' => $tournament->id,
+                'group_id' => $groupId,
+                'status' => 'pending',
+                'proposed_dates' => \App\Services\ProposedDatesService::generateProposedDates($tournament->id),
+            ]);
+            
+            \Log::info("Created 3-player tie breaker match", [
+                'type' => $type,
+                'bye_player' => $byePlayer,
+                'sf_winner' => $sfWinner
+            ]);
+        }
+    }
+
+    /**
+     * Create 3-player fair chance match
+     */
+    private function create3PlayerFairChance(Tournament $tournament, string $level, ?string $levelName, $groupId, $byePlayer, $sfWinner, string $type)
+    {
+        $roundName = $type === 'winners' ? '3_winners_fair_chance' : 'losers_3_fair_chance';
+        $matchName = $type === 'winners' ? '3_winners_fair_chance_match' : 'losers_3_fair_chance_match';
+        
+        // Check if fair chance already exists
+        $existing = PoolMatch::where('tournament_id', $tournament->id)
+            ->where('level', $level)
+            ->where('group_id', $groupId)
+            ->where('round_name', $roundName)
+            ->exists();
+            
+        if (!$existing) {
+            PoolMatch::create([
+                'match_name' => $matchName,
+                'player_1_id' => $byePlayer,
+                'player_2_id' => $sfWinner,
+                'level' => $level,
+                'level_name' => $levelName,
+                'round_name' => $roundName,
+                'tournament_id' => $tournament->id,
+                'group_id' => $groupId,
+                'status' => 'pending',
+                'proposed_dates' => \App\Services\ProposedDatesService::generateProposedDates($tournament->id),
+            ]);
+            
+            \Log::info("Created 3-player fair chance match", [
+                'type' => $type,
+                'bye_player' => $byePlayer,
+                'sf_winner' => $sfWinner
+            ]);
+        }
+    }
+
+    /**
+     * Handle 3-player winners tournament completion
+     */
+    private function handle3PlayerWinnersComplete(Tournament $tournament, string $level, ?string $levelName, $groupId)
+    {
+        \Log::info("3-player winners tournament complete - generating positions 1-3");
+        // This will be handled by the MatchAlgorithmService when determining winners
+    }
+
+    /**
+     * Handle 3-player losers tournament completion
+     */
+    private function handle3PlayerLosersComplete(Tournament $tournament, string $level, ?string $levelName, $groupId)
+    {
+        \Log::info("3-player losers tournament complete - generating positions 4-6");
+        // This will be handled by the MatchAlgorithmService when determining winners
     }
 
     /**
