@@ -106,7 +106,7 @@ class FirebaseService
     }
 
     /**
-     * Send push notification to multiple devices
+     * Send push notification to multiple devices (legacy - use sendBulkNotifications for better performance)
      */
     public function sendToMultipleDevices(array $fcmTokens, string $title, string $body, array $data = []): array
     {
@@ -114,6 +114,98 @@ class FirebaseService
         
         foreach ($fcmTokens as $token) {
             $results[$token] = $this->sendToDevice($token, $title, $body, $data);
+        }
+        
+        return $results;
+    }
+
+    /**
+     * Send bulk notifications efficiently (optimized for large batches)
+     */
+    public function sendBulkNotifications(array $userIds, string $type, array $notificationData = []): array
+    {
+        $results = ['sent' => 0, 'failed' => 0, 'invalid_tokens' => 0];
+        
+        try {
+            // Get users with valid FCM tokens in batches
+            $users = \App\Models\User::whereIn('id', $userIds)
+                ->whereNotNull('fcm_token')
+                ->where('fcm_token', '!=', '')
+                ->select('id', 'fcm_token', 'name')
+                ->get();
+                
+            if ($users->isEmpty()) {
+                \Log::info("No users with FCM tokens found for bulk notification");
+                return $results;
+            }
+            
+            $title = $this->getNotificationTitle($type, $notificationData);
+            $body = $this->getNotificationBody($type, $notificationData);
+            $data = $this->getNotificationData($type, $notificationData);
+            
+            \Log::info("Starting bulk push notifications", [
+                'type' => $type,
+                'user_count' => $users->count(),
+                'title' => $title
+            ]);
+            
+            // Process in smaller batches to avoid memory issues
+            $batchSize = 50;
+            $batches = $users->chunk($batchSize);
+            
+            foreach ($batches as $batch) {
+                $messages = [];
+                
+                foreach ($batch as $user) {
+                    // Validate token format before sending
+                    if (!$this->isValidFcmToken($user->fcm_token)) {
+                        $results['invalid_tokens']++;
+                        continue;
+                    }
+                    
+                    $notification = Notification::create($title, $body);
+                    $message = CloudMessage::withTarget('token', $user->fcm_token)
+                        ->withNotification($notification)
+                        ->withData($data);
+                    
+                    $messages[] = $message;
+                }
+                
+                // Send batch if we have valid messages
+                if (!empty($messages)) {
+                    try {
+                        $report = $this->messaging->sendAll($messages);
+                        $results['sent'] += $report->successes()->count();
+                        $results['failed'] += $report->failures()->count();
+                        
+                        // Log any failures for debugging
+                        if ($report->hasFailures()) {
+                            foreach ($report->failures()->getItems() as $failure) {
+                                \Log::warning("Push notification failed in batch", [
+                                    'error' => $failure->error()->getMessage()
+                                ]);
+                            }
+                        }
+                    } catch (\Exception $e) {
+                        \Log::error("Batch push notification failed", [
+                            'batch_size' => count($messages),
+                            'error' => $e->getMessage()
+                        ]);
+                        $results['failed'] += count($messages);
+                    }
+                }
+                
+                // Small delay between batches to avoid rate limiting
+                usleep(100000); // 0.1 second
+            }
+            
+            \Log::info("Bulk push notifications completed", $results);
+            
+        } catch (\Exception $e) {
+            \Log::error("Bulk notification error", [
+                'error' => $e->getMessage(),
+                'user_count' => count($userIds)
+            ]);
         }
         
         return $results;

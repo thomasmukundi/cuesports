@@ -155,24 +155,46 @@ Route::post('create-tournament', function(\Illuminate\Http\Request $request) {
             
             $users = $usersQuery->select('id', 'name', 'email')->get();
             
+            // Prepare bulk notification data
+            $notificationData = [];
+            $userIds = [];
+            
             foreach ($users as $user) {
                 $recipients[] = [
                     'email' => $user->email,
                     'name' => $user->name
                 ];
                 
-                // Also create push notification for each user
-                \App\Models\Notification::create([
+                $userIds[] = $user->id;
+                $notificationData[] = [
                     'player_id' => $user->id,
                     'type' => 'tournament_created',
                     'message' => "New tournament '{$tournament->name}' is now open for registration!",
-                    'data' => [
+                    'data' => json_encode([
                         'tournament_id' => $tournament->id,
                         'tournament_name' => $tournament->name,
                         'area_scope' => $tournament->area_scope,
                         'area_name' => $tournament->area_name
-                    ]
+                    ]),
+                    'read' => false,
+                    'created_at' => now(),
+                    'updated_at' => now()
+                ];
+            }
+            
+            // Bulk insert notifications and send push notifications
+            if (!empty($notificationData)) {
+                \App\Models\Notification::insert($notificationData);
+                
+                $firebaseService = new \App\Services\FirebaseService();
+                $pushResults = $firebaseService->sendBulkNotifications($userIds, 'tournament_created', [
+                    'tournament_id' => $tournament->id,
+                    'tournament_name' => $tournament->name,
+                    'area_scope' => $tournament->area_scope,
+                    'area_name' => $tournament->area_name
                 ]);
+                
+                \Log::info("Test tournament notifications completed", ['results' => $pushResults]);
             }
 
             // Use the EmailService to send tournament announcements
@@ -420,23 +442,50 @@ Route::middleware(['auth:sanctum'])->group(function () {
                 
                 $users = $usersQuery->select('id', 'name', 'email')->get();
                 
+                // Prepare bulk notification data
+                $notificationData = [];
+                $userIds = [];
+                
                 foreach ($users as $user) {
                     $recipients[] = [
                         'email' => $user->email,
                         'name' => $user->name
                     ];
                     
-                    // Also create push notification for each user
-                    \App\Models\Notification::create([
+                    $userIds[] = $user->id;
+                    $notificationData[] = [
                         'player_id' => $user->id,
                         'type' => 'tournament_created',
                         'message' => "New tournament '{$tournament->name}' is now open for registration!",
-                        'data' => [
+                        'data' => json_encode([
                             'tournament_id' => $tournament->id,
                             'tournament_name' => $tournament->name,
                             'area_scope' => $tournament->area_scope,
                             'area_name' => $tournament->area_name
-                        ]
+                        ]),
+                        'read' => false,
+                        'created_at' => now(),
+                        'updated_at' => now()
+                    ];
+                }
+                
+                // Bulk insert notifications (much faster)
+                if (!empty($notificationData)) {
+                    \App\Models\Notification::insert($notificationData);
+                    \Log::info("Bulk notifications created", ['count' => count($notificationData)]);
+                    
+                    // Send bulk push notifications efficiently
+                    $firebaseService = new \App\Services\FirebaseService();
+                    $pushResults = $firebaseService->sendBulkNotifications($userIds, 'tournament_created', [
+                        'tournament_id' => $tournament->id,
+                        'tournament_name' => $tournament->name,
+                        'area_scope' => $tournament->area_scope,
+                        'area_name' => $tournament->area_name
+                    ]);
+                    
+                    \Log::info("Tournament push notifications completed", [
+                        'tournament_id' => $tournament->id,
+                        'results' => $pushResults
                     ]);
                 }
 
