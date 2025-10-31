@@ -2098,7 +2098,11 @@ class TournamentProgressionController extends Controller
      */
     private function handle3PlayerLosersSFComplete(Tournament $tournament, string $level, ?string $levelName, $groupId)
     {
-        \Log::info("Handling 3-player losers semifinal completion");
+        \Log::info("=== HANDLING 3-PLAYER LOSERS SF COMPLETION ===", [
+            'tournament_id' => $tournament->id,
+            'level' => $level,
+            'group_id' => $groupId
+        ]);
         
         // Get the completed SF match
         $sfMatch = PoolMatch::where('tournament_id', $tournament->id)
@@ -2123,6 +2127,14 @@ class TournamentProgressionController extends Controller
             'bye_player' => $byePlayer
         ]);
         
+        if (!$byePlayer) {
+            \Log::error("Bye player not found in losers SF match", [
+                'sf_match_id' => $sfMatch->id,
+                'bye_player_id_field' => $sfMatch->bye_player_id
+            ]);
+            return;
+        }
+        
         // Check if final already exists
         $existingFinal = PoolMatch::where('tournament_id', $tournament->id)
             ->where('level', $level)
@@ -2131,8 +2143,13 @@ class TournamentProgressionController extends Controller
             ->exists();
             
         if (!$existingFinal) {
+            \Log::info("Creating 3-player losers final match", [
+                'sf_loser' => $sfLoser,
+                'bye_player' => $byePlayer
+            ]);
+            
             // Create final match: SF loser vs bye player
-            PoolMatch::create([
+            $finalMatch = PoolMatch::create([
                 'match_name' => 'losers_3_final_match',
                 'player_1_id' => $sfLoser,
                 'player_2_id' => $byePlayer,
@@ -2145,10 +2162,13 @@ class TournamentProgressionController extends Controller
                 'proposed_dates' => \App\Services\ProposedDatesService::generateProposedDates($tournament->id),
             ]);
             
-            \Log::info("Created 3-player losers final match", [
+            \Log::info("Successfully created 3-player losers final match", [
+                'match_id' => $finalMatch->id,
                 'sf_loser' => $sfLoser,
                 'bye_player' => $byePlayer
             ]);
+        } else {
+            \Log::info("3-player losers final match already exists - skipping creation");
         }
     }
 
