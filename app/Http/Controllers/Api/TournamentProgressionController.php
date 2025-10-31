@@ -330,9 +330,19 @@ class TournamentProgressionController extends Controller
                 
             case 4:
                 \Log::info("Processing 4 winner scenario");
-                if ($roundName === 'semifinal' || strpos($roundName, 'SF') !== false) {
+                if ($roundName === 'winners_final' || $roundName === 'losers_semifinal') {
                     \Log::info("Generating 4-player final from semifinals");
                     $this->generate4PlayerFinal($tournament, $level, $levelName);
+                } elseif ($roundName === '4player_round1') {
+                    \Log::info("4-player round 1 complete - generating winners final and losers semifinal");
+                    $this->generate4PlayerSemifinals($tournament, $level, $levelName, $matches);
+                } elseif ($isFirstRound) {
+                    \Log::info("4 winners from initial round - creating 4-player round 1 matches", [
+                        'round_name' => $roundName,
+                        'is_first_round' => $isFirstRound,
+                        'winner_count' => $winnerCount
+                    ]);
+                    $this->generate4PlayerRound1($tournament, $level, $levelName, $matches);
                 } else {
                     \Log::info("Generating 4-player semifinals", [
                         'round_name' => $roundName,
@@ -398,6 +408,68 @@ class TournamentProgressionController extends Controller
             'level' => $level,
             'level_name' => $levelName,
             'round_name' => '3_final',
+            'tournament_id' => $tournament->id,
+            'group_id' => $this->getGroupIdFromLevelName($level, $levelName),
+            'status' => 'pending',
+            'proposed_dates' => \App\Services\ProposedDatesService::generateProposedDates($tournament->id),
+        ]);
+    }
+
+    /**
+     * Generate 4-player round 1 matches from winners of larger tournament
+     */
+    private function generate4PlayerRound1(Tournament $tournament, string $level, ?string $levelName, $matches)
+    {
+        // Get the 4 winners from the completed matches
+        $winners = collect();
+        foreach ($matches as $match) {
+            if ($match->winner_id) {
+                $winner = \App\Models\User::find($match->winner_id);
+                if ($winner) {
+                    $winners->push($winner);
+                }
+            }
+        }
+        
+        if ($winners->count() !== 4) {
+            \Log::error("Expected 4 winners but got {$winners->count()}");
+            return;
+        }
+        
+        // Shuffle winners for fair pairing
+        $shuffledWinners = $winners->shuffle()->values();
+        
+        \Log::info("Creating 4-player round 1 matches", [
+            'tournament_id' => $tournament->id,
+            'level' => $level,
+            'player_1' => $shuffledWinners[0]->name,
+            'player_2' => $shuffledWinners[1]->name,
+            'player_3' => $shuffledWinners[2]->name,
+            'player_4' => $shuffledWinners[3]->name
+        ]);
+        
+        // Create 4-player round 1 match 1: A vs B
+        PoolMatch::create([
+            'match_name' => '4player_round1_match1',
+            'player_1_id' => $shuffledWinners[0]->id,
+            'player_2_id' => $shuffledWinners[1]->id,
+            'level' => $level,
+            'level_name' => $levelName,
+            'round_name' => '4player_round1',
+            'tournament_id' => $tournament->id,
+            'group_id' => $this->getGroupIdFromLevelName($level, $levelName),
+            'status' => 'pending',
+            'proposed_dates' => \App\Services\ProposedDatesService::generateProposedDates($tournament->id),
+        ]);
+        
+        // Create 4-player round 1 match 2: C vs D
+        PoolMatch::create([
+            'match_name' => '4player_round1_match2',
+            'player_1_id' => $shuffledWinners[2]->id,
+            'player_2_id' => $shuffledWinners[3]->id,
+            'level' => $level,
+            'level_name' => $levelName,
+            'round_name' => '4player_round1',
             'tournament_id' => $tournament->id,
             'group_id' => $this->getGroupIdFromLevelName($level, $levelName),
             'status' => 'pending',
