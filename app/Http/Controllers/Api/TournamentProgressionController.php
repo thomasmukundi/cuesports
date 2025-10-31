@@ -329,6 +329,16 @@ class TournamentProgressionController extends Controller
                 if ($roundName === 'SF_winners' || $roundName === 'SF_losers' || $roundName === 'losers_SF_winners' || $roundName === 'losers_SF_losers') {
                     \Log::info("Three comprehensive semifinals complete - checking if all semifinals done");
                     $this->checkComprehensiveSemifinalsComplete($tournament, $level, $levelName);
+                } elseif ($roundName === 'winners_final' || $roundName === 'losers_semifinal') {
+                    // Check if we need exactly 3 winners - if so, generate positions directly from semifinals
+                    $winnersNeeded = $tournament->winners ?? 3;
+                    if ($winnersNeeded == 3) {
+                        \Log::info("3 winners needed - checking if both semifinals complete for direct position generation");
+                        $this->checkTwoSemifinalsCompleteFor3Winners($tournament, $level, $levelName);
+                    } else {
+                        \Log::info("More than 3 winners needed - using standard progression");
+                        // Handle other cases if needed
+                    }
                 } else {
                     \Log::info("Generating 3-winner semifinal match", [
                         'round_name' => $roundName,
@@ -342,8 +352,15 @@ class TournamentProgressionController extends Controller
             case 4:
                 \Log::info("Processing 4 winner scenario");
                 if ($roundName === 'winners_final' || $roundName === 'losers_semifinal') {
-                    \Log::info("Generating 4-player final from semifinals");
-                    $this->generate4PlayerFinal($tournament, $level, $levelName);
+                    // Check if we need 4 winners - if so, generate positions directly from semifinals
+                    $winnersNeeded = $tournament->winners ?? 3;
+                    if ($winnersNeeded == 4) {
+                        \Log::info("4 winners needed - checking if both semifinals complete for direct position generation");
+                        $this->checkTwoSemifinalsComplete($tournament, $level, $levelName);
+                    } else {
+                        \Log::info("More than 4 winners needed - generating 4-player final");
+                        $this->generate4PlayerFinal($tournament, $level, $levelName);
+                    }
                 } elseif ($roundName === 'SF_winners' || $roundName === 'SF_losers' || $roundName === 'losers_SF_winners' || $roundName === 'losers_SF_losers') {
                     \Log::info("Comprehensive semifinal complete - checking if all semifinals done");
                     $this->checkComprehensiveSemifinalsComplete($tournament, $level, $levelName);
@@ -774,14 +791,322 @@ class TournamentProgressionController extends Controller
         $losersSemifinal = $losersSemifinalQuery->first();
         
         if ($winnersFinal && $losersSemifinal) {
-            \Log::info("All 2 standard semifinals complete - generating final positions");
-            $this->generate4PlayerFinal($tournament, $level, $levelName);
+            // Check how many winners are needed and generate positions accordingly
+            $winnersNeeded = $tournament->winners ?? 3;
+            if ($winnersNeeded == 3) {
+                \Log::info("All 2 standard semifinals complete - generating 3 positions directly (no final needed)");
+                $this->generateStandard3PlayerPositions($tournament, $level, $levelName, $winnersFinal, $losersSemifinal);
+            } elseif ($winnersNeeded == 4) {
+                \Log::info("All 2 standard semifinals complete - generating 4 positions directly (no final needed)");
+                $this->generateStandard4PlayerPositions($tournament, $level, $levelName, $winnersFinal, $losersSemifinal);
+            } else {
+                \Log::info("All 2 standard semifinals complete - generating 4-player final for more than 4 winners");
+                $this->generate4PlayerFinal($tournament, $level, $levelName);
+            }
         } else {
             \Log::info("Not all 2 standard semifinals complete yet", [
                 'winners_final_complete' => !!$winnersFinal,
                 'losers_semifinal_complete' => !!$losersSemifinal
             ]);
         }
+    }
+
+    /**
+     * Generate 4 positions directly from standard semifinals (no final needed)
+     */
+    private function generateStandard4PlayerPositions(Tournament $tournament, string $level, ?string $levelName, $winnersFinal, $losersSemifinal)
+    {
+        \Log::info("Generating 4 positions directly from standard semifinals", [
+            'tournament_id' => $tournament->id,
+            'level' => $level,
+            'winners_final_id' => $winnersFinal->id,
+            'losers_semifinal_id' => $losersSemifinal->id
+        ]);
+        
+        $groupId = $this->getGroupIdFromLevelName($level, $levelName);
+        
+        // Position 1: Winner of winners_final
+        \App\Models\Winner::create([
+            'tournament_id' => $tournament->id,
+            'player_id' => $winnersFinal->winner_id,
+            'position' => 1,
+            'level' => $level,
+            'level_name' => $levelName,
+            'level_id' => $groupId,
+        ]);
+        
+        // Position 2: Loser of winners_final
+        $winnersLoser = ($winnersFinal->player_1_id === $winnersFinal->winner_id) ? $winnersFinal->player_2_id : $winnersFinal->player_1_id;
+        \App\Models\Winner::create([
+            'tournament_id' => $tournament->id,
+            'player_id' => $winnersLoser,
+            'position' => 2,
+            'level' => $level,
+            'level_name' => $levelName,
+            'level_id' => $groupId,
+        ]);
+        
+        // Position 3: Winner of losers_semifinal
+        \App\Models\Winner::create([
+            'tournament_id' => $tournament->id,
+            'player_id' => $losersSemifinal->winner_id,
+            'position' => 3,
+            'level' => $level,
+            'level_name' => $levelName,
+            'level_id' => $groupId,
+        ]);
+        
+        // Position 4: Loser of losers_semifinal
+        $losersLoser = ($losersSemifinal->player_1_id === $losersSemifinal->winner_id) ? $losersSemifinal->player_2_id : $losersSemifinal->player_1_id;
+        \App\Models\Winner::create([
+            'tournament_id' => $tournament->id,
+            'player_id' => $losersLoser,
+            'position' => 4,
+            'level' => $level,
+            'level_name' => $levelName,
+            'level_id' => $groupId,
+        ]);
+        
+        // Send push notifications to all players about their final positions
+        $this->sendStandard4PlayerPositionNotifications($tournament, $level, $levelName, [
+            1 => $winnersFinal->winner_id,
+            2 => $winnersLoser,
+            3 => $losersSemifinal->winner_id,
+            4 => $losersLoser
+        ]);
+        
+        \Log::info("Generated 4 positions directly from standard semifinals", [
+            'tournament_id' => $tournament->id,
+            'level' => $level,
+            'position_1' => $winnersFinal->winner_id,
+            'position_2' => $winnersLoser,
+            'position_3' => $losersSemifinal->winner_id,
+            'position_4' => $losersLoser
+        ]);
+    }
+
+    /**
+     * Check if both standard semifinals are complete for 3-winner tournament
+     */
+    private function checkTwoSemifinalsCompleteFor3Winners(Tournament $tournament, string $level, ?string $levelName)
+    {
+        $winnersFinalQuery = PoolMatch::where('tournament_id', $tournament->id)
+            ->where('level', $level)
+            ->where('round_name', 'winners_final')
+            ->where('status', 'completed');
+            
+        $losersSemifinalQuery = PoolMatch::where('tournament_id', $tournament->id)
+            ->where('level', $level)
+            ->where('round_name', 'losers_semifinal')
+            ->where('status', 'completed');
+            
+        if ($levelName) {
+            $winnersFinalQuery->where('level_name', $levelName);
+            $losersSemifinalQuery->where('level_name', $levelName);
+        }
+        
+        $winnersFinal = $winnersFinalQuery->first();
+        $losersSemifinal = $losersSemifinalQuery->first();
+        
+        if ($winnersFinal && $losersSemifinal) {
+            \Log::info("All 2 standard semifinals complete - generating 3 positions directly (no final needed)");
+            $this->generateStandard3PlayerPositions($tournament, $level, $levelName, $winnersFinal, $losersSemifinal);
+        } else {
+            \Log::info("Not all 2 standard semifinals complete yet for 3 winners", [
+                'winners_final_complete' => !!$winnersFinal,
+                'losers_semifinal_complete' => !!$losersSemifinal
+            ]);
+        }
+    }
+
+    /**
+     * Generate 3 positions directly from standard semifinals (no final needed)
+     */
+    private function generateStandard3PlayerPositions(Tournament $tournament, string $level, ?string $levelName, $winnersFinal, $losersSemifinal)
+    {
+        \Log::info("Generating 3 positions directly from standard semifinals", [
+            'tournament_id' => $tournament->id,
+            'level' => $level,
+            'winners_final_id' => $winnersFinal->id,
+            'losers_semifinal_id' => $losersSemifinal->id
+        ]);
+        
+        $groupId = $this->getGroupIdFromLevelName($level, $levelName);
+        
+        // Position 1: Winner of winners_final
+        \App\Models\Winner::create([
+            'tournament_id' => $tournament->id,
+            'player_id' => $winnersFinal->winner_id,
+            'position' => 1,
+            'level' => $level,
+            'level_name' => $levelName,
+            'level_id' => $groupId,
+        ]);
+        
+        // Position 2: Loser of winners_final
+        $winnersLoser = ($winnersFinal->player_1_id === $winnersFinal->winner_id) ? $winnersFinal->player_2_id : $winnersFinal->player_1_id;
+        \App\Models\Winner::create([
+            'tournament_id' => $tournament->id,
+            'player_id' => $winnersLoser,
+            'position' => 2,
+            'level' => $level,
+            'level_name' => $levelName,
+            'level_id' => $groupId,
+        ]);
+        
+        // Position 3: Winner of losers_semifinal (loser of losers_semifinal does NOT count for 3 winners)
+        \App\Models\Winner::create([
+            'tournament_id' => $tournament->id,
+            'player_id' => $losersSemifinal->winner_id,
+            'position' => 3,
+            'level' => $level,
+            'level_name' => $levelName,
+            'level_id' => $groupId,
+        ]);
+        
+        // Send push notifications to the 3 winners about their final positions
+        $this->sendStandard3PlayerPositionNotifications($tournament, $level, $levelName, [
+            1 => $winnersFinal->winner_id,
+            2 => $winnersLoser,
+            3 => $losersSemifinal->winner_id
+        ]);
+        
+        \Log::info("Generated 3 positions directly from standard semifinals", [
+            'tournament_id' => $tournament->id,
+            'level' => $level,
+            'position_1' => $winnersFinal->winner_id,
+            'position_2' => $winnersLoser,
+            'position_3' => $losersSemifinal->winner_id
+        ]);
+    }
+
+    /**
+     * Send push notifications to players about their standard 3-player tournament positions
+     */
+    private function sendStandard3PlayerPositionNotifications(Tournament $tournament, string $level, ?string $levelName, array $positions)
+    {
+        foreach ($positions as $position => $playerId) {
+            try {
+                $player = \App\Models\User::find($playerId);
+                if (!$player) {
+                    \Log::warning("Player not found for position notification", [
+                        'player_id' => $playerId,
+                        'position' => $position
+                    ]);
+                    continue;
+                }
+                
+                // Create position-specific messages
+                $messages = [
+                    1 => "🏆 Congratulations! You won 1st place in {$tournament->name}!",
+                    2 => "🥈 Great job! You finished 2nd place in {$tournament->name}!",
+                    3 => "🥉 Well done! You finished 3rd place in {$tournament->name}!"
+                ];
+                
+                $message = $messages[$position] ?? "You finished position {$position} in {$tournament->name}!";
+                
+                // Create notification
+                \App\Models\Notification::create([
+                    'user_id' => $playerId,
+                    'type' => 'tournament_position',
+                    'title' => 'Tournament Results',
+                    'message' => $message,
+                    'data' => [
+                        'tournament_id' => $tournament->id,
+                        'tournament_name' => $tournament->name,
+                        'position' => $position,
+                        'level' => $level,
+                        'level_name' => $levelName,
+                        'total_participants' => 3
+                    ],
+                    'read' => false,
+                ]);
+                
+                \Log::info("Position notification sent", [
+                    'player_id' => $playerId,
+                    'player_name' => $player->name,
+                    'position' => $position,
+                    'tournament' => $tournament->name
+                ]);
+                
+            } catch (\Exception $e) {
+                \Log::error("Failed to send position notification", [
+                    'player_id' => $playerId,
+                    'position' => $position,
+                    'error' => $e->getMessage()
+                ]);
+            }
+        }
+        
+        \Log::info("All standard 3-player tournament position notifications sent", [
+            'tournament_id' => $tournament->id,
+            'positions_notified' => count($positions)
+        ]);
+    }
+
+    /**
+     * Send push notifications to players about their standard 4-player tournament positions
+     */
+    private function sendStandard4PlayerPositionNotifications(Tournament $tournament, string $level, ?string $levelName, array $positions)
+    {
+        foreach ($positions as $position => $playerId) {
+            try {
+                $player = \App\Models\User::find($playerId);
+                if (!$player) {
+                    \Log::warning("Player not found for position notification", [
+                        'player_id' => $playerId,
+                        'position' => $position
+                    ]);
+                    continue;
+                }
+                
+                // Create position-specific messages
+                $messages = [
+                    1 => "🏆 Congratulations! You won 1st place in {$tournament->name}!",
+                    2 => "🥈 Great job! You finished 2nd place in {$tournament->name}!",
+                    3 => "🥉 Well done! You finished 3rd place in {$tournament->name}!",
+                    4 => "👏 You finished 4th place in {$tournament->name}. Great effort!"
+                ];
+                
+                $message = $messages[$position] ?? "You finished position {$position} in {$tournament->name}!";
+                
+                // Create notification
+                \App\Models\Notification::create([
+                    'user_id' => $playerId,
+                    'type' => 'tournament_position',
+                    'title' => 'Tournament Results',
+                    'message' => $message,
+                    'data' => [
+                        'tournament_id' => $tournament->id,
+                        'tournament_name' => $tournament->name,
+                        'position' => $position,
+                        'level' => $level,
+                        'level_name' => $levelName,
+                        'total_participants' => 4
+                    ],
+                    'read' => false,
+                ]);
+                
+                \Log::info("Position notification sent", [
+                    'player_id' => $playerId,
+                    'player_name' => $player->name,
+                    'position' => $position,
+                    'tournament' => $tournament->name
+                ]);
+                
+            } catch (\Exception $e) {
+                \Log::error("Failed to send position notification", [
+                    'player_id' => $playerId,
+                    'position' => $position,
+                    'error' => $e->getMessage()
+                ]);
+            }
+        }
+        
+        \Log::info("All standard 4-player tournament position notifications sent", [
+            'tournament_id' => $tournament->id,
+            'positions_notified' => count($positions)
+        ]);
     }
 
     /**
