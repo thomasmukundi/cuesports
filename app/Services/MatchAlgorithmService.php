@@ -3197,11 +3197,11 @@ class MatchAlgorithmService
             'tournament_id' => $tournament->id
         ]);
         
-        // Get matches
-        $sfMatch = $this->getMatch($tournament, $level, $groupId, '3_SF');
-        $finalMatch = $this->getMatch($tournament, $level, $groupId, '3_final');
-        $tieBreakerMatch = $this->getMatch($tournament, $level, $groupId, '3_tie_breaker');
-        $fairChanceMatch = $this->getMatch($tournament, $level, $groupId, '3_fair_chance');
+        // Get matches - use new naming convention
+        $sfMatch = $this->getMatch($tournament, $level, $groupId, '3_winners_SF');
+        $finalMatch = $this->getMatch($tournament, $level, $groupId, '3_winners_final');
+        $tieBreakerMatch = $this->getMatch($tournament, $level, $groupId, '3_winners_tie_breaker');
+        $fairChanceMatch = $this->getMatch($tournament, $level, $groupId, '3_winners_fair_chance');
         
         // Determine current state and handle accordingly
         if (!$sfMatch || $sfMatch->status !== 'completed') {
@@ -3283,11 +3283,22 @@ class MatchAlgorithmService
         $tieBreakerLoser = ($tieBreakerMatch->player_1_id === $tieBreakerWinner) ? 
                           $tieBreakerMatch->player_2_id : $tieBreakerMatch->player_1_id;
         
-        return [
-            'position_1' => $tieBreakerWinner,
-            'position_2' => $tieBreakerLoser, 
-            'position_3' => $sfLoser
+        // Create Winner records for positions 1, 2, 3
+        $positions = [
+            1 => $tieBreakerWinner,
+            2 => $tieBreakerLoser, 
+            3 => $sfLoser
         ];
+        
+        $this->createWinnerRecords($tournament, $level, $positions, 'winners');
+        
+        \Log::info("Subcase 1a completed - positions assigned", [
+            'position_1' => $tieBreakerWinner,
+            'position_2' => $tieBreakerLoser,
+            'position_3' => $sfLoser
+        ]);
+        
+        return $positions;
     }
 
     /**
@@ -3317,15 +3328,427 @@ class MatchAlgorithmService
         
         // If C loses fair chance: A pos 1, B pos 2, C pos 3
         if ($fairChanceLoser === $byePlayer->id) {
-            return [
+            $positions = [
+                1 => $sfWinner,
+                2 => $sfLoser,
+                3 => $byePlayer->id
+            ];
+            
+            $this->createWinnerRecords($tournament, $level, $positions, 'winners');
+            
+            \Log::info("Subcase 1b completed - bye player lost fair chance", [
                 'position_1' => $sfWinner,
                 'position_2' => $sfLoser,
                 'position_3' => $byePlayer->id
-            ];
+            ]);
+            
+            return $positions;
         }
         
         // If C wins fair chance: A, B, C all have 1 win 1 loss - need tie breaking
         return $this->handle3PlayerTripleTie($tournament, $level, $groupId, $sfWinner, $sfLoser, $byePlayer->id);
+    }
+
+    /**
+     * Handle triple tie scenario using metrics
+     */
+    private function handle3PlayerTripleTie(Tournament $tournament, string $level, ?int $groupId, $playerA, $playerB, $playerC)
+    {
+        \Log::info("Handling triple tie scenario - using metrics", [
+            'players' => [$playerA, $playerB, $playerC]
+        ]);
+        
+        // Calculate metrics for tie breaking
+        $players = [$playerA, $playerB, $playerC];
+        $playerMetrics = [];
+        
+        foreach ($players as $playerId) {
+            $metrics = $this->calculatePlayerMetrics($tournament, $level, $groupId, $playerId);
+            $playerMetrics[$playerId] = $metrics;
+        }
+        
+        // Sort by win rate first, then total points
+        uasort($playerMetrics, function($a, $b) {
+            if ($a['win_rate'] != $b['win_rate']) {
+                return $b['win_rate'] <=> $a['win_rate']; // Higher win rate first
+            }
+            return $b['total_points'] <=> $a['total_points']; // Higher points first
+        });
+        
+        $sortedPlayers = array_keys($playerMetrics);
+        
+        // Check for ties in rankings
+        $tieInfo = $this->analyzeTieBreaking($playerMetrics);
+        
+        $positions = [
+            1 => $sortedPlayers[0],
+            2 => $sortedPlayers[1],
+            3 => $sortedPlayers[2]
+        ];
+        
+        $this->createWinnerRecords($tournament, $level, $positions, 'winners', $tieInfo);
+        
+        \Log::info("Triple tie resolved using metrics", [
+            'positions' => $positions,
+            'tie_info' => $tieInfo
+        ]);
+        
+        return $positions;
+    }
+
+    /**
+     * Calculate player metrics for tie breaking
+     */
+    private function calculatePlayerMetrics(Tournament $tournament, string $level, ?int $groupId, $playerId)
+    {
+        $matches = PoolMatch::where('tournament_id', $tournament->id)
+            ->where('level', $level)
+            ->where('group_id', $groupId)
+            ->where(function($q) use ($playerId) {
+                $q->where('player_1_id', $playerId)->orWhere('player_2_id', $playerId);
+            })
+            ->where('status', 'completed')
+            ->get();
+        
+        $totalPoints = 0;
+        $wins = 0;
+        $totalMatches = $matches->count();
+        
+        foreach ($matches as $match) {
+            if ($match->player_1_id == $playerId) {
+                $totalPoints += $match->player_1_points ?? 0;
+                if ($match->winner_id == $playerId) $wins++;
+            } else {
+                $totalPoints += $match->player_2_points ?? 0;
+                if ($match->winner_id == $playerId) $wins++;
+            }
+        }
+        
+        $winRate = $totalMatches > 0 ? ($wins / $totalMatches) * 100 : 0;
+        
+        return [
+            'player_id' => $playerId,
+            'total_points' => $totalPoints,
+            'wins' => $wins,
+            'total_matches' => $totalMatches,
+            'win_rate' => $winRate
+        ];
+    }
+
+    /**
+     * Analyze tie breaking to determine tie information
+     */
+    private function analyzeTieBreaking($playerMetrics)
+    {
+        $metrics = array_values($playerMetrics);
+        $tieInfo = [];
+        
+        // Check for ties between positions
+        if ($metrics[0]['win_rate'] == $metrics[1]['win_rate'] && 
+            $metrics[0]['total_points'] == $metrics[1]['total_points']) {
+            
+            if ($metrics[1]['win_rate'] == $metrics[2]['win_rate'] && 
+                $metrics[1]['total_points'] == $metrics[2]['total_points']) {
+                // All three tied
+                $tieInfo = ['type' => 'triple_tie', 'positions' => [1, 2, 3]];
+            } else {
+                // Top two tied for position 1
+                $tieInfo = ['type' => 'tie', 'positions' => [1, 2]];
+            }
+        } elseif ($metrics[1]['win_rate'] == $metrics[2]['win_rate'] && 
+                  $metrics[1]['total_points'] == $metrics[2]['total_points']) {
+            // Bottom two tied for position 2
+            $tieInfo = ['type' => 'tie', 'positions' => [2, 3]];
+        }
+        
+        return $tieInfo;
+    }
+
+    /**
+     * Create Winner records in database
+     */
+    private function createWinnerRecords(Tournament $tournament, string $level, array $positions, string $type = 'winners', array $tieInfo = [])
+    {
+        $basePosition = $type === 'winners' ? 1 : 4;
+        
+        foreach ($positions as $pos => $playerId) {
+            $actualPosition = $basePosition + $pos - 1;
+            
+            // Check if winner record already exists
+            $existingWinner = Winner::where('tournament_id', $tournament->id)
+                ->where('level', $level)
+                ->where('player_id', $playerId)
+                ->where('position', $actualPosition)
+                ->first();
+                
+            if (!$existingWinner) {
+                Winner::create([
+                    'tournament_id' => $tournament->id,
+                    'level' => $level,
+                    'player_id' => $playerId,
+                    'position' => $actualPosition,
+                    'prize_amount' => $this->calculatePrizeAmount($tournament, $actualPosition),
+                    'tie_info' => !empty($tieInfo) ? json_encode($tieInfo) : null
+                ]);
+                
+                \Log::info("Created winner record", [
+                    'player_id' => $playerId,
+                    'position' => $actualPosition,
+                    'type' => $type,
+                    'tie_info' => $tieInfo
+                ]);
+            }
+        }
+        
+        // Send notifications to winners
+        $this->sendWinnerNotifications($tournament, $level, $positions, $basePosition, $tieInfo);
+    }
+
+    /**
+     * Calculate prize amount for position
+     */
+    private function calculatePrizeAmount(Tournament $tournament, int $position)
+    {
+        // Basic prize calculation - can be enhanced based on tournament rules
+        $basePrize = $tournament->prize_pool ?? 0;
+        
+        switch ($position) {
+            case 1: return $basePrize * 0.5;
+            case 2: return $basePrize * 0.3;
+            case 3: return $basePrize * 0.2;
+            default: return 0;
+        }
+    }
+
+    /**
+     * Send notifications to winners
+     */
+    private function sendWinnerNotifications(Tournament $tournament, string $level, array $positions, int $basePosition, array $tieInfo)
+    {
+        foreach ($positions as $pos => $playerId) {
+            $actualPosition = $basePosition + $pos - 1;
+            
+            $message = "Congratulations! You finished in position {$actualPosition}";
+            
+            if (!empty($tieInfo)) {
+                if ($tieInfo['type'] === 'triple_tie') {
+                    $message .= " (tied for positions 1-3)";
+                } elseif (in_array($pos, $tieInfo['positions'])) {
+                    $tiedPositions = implode('-', $tieInfo['positions']);
+                    $message .= " (tied for positions {$tiedPositions})";
+                }
+            }
+            
+            $message .= " in {$tournament->name} ({$level} level)";
+            
+            // Create notification
+            Notification::create([
+                'user_id' => $playerId,
+                'type' => 'tournament_position',
+                'data' => [
+                    'tournament_id' => $tournament->id,
+                    'tournament_name' => $tournament->name,
+                    'level' => $level,
+                    'position' => $actualPosition,
+                    'tie_info' => $tieInfo,
+                    'message' => $message
+                ]
+            ]);
+            
+            \Log::info("Sent winner notification", [
+                'player_id' => $playerId,
+                'position' => $actualPosition,
+                'message' => $message
+            ]);
+        }
+    }
+
+    /**
+     * Handle 3-player losers tournament (D, E, F) with all subcases
+     */
+    private function handle3PlayerLosersTournament(Tournament $tournament, string $level, ?int $groupId, int $winnersNeeded)
+    {
+        \Log::info("Handling 3-player losers tournament", [
+            'tournament_id' => $tournament->id,
+            'winners_needed' => $winnersNeeded
+        ]);
+        
+        // Get matches - use losers naming convention
+        $sfMatch = $this->getMatch($tournament, $level, $groupId, 'losers_3_SF');
+        $finalMatch = $this->getMatch($tournament, $level, $groupId, 'losers_3_final');
+        $tieBreakerMatch = $this->getMatch($tournament, $level, $groupId, 'losers_3_tie_breaker');
+        $fairChanceMatch = $this->getMatch($tournament, $level, $groupId, 'losers_3_fair_chance');
+        
+        // Determine current state and handle accordingly
+        if (!$sfMatch || $sfMatch->status !== 'completed') {
+            \Log::info("Losers semifinal not completed yet");
+            return null;
+        }
+        
+        $sfWinner = $sfMatch->winner_id;
+        $sfLoser = ($sfMatch->player_1_id === $sfWinner) ? $sfMatch->player_2_id : $sfMatch->player_1_id;
+        $byePlayer = $sfMatch->bye_player_id;
+        
+        \Log::info("3-player losers tournament state", [
+            'sf_winner' => $sfWinner,
+            'sf_loser' => $sfLoser,
+            'bye_player' => $byePlayer
+        ]);
+        
+        // Handle different subcases based on match completion
+        return $this->handle3PlayerLosersSubcases($tournament, $level, $groupId, $sfWinner, $sfLoser, $byePlayer, 
+                                                $finalMatch, $tieBreakerMatch, $fairChanceMatch, $winnersNeeded);
+    }
+
+    /**
+     * Handle all 3-player losers tournament subcases
+     */
+    private function handle3PlayerLosersSubcases(Tournament $tournament, string $level, ?int $groupId, 
+                                               $sfWinner, $sfLoser, $byePlayer, $finalMatch, $tieBreakerMatch, $fairChanceMatch, $winnersNeeded)
+    {
+        // Case 1: D plays E, F gets bye. Loser of SF (E) plays with F in final
+        if (!$finalMatch || $finalMatch->status !== 'completed') {
+            return null; // Wait for final to complete
+        }
+        
+        $finalWinner = $finalMatch->winner_id;
+        $finalLoser = ($finalMatch->player_1_id === $finalWinner) ? $finalMatch->player_2_id : $finalMatch->player_1_id;
+        
+        \Log::info("Losers final match completed", [
+            'final_winner' => $finalWinner,
+            'final_loser' => $finalLoser,
+            'bye_player_won' => $finalWinner === $byePlayer
+        ]);
+        
+        // Subcase 1a: F (bye player) wins final
+        if ($finalWinner === $byePlayer) {
+            return $this->handle3PlayerLosersSubcase1a($tournament, $level, $groupId, $sfWinner, $sfLoser, $byePlayer, $tieBreakerMatch, $winnersNeeded);
+        }
+        
+        // Subcase 1b: F (bye player) loses final
+        return $this->handle3PlayerLosersSubcase1b($tournament, $level, $groupId, $sfWinner, $sfLoser, $byePlayer, $fairChanceMatch, $winnersNeeded);
+    }
+
+    /**
+     * Handle losers subcase 1a: Bye player (F) wins final - need tie breaker with SF winner (D)
+     */
+    private function handle3PlayerLosersSubcase1a(Tournament $tournament, string $level, ?int $groupId, 
+                                                $sfWinner, $sfLoser, $byePlayer, $tieBreakerMatch, $winnersNeeded)
+    {
+        \Log::info("Losers Subcase 1a: Bye player won final - tie breaker needed");
+        
+        // F wins final, F plays with D in tie breaker
+        if (!$tieBreakerMatch || $tieBreakerMatch->status !== 'completed') {
+            return null; // Wait for tie breaker to complete
+        }
+        
+        $tieBreakerWinner = $tieBreakerMatch->winner_id;
+        $tieBreakerLoser = ($tieBreakerMatch->player_1_id === $tieBreakerWinner) ? 
+                          $tieBreakerMatch->player_2_id : $tieBreakerMatch->player_1_id;
+        
+        // Create Winner records for positions 4, 5, 6
+        $positions = [
+            1 => $tieBreakerWinner,  // Position 4 (base + 1 - 1 = 4)
+            2 => $tieBreakerLoser,   // Position 5
+            3 => $sfLoser           // Position 6
+        ];
+        
+        $this->createWinnerRecords($tournament, $level, $positions, 'losers');
+        
+        \Log::info("Losers Subcase 1a completed - positions assigned", [
+            'position_4' => $tieBreakerWinner,
+            'position_5' => $tieBreakerLoser,
+            'position_6' => $sfLoser
+        ]);
+        
+        return $positions;
+    }
+
+    /**
+     * Handle losers subcase 1b: Bye player (F) loses final - need fair chance with SF winner (D)
+     */
+    private function handle3PlayerLosersSubcase1b(Tournament $tournament, string $level, ?int $groupId,
+                                                $sfWinner, $sfLoser, $byePlayer, $fairChanceMatch, $winnersNeeded)
+    {
+        \Log::info("Losers Subcase 1b: Bye player lost final - fair chance needed");
+        
+        // F loses final, F plays with D in fair chance
+        if (!$fairChanceMatch || $fairChanceMatch->status !== 'completed') {
+            return null; // Wait for fair chance to complete
+        }
+        
+        $fairChanceWinner = $fairChanceMatch->winner_id;
+        $fairChanceLoser = ($fairChanceMatch->player_1_id === $fairChanceWinner) ? 
+                          $fairChanceMatch->player_2_id : $fairChanceMatch->player_1_id;
+        
+        // If F loses fair chance: D pos 4, E pos 5, F pos 6
+        if ($fairChanceLoser === $byePlayer) {
+            $positions = [
+                1 => $sfWinner,      // Position 4
+                2 => $sfLoser,       // Position 5
+                3 => $byePlayer      // Position 6
+            ];
+            
+            $this->createWinnerRecords($tournament, $level, $positions, 'losers');
+            
+            \Log::info("Losers Subcase 1b completed - bye player lost fair chance", [
+                'position_4' => $sfWinner,
+                'position_5' => $sfLoser,
+                'position_6' => $byePlayer
+            ]);
+            
+            return $positions;
+        }
+        
+        // If F wins fair chance: D, E, F all have 1 win 1 loss - need tie breaking
+        return $this->handle3PlayerLosersTripleTie($tournament, $level, $groupId, $sfWinner, $sfLoser, $byePlayer);
+    }
+
+    /**
+     * Handle losers triple tie scenario using metrics
+     */
+    private function handle3PlayerLosersTripleTie(Tournament $tournament, string $level, ?int $groupId, $playerD, $playerE, $playerF)
+    {
+        \Log::info("Handling losers triple tie scenario - using metrics", [
+            'players' => [$playerD, $playerE, $playerF]
+        ]);
+        
+        // Calculate metrics for tie breaking
+        $players = [$playerD, $playerE, $playerF];
+        $playerMetrics = [];
+        
+        foreach ($players as $playerId) {
+            $metrics = $this->calculatePlayerMetrics($tournament, $level, $groupId, $playerId);
+            $playerMetrics[$playerId] = $metrics;
+        }
+        
+        // Sort by win rate first, then total points
+        uasort($playerMetrics, function($a, $b) {
+            if ($a['win_rate'] != $b['win_rate']) {
+                return $b['win_rate'] <=> $a['win_rate']; // Higher win rate first
+            }
+            return $b['total_points'] <=> $a['total_points']; // Higher points first
+        });
+        
+        $sortedPlayers = array_keys($playerMetrics);
+        
+        // Check for ties in rankings
+        $tieInfo = $this->analyzeTieBreaking($playerMetrics);
+        
+        $positions = [
+            1 => $sortedPlayers[0],  // Position 4
+            2 => $sortedPlayers[1],  // Position 5
+            3 => $sortedPlayers[2]   // Position 6
+        ];
+        
+        $this->createWinnerRecords($tournament, $level, $positions, 'losers', $tieInfo);
+        
+        \Log::info("Losers triple tie resolved using metrics", [
+            'positions' => $positions,
+            'tie_info' => $tieInfo
+        ]);
+        
+        return $positions;
     }
     
     /**
