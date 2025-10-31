@@ -291,41 +291,52 @@ class TournamentProgressionController extends Controller
         // Handle different scenarios based on winner count and current round
         switch ($winnerCount) {
             case 1:
-                \Log::info("Processing 1 winner scenario");
-                if ($roundName === '3_SF') {
-                    \Log::info("Generating 3-player final match");
-                    $this->generate3PlayerFinal($tournament, $level, $levelName, $matches);
+                // Check if this is part of comprehensive semifinals
+                if ($roundName === 'SF_winners' || $roundName === 'SF_losers' || $roundName === 'losers_SF_winners') {
+                    \Log::info("Single comprehensive semifinal complete - checking if all semifinals done");
+                    $this->checkComprehensiveSemifinalsComplete($tournament, $level, $levelName);
                 } else {
-                    \Log::info("1 winner but not in 3_SF round - no action needed");
+                    \Log::info("1 winner but not in comprehensive semifinals - no action needed", [
+                        'winner_count' => $winnerCount,
+                        'round_name' => $roundName
+                    ]);
+                    \Log::info("Processing 1 winner scenario");
                 }
                 break;
                 
             case 2:
                 \Log::info("Processing 2 winner scenario");
-                if ($isFirstRound) {
+                // Check if this is part of comprehensive semifinals
+                if ($roundName === 'SF_winners' || $roundName === 'SF_losers' || $roundName === 'losers_SF_winners') {
+                    \Log::info("Two comprehensive semifinals complete - checking if all semifinals done");
+                    $this->checkComprehensiveSemifinalsComplete($tournament, $level, $levelName);
+                } elseif ($isFirstRound) {
                     \Log::info("Generating semifinals from first round with 2 winners");
                     $this->generate4PlayerSemifinals($tournament, $level, $levelName, $matches);
                     \Log::info("4-player semifinals generated successfully");
                 } elseif ($roundName === 'semifinal' || strpos($roundName, 'SF') !== false) {
                     \Log::info("Generating final from semifinals");
                     $this->generate4PlayerFinal($tournament, $level, $levelName);
-                    \Log::info("4-player final generated successfully");
                 } else {
-                    \Log::info("2 winners but not in expected round", [
-                        'round_name' => $roundName,
-                        'is_first_round' => $isFirstRound
-                    ]);
+                    \Log::info("Generating 4-player semifinals");
+                    $this->generate4PlayerSemifinals($tournament, $level, $levelName, $matches);
                 }
                 break;
                 
             case 3:
                 \Log::info("Processing 3 winner scenario");
-                \Log::info("Generating 3-winner semifinal match", [
-                    'round_name' => $roundName,
-                    'is_first_round' => $isFirstRound,
-                    'winner_count' => $winnerCount
-                ]);
-                $this->generate3WinnerSemifinal($tournament, $level, $levelName, $matches);
+                // Check if this is part of comprehensive semifinals
+                if ($roundName === 'SF_winners' || $roundName === 'SF_losers' || $roundName === 'losers_SF_winners') {
+                    \Log::info("Three comprehensive semifinals complete - checking if all semifinals done");
+                    $this->checkComprehensiveSemifinalsComplete($tournament, $level, $levelName);
+                } else {
+                    \Log::info("Generating 3-winner semifinal match", [
+                        'round_name' => $roundName,
+                        'is_first_round' => $isFirstRound,
+                        'winner_count' => $winnerCount
+                    ]);
+                    $this->generate3WinnerSemifinal($tournament, $level, $levelName, $matches);
+                }
                 break;
                 
             case 4:
@@ -700,29 +711,30 @@ class TournamentProgressionController extends Controller
     private function checkThreeSemifinalsComplete(Tournament $tournament, string $level, ?string $levelName)
     {
         // Check if all 3 semifinals are completed (for 5-6 winners)
-        $sfWinners = PoolMatch::where('tournament_id', $tournament->id)
+        $sfWinnersQuery = PoolMatch::where('tournament_id', $tournament->id)
             ->where('level', $level)
             ->where('round_name', 'SF_winners')
-            ->where('status', 'completed')
-            ->first();
+            ->where('status', 'completed');
             
-        $sfLosers = PoolMatch::where('tournament_id', $tournament->id)
+        $sfLosersQuery = PoolMatch::where('tournament_id', $tournament->id)
             ->where('level', $level)
             ->where('round_name', 'SF_losers')
-            ->where('status', 'completed')
-            ->first();
+            ->where('status', 'completed');
             
-        $losersSfWinners = PoolMatch::where('tournament_id', $tournament->id)
+        $losersSfWinnersQuery = PoolMatch::where('tournament_id', $tournament->id)
             ->where('level', $level)
             ->where('round_name', 'losers_SF_winners')
-            ->where('status', 'completed')
-            ->first();
+            ->where('status', 'completed');
             
         if ($levelName) {
-            $sfWinners = $sfWinners ? $sfWinners->where('level_name', $levelName)->first() : null;
-            $sfLosers = $sfLosers ? $sfLosers->where('level_name', $levelName)->first() : null;
-            $losersSfWinners = $losersSfWinners ? $losersSfWinners->where('level_name', $levelName)->first() : null;
+            $sfWinnersQuery->where('level_name', $levelName);
+            $sfLosersQuery->where('level_name', $levelName);
+            $losersSfWinnersQuery->where('level_name', $levelName);
         }
+        
+        $sfWinners = $sfWinnersQuery->first();
+        $sfLosers = $sfLosersQuery->first();
+        $losersSfWinners = $losersSfWinnersQuery->first();
         
         if ($sfWinners && $sfLosers && $losersSfWinners) {
             \Log::info("All 3 comprehensive semifinals complete - generating final positions");
@@ -739,22 +751,23 @@ class TournamentProgressionController extends Controller
     private function checkTwoSemifinalsComplete(Tournament $tournament, string $level, ?string $levelName)
     {
         // Check if 2 semifinals are completed (for 3-4 winners)
-        $winnersFinal = PoolMatch::where('tournament_id', $tournament->id)
+        $winnersFinalQuery = PoolMatch::where('tournament_id', $tournament->id)
             ->where('level', $level)
             ->where('round_name', 'winners_final')
-            ->where('status', 'completed')
-            ->first();
+            ->where('status', 'completed');
             
-        $losersSemifinal = PoolMatch::where('tournament_id', $tournament->id)
+        $losersSemifinalQuery = PoolMatch::where('tournament_id', $tournament->id)
             ->where('level', $level)
             ->where('round_name', 'losers_semifinal')
-            ->where('status', 'completed')
-            ->first();
+            ->where('status', 'completed');
             
         if ($levelName) {
-            $winnersFinal = $winnersFinal ? $winnersFinal->where('level_name', $levelName)->first() : null;
-            $losersSemifinal = $losersSemifinal ? $losersSemifinal->where('level_name', $levelName)->first() : null;
+            $winnersFinalQuery->where('level_name', $levelName);
+            $losersSemifinalQuery->where('level_name', $levelName);
         }
+        
+        $winnersFinal = $winnersFinalQuery->first();
+        $losersSemifinal = $losersSemifinalQuery->first();
         
         if ($winnersFinal && $losersSemifinal) {
             \Log::info("All 2 standard semifinals complete - generating final positions");
