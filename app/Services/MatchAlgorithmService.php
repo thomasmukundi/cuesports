@@ -3397,14 +3397,12 @@ class MatchAlgorithmService
     }
 
     /**
-     * Calculate player metrics for tie breaking
+     * Calculate player metrics for tie breaking using global statistics
      */
     private function calculatePlayerMetrics(Tournament $tournament, string $level, ?int $groupId, $playerId)
     {
-        $matches = PoolMatch::where('tournament_id', $tournament->id)
-            ->where('level', $level)
-            ->where('group_id', $groupId)
-            ->where(function($q) use ($playerId) {
+        // Get ALL matches this player has ever played (global statistics)
+        $matches = PoolMatch::where(function($q) use ($playerId) {
                 $q->where('player_1_id', $playerId)->orWhere('player_2_id', $playerId);
             })
             ->where('status', 'completed')
@@ -3426,6 +3424,14 @@ class MatchAlgorithmService
         
         $winRate = $totalMatches > 0 ? ($wins / $totalMatches) * 100 : 0;
         
+        \Log::info("Global player metrics calculated", [
+            'player_id' => $playerId,
+            'win_rate' => $winRate,
+            'total_points' => $totalPoints,
+            'wins' => $wins,
+            'total_matches' => $totalMatches
+        ]);
+        
         return [
             'player_id' => $playerId,
             'total_points' => $totalPoints,
@@ -3436,49 +3442,61 @@ class MatchAlgorithmService
     }
 
     /**
-     * Analyze tie breaking to determine tie information
+     * Analyze tie breaking to determine tie information - simplified approach
      */
     private function analyzeTieBreaking($playerMetrics)
     {
+        $players = array_keys($playerMetrics);
         $metrics = array_values($playerMetrics);
-        $tieInfo = [];
+        $tieGroups = [];
         
-        // Check for ties between positions
+        // Check if all three have same metrics
         if ($metrics[0]['win_rate'] == $metrics[1]['win_rate'] && 
-            $metrics[0]['total_points'] == $metrics[1]['total_points']) {
-            
-            if ($metrics[1]['win_rate'] == $metrics[2]['win_rate'] && 
-                $metrics[1]['total_points'] == $metrics[2]['total_points']) {
-                // All three tied
-                $tieInfo = ['type' => 'triple_tie', 'positions' => [1, 2, 3]];
-            } else {
-                // Top two tied for position 1
-                $tieInfo = ['type' => 'tie', 'positions' => [1, 2]];
-            }
+            $metrics[0]['total_points'] == $metrics[1]['total_points'] &&
+            $metrics[1]['win_rate'] == $metrics[2]['win_rate'] && 
+            $metrics[1]['total_points'] == $metrics[2]['total_points']) {
+            // All three tied - they all get the same position
+            $tieGroups[] = [
+                'players' => [$players[0], $players[1], $players[2]],
+                'type' => 'triple_tie'
+            ];
+        } elseif ($metrics[0]['win_rate'] == $metrics[1]['win_rate'] && 
+                  $metrics[0]['total_points'] == $metrics[1]['total_points']) {
+            // First two tied
+            $tieGroups[] = [
+                'players' => [$players[0], $players[1]],
+                'type' => 'tie'
+            ];
         } elseif ($metrics[1]['win_rate'] == $metrics[2]['win_rate'] && 
                   $metrics[1]['total_points'] == $metrics[2]['total_points']) {
-            // Bottom two tied for position 2
-            $tieInfo = ['type' => 'tie', 'positions' => [2, 3]];
+            // Last two tied
+            $tieGroups[] = [
+                'players' => [$players[1], $players[2]],
+                'type' => 'tie'
+            ];
         }
         
-        return $tieInfo;
+        return [
+            'groups' => $tieGroups,
+            'has_ties' => !empty($tieGroups)
+        ];
     }
 
     /**
-     * Create Winner records in database
+     * Create Winner records in database with proper tie handling
      */
     private function createWinnerRecords(Tournament $tournament, string $level, array $positions, string $type = 'winners', array $tieInfo = [])
     {
         $basePosition = $type === 'winners' ? 1 : 4;
         
-        foreach ($positions as $pos => $playerId) {
-            $actualPosition = $basePosition + $pos - 1;
-            
+        // Calculate actual positions with tie handling
+        $actualPositions = $this->calculateActualPositions($positions, $basePosition, $tieInfo);
+        
+        foreach ($actualPositions as $playerId => $actualPosition) {
             // Check if winner record already exists
             $existingWinner = Winner::where('tournament_id', $tournament->id)
                 ->where('level', $level)
                 ->where('player_id', $playerId)
-                ->where('position', $actualPosition)
                 ->first();
                 
             if (!$existingWinner) {
@@ -3501,7 +3519,74 @@ class MatchAlgorithmService
         }
         
         // Send notifications to winners
-        $this->sendWinnerNotifications($tournament, $level, $positions, $basePosition, $tieInfo);
+        $this->sendWinnerNotifications($tournament, $level, $actualPositions, $tieInfo);
+    }
+
+    /**
+     * Calculate actual positions with proper tie handling
+     */
+    private function calculateActualPositions(array $positions, int $basePosition, array $tieInfo)
+    {
+        $actualPositions = [];
+        
+        if (empty($tieInfo)) {
+            // No ties - simple sequential positions
+            foreach ($positions as $pos => $playerId) {
+                $actualPositions[$playerId] = $basePosition + $pos - 1;
+            }
+        } else {
+            // Handle ties - same position for tied players
+            $currentPosition = $basePosition;
+            $positionGroups = $this->groupPlayersByTie($positions, $tieInfo);
+            
+            foreach ($positionGroups as $group) {
+                foreach ($group['players'] as $playerId) {
+                    $actualPositions[$playerId] = $currentPosition;
+                }
+                // Next position skips by the number of tied players
+                $currentPosition += count($group['players']);
+            }
+        }
+        
+        \Log::info("Calculated actual positions with ties", [
+            'original_positions' => $positions,
+            'actual_positions' => $actualPositions,
+            'tie_info' => $tieInfo
+        ]);
+        
+        return $actualPositions;
+    }
+
+    /**
+     * Group players by their tie status
+     */
+    private function groupPlayersByTie(array $positions, array $tieInfo)
+    {
+        $groups = [];
+        $processedPlayers = [];
+        
+        // Handle tied groups first
+        if (isset($tieInfo['groups'])) {
+            foreach ($tieInfo['groups'] as $group) {
+                $groups[] = [
+                    'players' => $group['players'],
+                    'tied' => true
+                ];
+                $processedPlayers = array_merge($processedPlayers, $group['players']);
+            }
+        }
+        
+        // Add non-tied players
+        foreach ($positions as $pos => $playerId) {
+            if (!in_array($playerId, $processedPlayers)) {
+                $groups[] = [
+                    'players' => [$playerId],
+                    'tied' => false
+                ];
+            }
+        }
+        
+        return $groups;
     }
 
     /**
@@ -3521,21 +3606,25 @@ class MatchAlgorithmService
     }
 
     /**
-     * Send notifications to winners
+     * Send notifications to winners with proper tie messaging
      */
-    private function sendWinnerNotifications(Tournament $tournament, string $level, array $positions, int $basePosition, array $tieInfo)
+    private function sendWinnerNotifications(Tournament $tournament, string $level, array $actualPositions, array $tieInfo)
     {
-        foreach ($positions as $pos => $playerId) {
-            $actualPosition = $basePosition + $pos - 1;
-            
+        foreach ($actualPositions as $playerId => $actualPosition) {
             $message = "Congratulations! You finished in position {$actualPosition}";
             
-            if (!empty($tieInfo)) {
-                if ($tieInfo['type'] === 'triple_tie') {
-                    $message .= " (tied for positions 1-3)";
-                } elseif (in_array($pos, $tieInfo['positions'])) {
-                    $tiedPositions = implode('-', $tieInfo['positions']);
-                    $message .= " (tied for positions {$tiedPositions})";
+            // Add tie information to message
+            if (!empty($tieInfo) && isset($tieInfo['groups'])) {
+                foreach ($tieInfo['groups'] as $group) {
+                    if (in_array($playerId, $group['players'])) {
+                        $tiedPlayerCount = count($group['players']);
+                        if ($group['type'] === 'triple_tie') {
+                            $message .= " (tied with " . ($tiedPlayerCount - 1) . " other players)";
+                        } else {
+                            $message .= " (tied with " . ($tiedPlayerCount - 1) . " other player" . ($tiedPlayerCount > 2 ? 's' : '') . ")";
+                        }
+                        break;
+                    }
                 }
             }
             
@@ -3558,7 +3647,8 @@ class MatchAlgorithmService
             \Log::info("Sent winner notification", [
                 'player_id' => $playerId,
                 'position' => $actualPosition,
-                'message' => $message
+                'message' => $message,
+                'tie_info' => $tieInfo
             ]);
         }
     }
