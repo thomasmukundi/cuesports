@@ -334,15 +334,39 @@ class TournamentProgressionController extends Controller
                     \Log::info("Generating 4-player final from semifinals");
                     $this->generate4PlayerFinal($tournament, $level, $levelName);
                 } elseif ($roundName === '4player_round1') {
-                    \Log::info("4-player round 1 complete - generating winners final and losers semifinal");
-                    $this->generate4PlayerSemifinals($tournament, $level, $levelName, $matches);
+                    $winnersNeeded = $tournament->winners ?? 3;
+                    \Log::info("4-player round 1 complete - checking tournament type", [
+                        'winners_needed' => $winnersNeeded,
+                        'match_count' => $matches->count()
+                    ]);
+                    
+                    if ($winnersNeeded >= 5 && $winnersNeeded <= 6 && $matches->count() === 4) {
+                        \Log::info("Generating comprehensive semifinals (SF_winners, SF_losers, losers_SF_losers)");
+                        $this->generateComprehensiveSemifinals($tournament, $level, $levelName, $matches);
+                    } else {
+                        \Log::info("Generating standard winners final and losers semifinal");
+                        $this->generate4PlayerSemifinals($tournament, $level, $levelName, $matches);
+                    }
                 } elseif ($isFirstRound) {
-                    \Log::info("4 winners from initial round - creating 4-player round 1 matches", [
+                    $winnersNeeded = $tournament->winners ?? 3;
+                    \Log::info("=== 4 WINNERS DECISION POINT ===", [
                         'round_name' => $roundName,
                         'is_first_round' => $isFirstRound,
-                        'winner_count' => $winnerCount
+                        'winner_count' => $winnerCount,
+                        'winners_needed' => $winnersNeeded,
+                        'tournament_winners_field' => $tournament->winners,
+                        'condition_check_5_6' => ($winnersNeeded >= 5 && $winnersNeeded <= 6),
+                        'will_use_comprehensive' => ($winnersNeeded >= 5 && $winnersNeeded <= 6),
+                        'will_use_standard' => !($winnersNeeded >= 5 && $winnersNeeded <= 6)
                     ]);
-                    $this->generate4PlayerRound1($tournament, $level, $levelName, $matches);
+                    
+                    if ($winnersNeeded >= 5 && $winnersNeeded <= 6) {
+                        \Log::info(">>> USING COMPREHENSIVE 4-PLAYER TOURNAMENT WITH LOSERS BRACKET <<<");
+                        $this->generateComprehensive4PlayerTournament($tournament, $level, $levelName, $matches);
+                    } else {
+                        \Log::info(">>> USING STANDARD 4-PLAYER ROUND 1 MATCHES <<<");
+                        $this->generate4PlayerRound1($tournament, $level, $levelName, $matches);
+                    }
                 } else {
                     \Log::info("Generating 4-player semifinals", [
                         'round_name' => $roundName,
@@ -416,6 +440,103 @@ class TournamentProgressionController extends Controller
     }
 
     /**
+     * Generate comprehensive 4-player tournament with winners and losers brackets
+     */
+    private function generateComprehensive4PlayerTournament(Tournament $tournament, string $level, ?string $levelName, $matches)
+    {
+        // Get the 4 winners from the completed matches
+        $winners = collect();
+        $losers = collect();
+        
+        foreach ($matches as $match) {
+            if ($match->winner_id) {
+                $winner = \App\Models\User::find($match->winner_id);
+                $loserId = ($match->player_1_id === $match->winner_id) ? $match->player_2_id : $match->player_1_id;
+                $loser = \App\Models\User::find($loserId);
+                
+                if ($winner) $winners->push($winner);
+                if ($loser) $losers->push($loser);
+            }
+        }
+        
+        if ($winners->count() !== 4 || $losers->count() !== 4) {
+            \Log::error("Expected 4 winners and 4 losers but got {$winners->count()} winners and {$losers->count()} losers");
+            return;
+        }
+        
+        // Shuffle for fair pairing
+        $shuffledWinners = $winners->shuffle()->values();
+        $shuffledLosers = $losers->shuffle()->values();
+        
+        \Log::info("=== CREATING COMPREHENSIVE 4-PLAYER TOURNAMENT ===", [
+            'tournament_id' => $tournament->id,
+            'level' => $level,
+            'winners_count' => $shuffledWinners->count(),
+            'losers_count' => $shuffledLosers->count(),
+            'winners' => $shuffledWinners->pluck('name')->toArray(),
+            'losers' => $shuffledLosers->pluck('name')->toArray(),
+            'matches_to_create' => 4,
+            'match_names' => ['4player_round1_match1', '4player_round1_match2', '4player_round1_match3', '4player_round1_match4']
+        ]);
+        
+        // Create 4player_round1_match1: Winner A vs Winner B (for positions 1-2)
+        PoolMatch::create([
+            'match_name' => '4player_round1_match1',
+            'player_1_id' => $shuffledWinners[0]->id,
+            'player_2_id' => $shuffledWinners[1]->id,
+            'level' => $level,
+            'level_name' => $levelName,
+            'round_name' => '4player_round1',
+            'tournament_id' => $tournament->id,
+            'group_id' => $this->getGroupIdFromLevelName($level, $levelName),
+            'status' => 'pending',
+            'proposed_dates' => \App\Services\ProposedDatesService::generateProposedDates($tournament->id),
+        ]);
+        
+        // Create 4player_round1_match2: Winner C vs Winner D (for positions 1-2)
+        PoolMatch::create([
+            'match_name' => '4player_round1_match2',
+            'player_1_id' => $shuffledWinners[2]->id,
+            'player_2_id' => $shuffledWinners[3]->id,
+            'level' => $level,
+            'level_name' => $levelName,
+            'round_name' => '4player_round1',
+            'tournament_id' => $tournament->id,
+            'group_id' => $this->getGroupIdFromLevelName($level, $levelName),
+            'status' => 'pending',
+            'proposed_dates' => \App\Services\ProposedDatesService::generateProposedDates($tournament->id),
+        ]);
+        
+        // Create 4player_round1_match3: Loser A vs Loser B (for positions 3-4)
+        PoolMatch::create([
+            'match_name' => '4player_round1_match3',
+            'player_1_id' => $shuffledLosers[0]->id,
+            'player_2_id' => $shuffledLosers[1]->id,
+            'level' => $level,
+            'level_name' => $levelName,
+            'round_name' => '4player_round1',
+            'tournament_id' => $tournament->id,
+            'group_id' => $this->getGroupIdFromLevelName($level, $levelName),
+            'status' => 'pending',
+            'proposed_dates' => \App\Services\ProposedDatesService::generateProposedDates($tournament->id),
+        ]);
+        
+        // Create 4player_round1_match4: Loser C vs Loser D (for positions 5-6)
+        PoolMatch::create([
+            'match_name' => '4player_round1_match4',
+            'player_1_id' => $shuffledLosers[2]->id,
+            'player_2_id' => $shuffledLosers[3]->id,
+            'level' => $level,
+            'level_name' => $levelName,
+            'round_name' => '4player_round1',
+            'tournament_id' => $tournament->id,
+            'group_id' => $this->getGroupIdFromLevelName($level, $levelName),
+            'status' => 'pending',
+            'proposed_dates' => \App\Services\ProposedDatesService::generateProposedDates($tournament->id),
+        ]);
+    }
+
+    /**
      * Generate 4-player round 1 matches from winners of larger tournament
      */
     private function generate4PlayerRound1(Tournament $tournament, string $level, ?string $levelName, $matches)
@@ -470,6 +591,78 @@ class TournamentProgressionController extends Controller
             'level' => $level,
             'level_name' => $levelName,
             'round_name' => '4player_round1',
+            'tournament_id' => $tournament->id,
+            'group_id' => $this->getGroupIdFromLevelName($level, $levelName),
+            'status' => 'pending',
+            'proposed_dates' => \App\Services\ProposedDatesService::generateProposedDates($tournament->id),
+        ]);
+    }
+
+    /**
+     * Generate comprehensive semifinals for 5-6 winner tournaments
+     */
+    private function generateComprehensiveSemifinals(Tournament $tournament, string $level, ?string $levelName, $matches)
+    {
+        // Sort matches by match name to get them in order
+        $sortedMatches = $matches->sortBy('match_name');
+        
+        // Get winners and losers from each match
+        $match1 = $sortedMatches->where('match_name', '4player_round1_match1')->first(); // Winners bracket
+        $match2 = $sortedMatches->where('match_name', '4player_round1_match2')->first(); // Winners bracket
+        $match3 = $sortedMatches->where('match_name', '4player_round1_match3')->first(); // Losers bracket pos 3-4
+        $match4 = $sortedMatches->where('match_name', '4player_round1_match4')->first(); // Losers bracket pos 5-6
+        
+        if (!$match1 || !$match2 || !$match3 || !$match4) {
+            \Log::error("Missing required matches for comprehensive semifinals");
+            return;
+        }
+        
+        \Log::info("Creating comprehensive semifinals", [
+            'match1_winner' => $match1->winner_id,
+            'match2_winner' => $match2->winner_id,
+            'match3_winner' => $match3->winner_id,
+            'match4_winner' => $match4->winner_id
+        ]);
+        
+        // Create SF_winners: Winners of match1 vs match2 (for positions 1-2)
+        PoolMatch::create([
+            'match_name' => 'SF_winners',
+            'player_1_id' => $match1->winner_id,
+            'player_2_id' => $match2->winner_id,
+            'level' => $level,
+            'level_name' => $levelName,
+            'round_name' => 'SF_winners',
+            'tournament_id' => $tournament->id,
+            'group_id' => $this->getGroupIdFromLevelName($level, $levelName),
+            'status' => 'pending',
+            'proposed_dates' => \App\Services\ProposedDatesService::generateProposedDates($tournament->id),
+        ]);
+        
+        // Create SF_losers: Losers of match1 vs match2 (for positions 3-4)
+        $match1_loser = ($match1->player_1_id === $match1->winner_id) ? $match1->player_2_id : $match1->player_1_id;
+        $match2_loser = ($match2->player_1_id === $match2->winner_id) ? $match2->player_2_id : $match2->player_1_id;
+        
+        PoolMatch::create([
+            'match_name' => 'SF_losers',
+            'player_1_id' => $match1_loser,
+            'player_2_id' => $match2_loser,
+            'level' => $level,
+            'level_name' => $levelName,
+            'round_name' => 'SF_losers',
+            'tournament_id' => $tournament->id,
+            'group_id' => $this->getGroupIdFromLevelName($level, $levelName),
+            'status' => 'pending',
+            'proposed_dates' => \App\Services\ProposedDatesService::generateProposedDates($tournament->id),
+        ]);
+        
+        // Create losers_SF_losers: Winners of match3 vs match4 (for positions 5-6)
+        PoolMatch::create([
+            'match_name' => 'losers_SF_losers',
+            'player_1_id' => $match3->winner_id,
+            'player_2_id' => $match4->winner_id,
+            'level' => $level,
+            'level_name' => $levelName,
+            'round_name' => 'losers_SF_losers',
             'tournament_id' => $tournament->id,
             'group_id' => $this->getGroupIdFromLevelName($level, $levelName),
             'status' => 'pending',

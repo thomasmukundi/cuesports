@@ -3210,12 +3210,13 @@ class MatchAlgorithmService
             'positions_needed' => [4, 5, 6]
         ]);
         
-        // Get all losers from the main tournament matches
+        // Get losers from the initial round (before 4player_round1)
+        // For 8→4 scenario, we want losers from round_1, not from 4player_round1
         $allMatches = PoolMatch::where('tournament_id', $tournament->id)
             ->where('level', $level)
             ->where('group_id', $groupId)
             ->where('status', 'completed')
-            ->whereNotIn('round_name', ['losers_SF', 'losers_final', 'losers_Fair_Chance', 'losers_semifinal', 'losers_winners_final'])
+            ->whereNotIn('round_name', ['losers_SF', 'losers_final', 'losers_Fair_Chance', 'losers_semifinal', 'losers_winners_final', '4player_round1', 'winners_final'])
             ->get();
             
         $losers = collect();
@@ -3299,12 +3300,12 @@ class MatchAlgorithmService
         $shuffledLosers = $losers->shuffle()->values();
         
         PoolMatch::create([
-            'match_name' => 'losers_round_1_M1',
+            'match_name' => '4player_losers_round1_M1',
             'player_1_id' => $shuffledLosers[0]->id,
             'player_2_id' => $shuffledLosers[1]->id,
             'level' => $level,
             'level_name' => $this->getLevelName($level, $groupId),
-            'round_name' => 'losers_round_1',
+            'round_name' => '4player_losers_round1',
             'tournament_id' => $tournament->id,
             'group_id' => $groupId,
             'status' => 'pending',
@@ -3312,12 +3313,12 @@ class MatchAlgorithmService
         ]);
         
         PoolMatch::create([
-            'match_name' => 'losers_round_1_M2',
+            'match_name' => '4player_losers_round1_M2',
             'player_1_id' => $shuffledLosers[2]->id,
             'player_2_id' => $shuffledLosers[3]->id,
             'level' => $level,
             'level_name' => $this->getLevelName($level, $groupId),
-            'round_name' => 'losers_round_1',
+            'round_name' => '4player_losers_round1',
             'tournament_id' => $tournament->id,
             'group_id' => $groupId,
             'status' => 'pending',
@@ -4340,7 +4341,7 @@ class MatchAlgorithmService
         $losersFinal = $losersMatches->where('round_name', 'losers_final')->first();
         $losersFairChance = $losersMatches->where('round_name', 'losers_Fair_Chance')->first();
         $losersBreakTie = $losersMatches->where('round_name', 'losers_break_tie')->first();
-        $losersRound1 = $losersMatches->where('round_name', 'losers_round_1');
+        $losersRound1 = $losersMatches->where('round_name', '4player_losers_round1');
         $losersWinnersFinal = $losersMatches->where('round_name', 'losers_winners_final')->first();
         
         if ($losersSF) {
