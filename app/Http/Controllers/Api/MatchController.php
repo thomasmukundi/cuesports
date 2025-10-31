@@ -721,6 +721,9 @@ class MatchController extends Controller
             
             \Log::info("About to call checkRoundCompletionAndPositions", ['match_id' => $match->id]);
             
+            // Check if comprehensive semifinals are complete and generate winners
+            $this->checkComprehensiveSemifinalsForWinnerGeneration($match);
+            
             // Check if round robin should be triggered before normal progression
             $this->checkRoundRobinTrigger($match);
             
@@ -995,6 +998,47 @@ class MatchController extends Controller
                     'points' => $standing['points'] ?? $standing['average_points'],
                     'wins' => $standing['wins']
                 ]
+            ]);
+        }
+    }
+
+    /**
+     * Check if comprehensive semifinals are complete and generate winners
+     */
+    private function checkComprehensiveSemifinalsForWinnerGeneration($match)
+    {
+        try {
+            // Only check for comprehensive semifinal rounds
+            $comprehensiveRounds = ['SF_winners', 'SF_losers', 'losers_SF_winners', 'winners_final', 'losers_semifinal'];
+            
+            if (!in_array($match->round_name, $comprehensiveRounds)) {
+                return;
+            }
+            
+            \Log::info("Checking comprehensive semifinals completion for winner generation", [
+                'match_id' => $match->id,
+                'round_name' => $match->round_name,
+                'tournament_id' => $match->tournament_id,
+                'level' => $match->level
+            ]);
+            
+            // Create progression controller to handle winner generation
+            $progressionController = new \App\Http\Controllers\Api\TournamentProgressionController(
+                new \App\Services\MatchAlgorithmService()
+            );
+            
+            // Call the comprehensive semifinals check method
+            $progressionController->checkComprehensiveSemifinalsComplete(
+                $match->tournament, 
+                $match->level, 
+                $match->level_name
+            );
+            
+        } catch (\Exception $e) {
+            \Log::error("Error checking comprehensive semifinals for winner generation", [
+                'match_id' => $match->id,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
             ]);
         }
     }

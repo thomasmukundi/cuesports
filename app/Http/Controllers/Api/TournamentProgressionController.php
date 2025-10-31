@@ -684,7 +684,7 @@ class TournamentProgressionController extends Controller
     /**
      * Check if all comprehensive semifinals are complete and generate winners
      */
-    private function checkComprehensiveSemifinalsComplete(Tournament $tournament, string $level, ?string $levelName)
+    public function checkComprehensiveSemifinalsComplete(Tournament $tournament, string $level, ?string $levelName)
     {
         $winnersNeeded = $tournament->winners ?? 3;
         
