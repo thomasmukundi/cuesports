@@ -2006,6 +2006,46 @@ class TournamentProgressionController extends Controller
     }
 
     /**
+     * Check if losers SF is complete and process it
+     */
+    private function checkAndProcessLosersSF(Tournament $tournament, string $level, ?string $levelName, $groupId)
+    {
+        $losersSF = PoolMatch::where('tournament_id', $tournament->id)
+            ->where('level', $level)
+            ->where('group_id', $groupId)
+            ->where('round_name', 'losers_3_SF')
+            ->where('status', 'completed')
+            ->first();
+            
+        if ($losersSF) {
+            \Log::info("Losers SF already completed - processing it now");
+            $this->handle3PlayerLosersSFComplete($tournament, $level, $levelName, $groupId);
+        } else {
+            \Log::info("Losers SF not yet completed - will wait");
+        }
+    }
+
+    /**
+     * Check if winners SF is complete and process it
+     */
+    private function checkAndProcessWinnersSF(Tournament $tournament, string $level, ?string $levelName, $groupId)
+    {
+        $winnersSF = PoolMatch::where('tournament_id', $tournament->id)
+            ->where('level', $level)
+            ->where('group_id', $groupId)
+            ->where('round_name', '3_winners_SF')
+            ->where('status', 'completed')
+            ->first();
+            
+        if ($winnersSF) {
+            \Log::info("Winners SF already completed - processing it now");
+            $this->handle3PlayerWinnersSFComplete($tournament, $level, $levelName, $groupId);
+        } else {
+            \Log::info("Winners SF not yet completed - will wait");
+        }
+    }
+
+    /**
      * Check 3-player tournament progression and generate next matches
      */
     private function check3PlayerTournamentProgression(Tournament $tournament, string $level, ?string $levelName, string $completedRound)
@@ -2019,8 +2059,12 @@ class TournamentProgressionController extends Controller
         
         if ($completedRound === '3_winners_SF') {
             $this->handle3PlayerWinnersSFComplete($tournament, $level, $levelName, $groupId);
+            // Also check if losers SF is complete and needs processing
+            $this->checkAndProcessLosersSF($tournament, $level, $levelName, $groupId);
         } elseif ($completedRound === 'losers_3_SF') {
             $this->handle3PlayerLosersSFComplete($tournament, $level, $levelName, $groupId);
+            // Also check if winners SF is complete and needs processing  
+            $this->checkAndProcessWinnersSF($tournament, $level, $levelName, $groupId);
         } elseif ($completedRound === '3_winners_final') {
             $this->handle3PlayerWinnersFinalComplete($tournament, $level, $levelName, $groupId);
         } elseif ($completedRound === 'losers_3_final') {
