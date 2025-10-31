@@ -292,7 +292,7 @@ class TournamentProgressionController extends Controller
         switch ($winnerCount) {
             case 1:
                 // Check if this is part of comprehensive semifinals
-                if ($roundName === 'SF_winners' || $roundName === 'SF_losers' || $roundName === 'losers_SF_winners') {
+                if ($roundName === 'SF_winners' || $roundName === 'SF_losers' || $roundName === 'losers_SF_winners' || $roundName === 'losers_SF_losers') {
                     \Log::info("Single comprehensive semifinal complete - checking if all semifinals done");
                     $this->checkComprehensiveSemifinalsComplete($tournament, $level, $levelName);
                 } else {
@@ -307,7 +307,7 @@ class TournamentProgressionController extends Controller
             case 2:
                 \Log::info("Processing 2 winner scenario");
                 // Check if this is part of comprehensive semifinals
-                if ($roundName === 'SF_winners' || $roundName === 'SF_losers' || $roundName === 'losers_SF_winners') {
+                if ($roundName === 'SF_winners' || $roundName === 'SF_losers' || $roundName === 'losers_SF_winners' || $roundName === 'losers_SF_losers') {
                     \Log::info("Two comprehensive semifinals complete - checking if all semifinals done");
                     $this->checkComprehensiveSemifinalsComplete($tournament, $level, $levelName);
                 } elseif ($isFirstRound) {
@@ -326,7 +326,7 @@ class TournamentProgressionController extends Controller
             case 3:
                 \Log::info("Processing 3 winner scenario");
                 // Check if this is part of comprehensive semifinals
-                if ($roundName === 'SF_winners' || $roundName === 'SF_losers' || $roundName === 'losers_SF_winners') {
+                if ($roundName === 'SF_winners' || $roundName === 'SF_losers' || $roundName === 'losers_SF_winners' || $roundName === 'losers_SF_losers') {
                     \Log::info("Three comprehensive semifinals complete - checking if all semifinals done");
                     $this->checkComprehensiveSemifinalsComplete($tournament, $level, $levelName);
                 } else {
@@ -344,7 +344,7 @@ class TournamentProgressionController extends Controller
                 if ($roundName === 'winners_final' || $roundName === 'losers_semifinal') {
                     \Log::info("Generating 4-player final from semifinals");
                     $this->generate4PlayerFinal($tournament, $level, $levelName);
-                } elseif ($roundName === 'SF_winners' || $roundName === 'SF_losers' || $roundName === 'losers_SF_winners') {
+                } elseif ($roundName === 'SF_winners' || $roundName === 'SF_losers' || $roundName === 'losers_SF_winners' || $roundName === 'losers_SF_losers') {
                     \Log::info("Comprehensive semifinal complete - checking if all semifinals done");
                     $this->checkComprehensiveSemifinalsComplete($tournament, $level, $levelName);
                 } elseif ($roundName === '4player_round1') {
@@ -721,9 +721,13 @@ class TournamentProgressionController extends Controller
             ->where('round_name', 'SF_losers')
             ->where('status', 'completed');
             
+        // Check for both possible names for the losers bracket final match
         $losersSfWinnersQuery = PoolMatch::where('tournament_id', $tournament->id)
             ->where('level', $level)
-            ->where('round_name', 'losers_SF_winners')
+            ->where(function($query) {
+                $query->where('round_name', 'losers_SF_winners')
+                      ->orWhere('round_name', 'losers_SF_losers');
+            })
             ->where('status', 'completed');
             
         if ($levelName) {

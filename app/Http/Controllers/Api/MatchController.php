@@ -1030,7 +1030,7 @@ class MatchController extends Controller
             }
             
             // Handle comprehensive semifinals - generate winners when all complete
-            $comprehensiveRounds = ['SF_winners', 'SF_losers', 'losers_SF_winners', 'winners_final', 'losers_semifinal'];
+            $comprehensiveRounds = ['SF_winners', 'SF_losers', 'losers_SF_winners', 'losers_SF_losers', 'winners_final', 'losers_semifinal'];
             if (in_array($match->round_name, $comprehensiveRounds)) {
                 \Log::info("Processing comprehensive semifinal for winner generation", [
                     'match_id' => $match->id,
