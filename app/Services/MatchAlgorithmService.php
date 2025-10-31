@@ -3161,7 +3161,7 @@ class MatchAlgorithmService
     /**
      * Robust 3-player tournament handler with comprehensive subcase logic
      */
-    private function determine3PlayerWinnersRobust(Tournament $tournament, string $level, ?int $groupId)
+    public function determine3PlayerWinnersRobust(Tournament $tournament, string $level, ?int $groupId)
     {
         \Log::info("=== ROBUST 3-PLAYER TOURNAMENT HANDLER START ===", [
             'tournament_id' => $tournament->id,

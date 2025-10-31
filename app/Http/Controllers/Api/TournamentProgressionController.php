@@ -2387,7 +2387,7 @@ class TournamentProgressionController extends Controller
      */
     private function handle3PlayerWinnersComplete(Tournament $tournament, string $level, ?string $levelName, $groupId)
     {
-        \Log::info("3-player winners tournament complete - checking for triple tie scenario");
+        \Log::info("3-player winners tournament complete - determining winners");
         
         // Check if this was a fair chance match completion
         $fairChanceMatch = PoolMatch::where('tournament_id', $tournament->id)
@@ -2400,6 +2400,10 @@ class TournamentProgressionController extends Controller
         if ($fairChanceMatch) {
             $this->handle3PlayerTripleTieScenario($tournament, $level, $levelName, $groupId, 'winners', $fairChanceMatch);
         }
+        
+        // Call MatchAlgorithmService to determine winners and create Winner records
+        \Log::info("Calling MatchAlgorithmService to determine 3-player winners");
+        $this->matchService->determine3PlayerWinnersRobust($tournament, $level, $groupId);
     }
 
     /**
@@ -2407,7 +2411,7 @@ class TournamentProgressionController extends Controller
      */
     private function handle3PlayerLosersComplete(Tournament $tournament, string $level, ?string $levelName, $groupId)
     {
-        \Log::info("3-player losers tournament complete - checking for triple tie scenario");
+        \Log::info("3-player losers tournament complete - determining winners");
         
         // Check if this was a fair chance match completion
         $fairChanceMatch = PoolMatch::where('tournament_id', $tournament->id)
@@ -2420,6 +2424,10 @@ class TournamentProgressionController extends Controller
         if ($fairChanceMatch) {
             $this->handle3PlayerTripleTieScenario($tournament, $level, $levelName, $groupId, 'losers', $fairChanceMatch);
         }
+        
+        // Call MatchAlgorithmService to determine winners and create Winner records
+        \Log::info("Calling MatchAlgorithmService to determine 3-player losers");
+        $this->matchService->determine3PlayerWinnersRobust($tournament, $level, $groupId);
     }
 
     /**
