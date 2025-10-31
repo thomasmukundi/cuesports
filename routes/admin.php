@@ -101,26 +101,50 @@ Route::post('create-tournament', function(\Illuminate\Http\Request $request) {
             // Get users based on tournament area scope
             $recipients = [];
             
-            $usersQuery = \App\Models\User::where('is_admin', '!=', true)
-                ->orWhereNull('is_admin');
+            $usersQuery = \App\Models\User::where(function($query) {
+                $query->where('is_admin', '!=', true)
+                      ->orWhereNull('is_admin');
+            });
             
             // Apply area scoping based on tournament scope
             if ($tournament->area_scope && $tournament->area_name) {
                 switch ($tournament->area_scope) {
                     case 'community':
-                        $usersQuery->whereHas('community', function($q) use ($tournament) {
-                            $q->where('name', $tournament->area_name);
-                        });
+                        $community = \App\Models\Community::where('name', $tournament->area_name)->first();
+                        if ($community) {
+                            $usersQuery->where('community_id', $community->id);
+                        } else {
+                            $usersQuery->where('id', -1); // No users
+                        }
                         break;
                     case 'county':
-                        $usersQuery->whereHas('county', function($q) use ($tournament) {
-                            $q->where('name', $tournament->area_name);
-                        });
+                        $county = \App\Models\County::where('name', $tournament->area_name)->first();
+                        if ($county) {
+                            $usersQuery->where(function($q) use ($county) {
+                                $q->where('county_id', $county->id)
+                                  ->orWhereHas('community', function($subQ) use ($county) {
+                                      $subQ->where('county_id', $county->id);
+                                  });
+                            });
+                        } else {
+                            $usersQuery->where('id', -1); // No users
+                        }
                         break;
                     case 'region':
-                        $usersQuery->whereHas('region', function($q) use ($tournament) {
-                            $q->where('name', $tournament->area_name);
-                        });
+                        $region = \App\Models\Region::where('name', $tournament->area_name)->first();
+                        if ($region) {
+                            $usersQuery->where(function($q) use ($region) {
+                                $q->where('region_id', $region->id)
+                                  ->orWhereHas('community', function($subQ) use ($region) {
+                                      $subQ->where('region_id', $region->id);
+                                  })
+                                  ->orWhereHas('county', function($subQ) use ($region) {
+                                      $subQ->where('region_id', $region->id);
+                                  });
+                            });
+                        } else {
+                            $usersQuery->where('id', -1); // No users
+                        }
                         break;
                     case 'national':
                     default:
@@ -301,32 +325,97 @@ Route::middleware(['auth:sanctum'])->group(function () {
                 // Get users based on tournament area scope
                 $recipients = [];
                 
-                $usersQuery = \App\Models\User::where('is_admin', '!=', true)
-                    ->orWhereNull('is_admin');
+                $usersQuery = \App\Models\User::where(function($query) {
+                    $query->where('is_admin', '!=', true)
+                          ->orWhereNull('is_admin');
+                });
                 
                 // Apply area scoping based on tournament scope
                 if ($tournament->area_scope && $tournament->area_name) {
+                    \Log::info("Applying area scope filtering", [
+                        'area_scope' => $tournament->area_scope,
+                        'area_name' => $tournament->area_name,
+                        'tournament_id' => $tournament->id
+                    ]);
+                    
+                    // Debug: Check if the area exists in database
+                    if ($tournament->area_scope === 'county') {
+                        $countyExists = \App\Models\County::where('name', $tournament->area_name)->first();
+                        \Log::info("County lookup", [
+                            'county_name' => $tournament->area_name,
+                            'county_exists' => !!$countyExists,
+                            'county_id' => $countyExists ? $countyExists->id : null
+                        ]);
+                        
+                        if ($countyExists) {
+                            $usersInCounty = \App\Models\User::where('county_id', $countyExists->id)
+                                ->where(function($query) {
+                                    $query->where('is_admin', '!=', true)->orWhereNull('is_admin');
+                                })->count();
+                            \Log::info("Direct county users count", [
+                                'county_id' => $countyExists->id,
+                                'users_count' => $usersInCounty
+                            ]);
+                        }
+                    }
+                    
                     switch ($tournament->area_scope) {
                         case 'community':
-                            $usersQuery->whereHas('community', function($q) use ($tournament) {
-                                $q->where('name', $tournament->area_name);
-                            });
+                            $community = \App\Models\Community::where('name', $tournament->area_name)->first();
+                            if ($community) {
+                                $usersQuery->where('community_id', $community->id);
+                            } else {
+                                \Log::warning("Community not found", ['name' => $tournament->area_name]);
+                                $usersQuery->where('id', -1); // No users
+                            }
                             break;
                         case 'county':
-                            $usersQuery->whereHas('county', function($q) use ($tournament) {
-                                $q->where('name', $tournament->area_name);
-                            });
+                            $county = \App\Models\County::where('name', $tournament->area_name)->first();
+                            if ($county) {
+                                // Users can be in county directly OR through their community
+                                $usersQuery->where(function($q) use ($county) {
+                                    $q->where('county_id', $county->id)
+                                      ->orWhereHas('community', function($subQ) use ($county) {
+                                          $subQ->where('county_id', $county->id);
+                                      });
+                                });
+                            } else {
+                                \Log::warning("County not found", ['name' => $tournament->area_name]);
+                                $usersQuery->where('id', -1); // No users
+                            }
                             break;
                         case 'region':
-                            $usersQuery->whereHas('region', function($q) use ($tournament) {
-                                $q->where('name', $tournament->area_name);
-                            });
+                            $region = \App\Models\Region::where('name', $tournament->area_name)->first();
+                            if ($region) {
+                                // Users can be in region directly OR through their community/county
+                                $usersQuery->where(function($q) use ($region) {
+                                    $q->where('region_id', $region->id)
+                                      ->orWhereHas('community', function($subQ) use ($region) {
+                                          $subQ->where('region_id', $region->id);
+                                      })
+                                      ->orWhereHas('county', function($subQ) use ($region) {
+                                          $subQ->where('region_id', $region->id);
+                                      });
+                                });
+                            } else {
+                                \Log::warning("Region not found", ['name' => $tournament->area_name]);
+                                $usersQuery->where('id', -1); // No users
+                            }
                             break;
                         case 'national':
                         default:
                             // National tournaments - send to all users (no filtering)
+                            \Log::info("National tournament - no area filtering applied");
                             break;
                     }
+                    
+                    // Debug: Check how many users match the filter
+                    $filteredCount = $usersQuery->count();
+                    \Log::info("Users after area filtering", [
+                        'area_scope' => $tournament->area_scope,
+                        'area_name' => $tournament->area_name,
+                        'filtered_user_count' => $filteredCount
+                    ]);
                 }
                 
                 $users = $usersQuery->select('id', 'name', 'email')->get();
@@ -595,7 +684,10 @@ Route::middleware(['auth:sanctum'])->group(function () {
                 }
             } else {
                 // Send to all users (exclude admins)
-                $users = \App\Models\User::where('is_admin', '!=', true)->orWhereNull('is_admin')->get();
+                $users = \App\Models\User::where(function($query) {
+                    $query->where('is_admin', '!=', true)
+                          ->orWhereNull('is_admin');
+                })->get();
                 
                 foreach ($users as $user) {
                     \App\Models\Notification::create([
