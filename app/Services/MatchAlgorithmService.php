@@ -3214,7 +3214,10 @@ class MatchAlgorithmService
         
         $sfWinner = $sfMatch->winner_id;
         $sfLoser = ($sfMatch->player_1_id === $sfWinner) ? $sfMatch->player_2_id : $sfMatch->player_1_id;
-        $byePlayer = $this->getByePlayer($tournament, $level, $groupId, [$sfMatch->player_1_id, $sfMatch->player_2_id]);
+        
+        // Get bye player from SF match bye_player_id field
+        $byePlayerId = $sfMatch->bye_player_id;
+        $byePlayer = $byePlayerId ? User::find($byePlayerId) : null;
         
         \Log::info("3-player tournament state", [
             'sf_winner' => $sfWinner,
@@ -3691,6 +3694,45 @@ class MatchAlgorithmService
 
         $byePlayerId = $allPlayers->first();
         return $byePlayerId ? User::find($byePlayerId) : null;
+    }
+
+    /**
+     * Create 3-player final match
+     */
+    private function create3PlayerFinalMatch(Tournament $tournament, string $level, ?int $groupId, $player1Id, $player2Id)
+    {
+        \Log::info("Creating 3-player final match", [
+            'player_1' => $player1Id,
+            'player_2' => $player2Id
+        ]);
+        // This method is called but matches are already created by TournamentProgressionController
+        // Just log for now
+    }
+
+    /**
+     * Create 3-player tie breaker match
+     */
+    private function create3PlayerTieBreakerMatch(Tournament $tournament, string $level, ?int $groupId, $player1Id, $player2Id)
+    {
+        \Log::info("Creating 3-player tie breaker match", [
+            'player_1' => $player1Id,
+            'player_2' => $player2Id
+        ]);
+        // This method is called but matches are already created by TournamentProgressionController
+        // Just log for now
+    }
+
+    /**
+     * Create 3-player fair chance match
+     */
+    private function create3PlayerFairChanceMatch(Tournament $tournament, string $level, ?int $groupId, $player1Id, $player2Id)
+    {
+        \Log::info("Creating 3-player fair chance match", [
+            'player_1' => $player1Id,
+            'player_2' => $player2Id
+        ]);
+        // This method is called but matches are already created by TournamentProgressionController
+        // Just log for now
     }
 
     /**
