@@ -3176,14 +3176,17 @@ class MatchAlgorithmService
         
         // If we need more than 3 winners, handle losers tournament (D, E, F)
         if ($winnersNeeded > 3) {
+            \Log::info("Handling losers tournament for positions 4-6", [
+                'winners_needed' => $winnersNeeded
+            ]);
             $losersPositions = $this->handle3PlayerLosersTournament($tournament, $level, $groupId, $winnersNeeded);
-            
-            // Assign positions systematically: losers first (4-6), then winners (1-3)
-            $this->assign3PlayerPositionsSystematic($tournament, $level, $groupId, $winnersPositions, $losersPositions, $winnersNeeded);
         } else {
-            // Only need 3 winners - assign positions 1-3 from winners tournament
-            $this->assign3PlayerWinnersOnly($tournament, $level, $groupId, $winnersPositions);
+            \Log::info("Only 3 winners needed - skipping losers tournament", [
+                'winners_needed' => $winnersNeeded
+            ]);
         }
+        
+        // Winner records are created in the individual subcase methods
         
         \Log::info("=== ROBUST 3-PLAYER TOURNAMENT HANDLER COMPLETE ===");
     }
@@ -3505,7 +3508,7 @@ class MatchAlgorithmService
                     'level' => $level,
                     'player_id' => $playerId,
                     'position' => $actualPosition,
-                    'prize_amount' => $this->calculatePrizeAmount($tournament, $actualPosition),
+                    'prize_amount' => 0, // Prize calculation not relevant
                     'tie_info' => !empty($tieInfo) ? json_encode($tieInfo) : null
                 ]);
                 
@@ -3651,6 +3654,43 @@ class MatchAlgorithmService
                 'tie_info' => $tieInfo
             ]);
         }
+    }
+
+    /**
+     * Get match by round name
+     */
+    private function getMatch(Tournament $tournament, string $level, ?int $groupId, string $roundName)
+    {
+        return PoolMatch::where('tournament_id', $tournament->id)
+            ->where('level', $level)
+            ->where('group_id', $groupId)
+            ->where('round_name', $roundName)
+            ->first();
+    }
+
+    /**
+     * Get bye player from tournament participants
+     */
+    private function getByePlayer(Tournament $tournament, string $level, ?int $groupId, array $excludePlayerIds)
+    {
+        // Get all players in this tournament level
+        $allPlayers = PoolMatch::where('tournament_id', $tournament->id)
+            ->where('level', $level)
+            ->where('group_id', $groupId)
+            ->where(function($q) {
+                $q->where('player_1_id', '!=', null)->orWhere('player_2_id', '!=', null);
+            })
+            ->get()
+            ->flatMap(function($match) {
+                return [$match->player_1_id, $match->player_2_id];
+            })
+            ->unique()
+            ->filter(function($playerId) use ($excludePlayerIds) {
+                return !in_array($playerId, $excludePlayerIds);
+            });
+
+        $byePlayerId = $allPlayers->first();
+        return $byePlayerId ? User::find($byePlayerId) : null;
     }
 
     /**
