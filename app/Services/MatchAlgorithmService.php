@@ -148,7 +148,16 @@ class MatchAlgorithmService
             \Log::info("=== GENERATE NEXT ROUND START ===");
             
             // For special tournaments, use simplified logic
+            \Log::info("=== TOURNAMENT TYPE CHECK ===", [
+                'level' => $level,
+                'tournament_special' => $tournament->special,
+                'is_special_level' => ($level === 'special'),
+                'is_special_tournament' => $tournament->special,
+                'will_use_special_logic' => ($level === 'special' || $tournament->special)
+            ]);
+            
             if ($level === 'special' || $tournament->special) {
+                \Log::info("USING SPECIAL TOURNAMENT LOGIC");
                 return $this->generateSpecialTournamentNextRound($tournament, $level, $groupId);
             }
             
@@ -156,11 +165,22 @@ class MatchAlgorithmService
             $currentRoundMatches = $this->getCurrentRoundMatches($tournament, $level, $groupId);
             $winners = $this->getWinnersFromMatches($currentRoundMatches);
             
-            \Log::info("Round completion check", [
+            \Log::info("=== ROUND COMPLETION CHECK START ===", [
+                'tournament_id' => $tournament->id,
+                'level' => $level,
+                'group_id' => $groupId,
                 'current_matches' => $currentRoundMatches->count(),
                 'winners_found' => $winners->count(),
-                'level' => $level,
-                'group_id' => $groupId
+                'current_round_names' => $currentRoundMatches->pluck('round_name')->unique()->toArray(),
+                'match_details' => $currentRoundMatches->map(function($match) {
+                    return [
+                        'id' => $match->id,
+                        'round_name' => $match->round_name,
+                        'match_name' => $match->match_name,
+                        'status' => $match->status,
+                        'winner_id' => $match->winner_id
+                    ];
+                })->toArray()
             ]);
             
             $originalPlayerCount = $this->getTotalPlayersInTournament($tournament, $level, $groupId);
@@ -998,10 +1018,21 @@ class MatchAlgorithmService
         $levelName = $this->getLevelName($level, $groupId);
         $playerCount = $players->count();
         
-        \Log::info("Creating smart pairing for {$level} level: {$playerCount} players in group {$groupId}");
+        \Log::info("=== SMART PAIRING DECISION POINT ===", [
+            'level' => $level,
+            'player_count' => $playerCount,
+            'group_id' => $groupId,
+            'tournament_id' => $tournament->id,
+            'will_use_special_cases' => ($playerCount <= 4),
+            'will_use_standard_progression' => ($playerCount > 4),
+            'players' => $players->map(function($p) {
+                return ['id' => $p->id, 'name' => $p->name];
+            })->toArray()
+        ]);
         
         // Only handle special cases for 1-4 players
         if ($playerCount <= 4) {
+            \Log::info("USING handleSpecialCasesWithSmartPairing for {$playerCount} players");
             return $this->handleSpecialCasesWithSmartPairing($tournament, $players, $level, $groupId, $levelName);
         }
         
@@ -1052,15 +1083,25 @@ class MatchAlgorithmService
         }
         
         if ($playerCount === 4) {
-            // Create 4-player tournament: Round 1 matches first
+            // Create 4-player tournament: Use unique round name to avoid conflicts
             $pairedPlayers = $this->smartPairPlayers($players, $level);
             
-            // Round 1 Match 1: A vs B
-            $match1 = $this->createMatch($tournament, $pairedPlayers[0], $pairedPlayers[1], 'round_1', $level, $groupId, $levelName);
+            \Log::info("=== CREATING 4-PLAYER SPECIAL CASE MATCHES ===", [
+                'tournament_id' => $tournament->id,
+                'level' => $level,
+                'group_id' => $groupId,
+                'round_name_to_use' => '4player_round1',
+                'players' => array_map(function($p) {
+                    return ['id' => $p->id ?? $p['id'], 'name' => $p->name ?? $p['name']];
+                }, $pairedPlayers)
+            ]);
+            
+            // 4-Player Round 1 Match 1: A vs B
+            $match1 = $this->createMatch($tournament, $pairedPlayers[0], $pairedPlayers[1], '4player_round1', $level, $groupId, $levelName);
             $matches[] = $match1;
             
-            // Round 1 Match 2: C vs D
-            $match2 = $this->createMatch($tournament, $pairedPlayers[2], $pairedPlayers[3], 'round_1', $level, $groupId, $levelName);
+            // 4-Player Round 1 Match 2: C vs D
+            $match2 = $this->createMatch($tournament, $pairedPlayers[2], $pairedPlayers[3], '4player_round1', $level, $groupId, $levelName);
             $matches[] = $match2;
         }
         
@@ -1773,15 +1814,19 @@ class MatchAlgorithmService
     private function handleLargeGroupProgression(Tournament $tournament, Collection $winners, string $level, $groupId, Collection $currentRoundMatches)
     {
         $levelName = $this->getLevelName($level, $groupId);
-        $nextRoundName = $this->getNextRoundName($currentRoundMatches->first()->round_name);
+        $currentRoundName = $currentRoundMatches->first()->round_name;
+        $nextRoundName = $this->getNextRoundName($currentRoundName);
         
         \Log::info("=== LARGE GROUP PROGRESSION START ===", [
             'tournament_id' => $tournament->id,
             'level' => $level,
             'level_name' => $levelName,
+            'current_round_name' => $currentRoundName,
             'next_round_name' => $nextRoundName,
             'initial_winner_count' => $winners->count(),
-            'current_round_matches' => $currentRoundMatches->count()
+            'current_round_matches' => $currentRoundMatches->count(),
+            'winner_ids' => $winners->pluck('id')->toArray(),
+            'winner_names' => $winners->pluck('name')->toArray()
         ]);
         
         // If odd number of winners > 3, add a loser to make even pairs
@@ -2094,7 +2139,9 @@ class MatchAlgorithmService
             'player_count' => $players->count(),
             'players' => $players->map(function($p) {
                 return ['id' => $p->id, 'name' => $p->name];
-            })->toArray()
+            })->toArray(),
+            'will_use_smart_pairing' => ($level !== 'community' && $level !== 'special'),
+            'will_use_random_pairing' => ($level === 'community' || $level === 'special')
         ]);
         
         if ($level !== 'community' && $level !== 'special') {
@@ -2115,7 +2162,15 @@ class MatchAlgorithmService
      */
     private function createSmartPairingMatches(Tournament $tournament, Collection $players, string $level, $groupId, string $roundName, string $levelName)
     {
-        \Log::info("Creating smart pairing matches for {$level} level, round: {$roundName}, players: {$players->count()}");
+        \Log::info("=== CREATE SMART PAIRING MATCHES START ===", [
+            'tournament_id' => $tournament->id,
+            'level' => $level,
+            'round_name' => $roundName,
+            'player_count' => $players->count(),
+            'players' => $players->map(function($p) {
+                return ['id' => $p->id, 'name' => $p->name];
+            })->toArray()
+        ]);
         
         // Create enhanced player objects with previous group info for smart pairing
         $enhancedPlayers = collect();
@@ -4117,18 +4172,18 @@ class MatchAlgorithmService
                 break;
 
             case 4:
-                // 4-player tournament: Round 1 matches first
+                // 4-player tournament: Use unique round name to avoid conflicts
                 $matches[] = [
                     'player1' => $players[0],
                     'player2' => $players[1],
-                    'round_name' => 'round_1',
-                    'match_name' => 'round_1_match1'
+                    'round_name' => '4player_round1',
+                    'match_name' => '4player_round1_match1'
                 ];
                 $matches[] = [
                     'player1' => $players[2],
                     'player2' => $players[3],
-                    'round_name' => 'round_1',
-                    'match_name' => 'round_1_match2'
+                    'round_name' => '4player_round1',
+                    'match_name' => '4player_round1_match2'
                 ];
                 break;
 
@@ -4662,11 +4717,16 @@ class MatchAlgorithmService
     {
         $winnersArray = $winners->shuffle()->values();
         
-        \Log::info("Creating 4-player tournament Round 1 from winners", [
+        \Log::info("=== CREATE 4-PLAYER TOURNAMENT FROM WINNERS ===", [
+            'tournament_id' => $tournament->id,
+            'level' => $level,
+            'group_id' => $groupId,
+            'round_name_to_use' => '4player_round1',
             'player_1' => $winnersArray[0]->name,
             'player_2' => $winnersArray[1]->name,
             'player_3' => $winnersArray[2]->name,
-            'player_4' => $winnersArray[3]->name
+            'player_4' => $winnersArray[3]->name,
+            'logic' => 'Creating new 4-player tournament from larger tournament winners'
         ]);
         
         // Create Round 1 Match 1: A vs B
