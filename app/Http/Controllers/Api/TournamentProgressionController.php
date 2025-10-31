@@ -799,7 +799,6 @@ class TournamentProgressionController extends Controller
             'level' => $level,
             'level_name' => $levelName,
             'level_id' => $groupId,
-            'prize_amount' => $this->calculatePrizeAmount($tournament, 1),
         ]);
         
         // Position 2: Loser of SF_winners
@@ -811,7 +810,6 @@ class TournamentProgressionController extends Controller
             'level' => $level,
             'level_name' => $levelName,
             'level_id' => $groupId,
-            'prize_amount' => $this->calculatePrizeAmount($tournament, 2),
         ]);
         
         // Position 3: Winner of SF_losers
@@ -822,7 +820,6 @@ class TournamentProgressionController extends Controller
             'level' => $level,
             'level_name' => $levelName,
             'level_id' => $groupId,
-            'prize_amount' => $this->calculatePrizeAmount($tournament, 3),
         ]);
         
         // Position 4: Loser of SF_losers
@@ -834,7 +831,6 @@ class TournamentProgressionController extends Controller
             'level' => $level,
             'level_name' => $levelName,
             'level_id' => $groupId,
-            'prize_amount' => $this->calculatePrizeAmount($tournament, 4),
         ]);
         
         // Position 5: Winner of losers_SF_winners
@@ -845,7 +841,6 @@ class TournamentProgressionController extends Controller
             'level' => $level,
             'level_name' => $levelName,
             'level_id' => $groupId,
-            'prize_amount' => $this->calculatePrizeAmount($tournament, 5),
         ]);
         
         // Position 6: Loser of losers_SF_winners
@@ -857,7 +852,6 @@ class TournamentProgressionController extends Controller
             'level' => $level,
             'level_name' => $levelName,
             'level_id' => $groupId,
-            'prize_amount' => $this->calculatePrizeAmount($tournament, 6),
         ]);
         
         \Log::info("Generated all 6 positions for comprehensive tournament", [
