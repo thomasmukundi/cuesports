@@ -854,10 +854,87 @@ class TournamentProgressionController extends Controller
             'level_id' => $groupId,
         ]);
         
+        // Send push notifications to all players about their final positions
+        $this->sendComprehensiveTournamentPositionNotifications($tournament, $level, $levelName, [
+            1 => $sfWinners->winner_id,
+            2 => $sfWinnersLoser,
+            3 => $sfLosers->winner_id,
+            4 => $sfLosersLoser,
+            5 => $losersSfWinners->winner_id,
+            6 => $losersSfWinnersLoser
+        ]);
+        
         \Log::info("Generated all 6 positions for comprehensive tournament", [
             'tournament_id' => $tournament->id,
             'level' => $level,
             'positions_created' => 6
+        ]);
+    }
+
+    /**
+     * Send push notifications to players about their comprehensive tournament positions
+     */
+    private function sendComprehensiveTournamentPositionNotifications(Tournament $tournament, string $level, ?string $levelName, array $positions)
+    {
+        foreach ($positions as $position => $playerId) {
+            try {
+                $player = \App\Models\User::find($playerId);
+                if (!$player) {
+                    \Log::warning("Player not found for position notification", [
+                        'player_id' => $playerId,
+                        'position' => $position
+                    ]);
+                    continue;
+                }
+                
+                // Create position-specific messages
+                $messages = [
+                    1 => "🏆 Congratulations! You won 1st place in {$tournament->name}!",
+                    2 => "🥈 Great job! You finished 2nd place in {$tournament->name}!",
+                    3 => "🥉 Well done! You finished 3rd place in {$tournament->name}!",
+                    4 => "👏 You finished 4th place in {$tournament->name}. Great effort!",
+                    5 => "💪 You finished 5th place in {$tournament->name}. Keep it up!",
+                    6 => "🎯 You finished 6th place in {$tournament->name}. Thanks for participating!"
+                ];
+                
+                $message = $messages[$position] ?? "You finished position {$position} in {$tournament->name}!";
+                
+                // Create notification
+                \App\Models\Notification::create([
+                    'user_id' => $playerId,
+                    'type' => 'tournament_position',
+                    'title' => 'Tournament Results',
+                    'message' => $message,
+                    'data' => [
+                        'tournament_id' => $tournament->id,
+                        'tournament_name' => $tournament->name,
+                        'position' => $position,
+                        'level' => $level,
+                        'level_name' => $levelName,
+                        'total_participants' => 6
+                    ],
+                    'read' => false,
+                ]);
+                
+                \Log::info("Position notification sent", [
+                    'player_id' => $playerId,
+                    'player_name' => $player->name,
+                    'position' => $position,
+                    'tournament' => $tournament->name
+                ]);
+                
+            } catch (\Exception $e) {
+                \Log::error("Failed to send position notification", [
+                    'player_id' => $playerId,
+                    'position' => $position,
+                    'error' => $e->getMessage()
+                ]);
+            }
+        }
+        
+        \Log::info("All comprehensive tournament position notifications sent", [
+            'tournament_id' => $tournament->id,
+            'positions_notified' => count($positions)
         ]);
     }
 
