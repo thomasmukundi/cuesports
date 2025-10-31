@@ -17,18 +17,24 @@ class RoundRobinService
     {
         $winnersNeeded = $tournament->winners ?? 3;
         
-        \Log::info("Checking round robin trigger conditions", [
+        \Log::info("=== ROUND ROBIN TRIGGER CHECK ===", [
             'tournament_id' => $tournament->id,
             'level' => $level,
             'remaining_players' => $remainingPlayers,
             'winners_needed' => $winnersNeeded,
-            'is_special' => $tournament->special ?? false
+            'is_special' => $tournament->special ?? false,
+            'threshold_for_round_robin' => 7,
+            'will_use_round_robin' => ($winnersNeeded > 6),
+            'will_use_comprehensive_4player' => ($winnersNeeded >= 4 && $winnersNeeded <= 6),
+            'will_use_standard_progression' => ($winnersNeeded <= 3)
         ]);
         
-        // Only trigger round robin if we need more than 3 winners
-        if ($winnersNeeded <= 3) {
-            \Log::info("Round robin not triggered: winners needed <= 3", [
-                'winners_needed' => $winnersNeeded
+        // Only trigger round robin if we need 7 or more winners
+        // For 1-6 winners, use standard or comprehensive 4-player tournament system
+        if ($winnersNeeded < 7) {
+            \Log::info("Round robin not triggered: winners needed < 7 (using other tournament systems)", [
+                'winners_needed' => $winnersNeeded,
+                'reason' => 'Will use standard (1-3) or comprehensive 4-player (4-6) tournament systems'
             ]);
             return false;
         }
