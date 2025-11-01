@@ -1350,7 +1350,7 @@ class AdminController extends Controller
             $notifications = $eligibleUsers->map(function($user) use ($tournament, $notificationData) {
                 return [
                     'player_id' => $user->id,
-                    'type' => 'tournament',
+                    'type' => 'new_tournament',
                     'message' => "New tournament '{$tournament->name}' is now open for registration!",
                     'data' => json_encode($notificationData),
                     'created_at' => now(),
@@ -1359,6 +1359,12 @@ class AdminController extends Controller
             })->toArray();
 
             // Single bulk insert - much faster than loops
+            \Log::info('🔄 About to insert notifications', [
+                'tournament_id' => $tournament->id,
+                'notification_count' => count($notifications),
+                'sample_notification' => $notifications[0] ?? null
+            ]);
+            
             \DB::table('notifications')->insert($notifications);
 
             \Log::info('✅ Tournament notifications sent successfully', [
