@@ -1567,13 +1567,17 @@ class AdminController extends Controller
 
             foreach ($usersWithEmails as $user) {
                 try {
-                    $recipient = [
-                        'email' => $user->email,
-                        'name' => $user->name
-                    ];
+                    $success = $emailService->sendTournamentAnnouncement(
+                        $user->email,
+                        $user->name,
+                        $tournamentData
+                    );
                     
-                    $emailService->sendTournamentAnnouncementEmail($recipient, $tournamentData);
-                    $successCount++;
+                    if ($success) {
+                        $successCount++;
+                    } else {
+                        $failureCount++;
+                    }
                 } catch (\Exception $e) {
                     $failureCount++;
                     \Log::error('Failed to send email notification', [
