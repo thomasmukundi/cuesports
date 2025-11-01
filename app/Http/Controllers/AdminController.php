@@ -1318,6 +1318,14 @@ class AdminController extends Controller
             // Get eligible users with a single optimized query
             $eligibleUsers = $this->getEligibleUsersOptimized($tournament);
             
+            \Log::info('📱 Eligible users found', [
+                'tournament_id' => $tournament->id,
+                'area_scope' => $tournament->area_scope,
+                'area_name' => $tournament->area_name,
+                'user_count' => $eligibleUsers->count(),
+                'first_few_users' => $eligibleUsers->take(3)->pluck('id', 'name')->toArray()
+            ]);
+            
             if ($eligibleUsers->isEmpty()) {
                 \Log::info('📱 No eligible users found for tournament notifications', [
                     'tournament_id' => $tournament->id,
@@ -1342,7 +1350,7 @@ class AdminController extends Controller
             $notifications = $eligibleUsers->map(function($user) use ($tournament, $notificationData) {
                 return [
                     'player_id' => $user->id,
-                    'type' => 'tournament_created',
+                    'type' => 'tournament',
                     'message' => "New tournament '{$tournament->name}' is now open for registration!",
                     'data' => json_encode($notificationData),
                     'created_at' => now(),
@@ -1385,25 +1393,37 @@ class AdminController extends Controller
             switch ($tournament->area_scope) {
                 case 'community':
                     if ($tournament->area_name) {
-                        $query->whereHas('community', function($q) use ($tournament) {
-                            $q->where('name', $tournament->area_name);
-                        });
+                        $community = Community::where('name', $tournament->area_name)->first();
+                        if ($community) {
+                            $query->where('community_id', $community->id);
+                        } else {
+                            // No community found, return empty collection
+                            return collect();
+                        }
                     }
                     break;
                     
                 case 'county':
                     if ($tournament->area_name) {
-                        $query->whereHas('county', function($q) use ($tournament) {
-                            $q->where('name', $tournament->area_name);
-                        });
+                        $county = County::where('name', $tournament->area_name)->first();
+                        if ($county) {
+                            $query->where('county_id', $county->id);
+                        } else {
+                            // No county found, return empty collection
+                            return collect();
+                        }
                     }
                     break;
                     
                 case 'regional':
                     if ($tournament->area_name) {
-                        $query->whereHas('region', function($q) use ($tournament) {
-                            $q->where('name', $tournament->area_name);
-                        });
+                        $region = Region::where('name', $tournament->area_name)->first();
+                        if ($region) {
+                            $query->where('region_id', $region->id);
+                        } else {
+                            // No region found, return empty collection
+                            return collect();
+                        }
                     }
                     break;
             }
