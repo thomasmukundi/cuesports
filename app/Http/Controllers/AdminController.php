@@ -1475,19 +1475,24 @@ class AdminController extends Controller
 
             foreach ($usersWithTokens as $user) {
                 try {
-                    $firebaseService->sendPushNotification(
+                    $success = $firebaseService->sendToDevice(
                         $user->fcm_token,
                         'New Tournament Available',
                         "New tournament '{$tournament->name}' is now open for registration!",
                         [
                             'type' => 'new_tournament',
-                            'tournament_id' => $tournament->id,
+                            'tournament_id' => (string)$tournament->id,
                             'tournament_name' => $tournament->name,
-                            'area_scope' => $tournament->area_scope,
-                            'area_name' => $tournament->area_name
+                            'area_scope' => $tournament->area_scope ?? '',
+                            'area_name' => $tournament->area_name ?? ''
                         ]
                     );
-                    $successCount++;
+                    
+                    if ($success) {
+                        $successCount++;
+                    } else {
+                        $failureCount++;
+                    }
                 } catch (\Exception $e) {
                     $failureCount++;
                     \Log::error('Failed to send push notification', [
