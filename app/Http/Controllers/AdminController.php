@@ -1367,12 +1367,18 @@ class AdminController extends Controller
             
             \DB::table('notifications')->insert($notifications);
 
-            \Log::info('✅ Tournament notifications sent successfully', [
+            \Log::info('✅ Database notifications sent successfully', [
                 'tournament_id' => $tournament->id,
                 'tournament_name' => $tournament->name,
                 'notifications_sent' => count($notifications),
                 'total_users' => $eligibleUsers->count()
             ]);
+
+            // Send push notifications
+            $this->sendPushNotificationsOptimized($tournament, $eligibleUsers);
+            
+            // Send email notifications
+            $this->sendEmailNotificationsOptimized($tournament, $eligibleUsers);
 
         } catch (\Exception $e) {
             \Log::error('❌ Failed to send tournament notifications', [
@@ -1388,7 +1394,7 @@ class AdminController extends Controller
      */
     private function getEligibleUsersOptimized(Tournament $tournament)
     {
-        $query = User::select('id', 'name', 'email')
+        $query = User::select('id', 'name', 'email', 'fcm_token')
             ->where(function($q) {
                 $q->where('is_admin', '!=', true)
                   ->orWhereNull('is_admin');
@@ -1436,6 +1442,157 @@ class AdminController extends Controller
         }
 
         return $query->get();
+    }
+
+    /**
+     * Send push notifications optimized for tournament announcements
+     */
+    private function sendPushNotificationsOptimized(Tournament $tournament, $eligibleUsers)
+    {
+        try {
+            // Filter users who have FCM tokens
+            $usersWithTokens = $eligibleUsers->filter(function($user) {
+                return !empty($user->fcm_token);
+            });
+
+            if ($usersWithTokens->isEmpty()) {
+                \Log::info('📱 No users with FCM tokens found for push notifications', [
+                    'tournament_id' => $tournament->id,
+                    'total_users' => $eligibleUsers->count()
+                ]);
+                return;
+            }
+
+            \Log::info('📱 Starting push notifications', [
+                'tournament_id' => $tournament->id,
+                'users_with_tokens' => $usersWithTokens->count(),
+                'total_users' => $eligibleUsers->count()
+            ]);
+
+            $firebaseService = app(\App\Services\FirebaseService::class);
+            $successCount = 0;
+            $failureCount = 0;
+
+            foreach ($usersWithTokens as $user) {
+                try {
+                    $firebaseService->sendPushNotification(
+                        $user->fcm_token,
+                        'New Tournament Available',
+                        "New tournament '{$tournament->name}' is now open for registration!",
+                        [
+                            'type' => 'new_tournament',
+                            'tournament_id' => $tournament->id,
+                            'tournament_name' => $tournament->name,
+                            'area_scope' => $tournament->area_scope,
+                            'area_name' => $tournament->area_name
+                        ]
+                    );
+                    $successCount++;
+                } catch (\Exception $e) {
+                    $failureCount++;
+                    \Log::error('Failed to send push notification', [
+                        'user_id' => $user->id,
+                        'tournament_id' => $tournament->id,
+                        'error' => $e->getMessage()
+                    ]);
+                }
+            }
+
+            \Log::info('📱 Push notifications completed', [
+                'tournament_id' => $tournament->id,
+                'success_count' => $successCount,
+                'failure_count' => $failureCount,
+                'total_attempted' => $usersWithTokens->count()
+            ]);
+
+        } catch (\Exception $e) {
+            \Log::error('❌ Failed to send push notifications', [
+                'tournament_id' => $tournament->id,
+                'error' => $e->getMessage()
+            ]);
+        }
+    }
+
+    /**
+     * Send email notifications optimized for tournament announcements
+     */
+    private function sendEmailNotificationsOptimized(Tournament $tournament, $eligibleUsers)
+    {
+        try {
+            // Filter users who have email addresses
+            $usersWithEmails = $eligibleUsers->filter(function($user) {
+                return !empty($user->email);
+            });
+
+            if ($usersWithEmails->isEmpty()) {
+                \Log::info('📧 No users with email addresses found', [
+                    'tournament_id' => $tournament->id,
+                    'total_users' => $eligibleUsers->count()
+                ]);
+                return;
+            }
+
+            \Log::info('📧 Starting email notifications', [
+                'tournament_id' => $tournament->id,
+                'users_with_emails' => $usersWithEmails->count(),
+                'total_users' => $eligibleUsers->count()
+            ]);
+
+            $emailService = new EmailService();
+            $successCount = 0;
+            $failureCount = 0;
+
+            // Prepare tournament data for email
+            $tournamentData = [
+                'tournament_name' => $tournament->name,
+                'tournament_description' => $tournament->description ?? 'Join this exciting tournament!',
+                'start_date' => $tournament->start_date,
+                'end_date' => $tournament->end_date,
+                'registration_deadline' => $tournament->registration_deadline,
+                'entry_fee' => $tournament->entry_fee ?? 0,
+                'tournament_charge' => $tournament->tournament_charge ?? 0,
+                'community_prize' => $tournament->community_prize ?? 0,
+                'county_prize' => $tournament->county_prize ?? 0,
+                'regional_prize' => $tournament->regional_prize ?? 0,
+                'national_prize' => $tournament->national_prize ?? 0,
+                'area_scope' => $tournament->area_scope,
+                'area_name' => $tournament->area_name,
+                'special' => $tournament->special ?? false
+            ];
+
+            foreach ($usersWithEmails as $user) {
+                try {
+                    $recipient = [
+                        'email' => $user->email,
+                        'name' => $user->name
+                    ];
+                    
+                    $emailService->sendTournamentAnnouncementEmail($recipient, $tournamentData);
+                    $successCount++;
+                } catch (\Exception $e) {
+                    $failureCount++;
+                    \Log::error('Failed to send email notification', [
+                        'user_id' => $user->id,
+                        'email' => $user->email,
+                        'tournament_id' => $tournament->id,
+                        'error' => $e->getMessage()
+                    ]);
+                }
+            }
+
+            \Log::info('📧 Email notifications completed', [
+                'tournament_id' => $tournament->id,
+                'success_count' => $successCount,
+                'failure_count' => $failureCount,
+                'total_attempted' => $usersWithEmails->count()
+            ]);
+
+        } catch (\Exception $e) {
+            \Log::error('❌ Failed to send email notifications', [
+                'tournament_id' => $tournament->id,
+                'error' => $e->getMessage()
+            ]);
+        }
     }
 
     /**
