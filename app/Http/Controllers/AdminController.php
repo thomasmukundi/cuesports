@@ -527,10 +527,10 @@ class AdminController extends Controller
                 'special' => $tournament->special
             ]);
             
-            // Send automatic tournament announcement emails
-            $this->sendTournamentAnnouncement($tournament);
+            // Send tournament notifications efficiently without jobs
+            $this->sendTournamentNotificationsOptimized($tournament);
             
-            return redirect()->route('admin.tournaments')->with('success', 'Tournament created successfully! Announcement emails are being sent to eligible players.');
+            return redirect()->route('admin.tournaments')->with('success', 'Tournament created successfully! Notifications have been sent to eligible players.');
         } catch (\Exception $e) {
             \Log::error('Tournament creation failed: ' . $e->getMessage());
             return back()->withErrors(['error' => 'Failed to create tournament. Please try again.'])->withInput();
@@ -1300,6 +1300,116 @@ class AdminController extends Controller
         ]);
 
         return $recipients;
+    }
+
+    /**
+     * Send tournament notifications efficiently using bulk operations
+     */
+    private function sendTournamentNotificationsOptimized(Tournament $tournament)
+    {
+        try {
+            \Log::info('🚀 Starting optimized tournament notifications', [
+                'tournament_id' => $tournament->id,
+                'tournament_name' => $tournament->name,
+                'area_scope' => $tournament->area_scope,
+                'area_name' => $tournament->area_name
+            ]);
+
+            // Get eligible users with a single optimized query
+            $eligibleUsers = $this->getEligibleUsersOptimized($tournament);
+            
+            if ($eligibleUsers->isEmpty()) {
+                \Log::info('📱 No eligible users found for tournament notifications', [
+                    'tournament_id' => $tournament->id,
+                    'area_scope' => $tournament->area_scope,
+                    'area_name' => $tournament->area_name
+                ]);
+                return;
+            }
+
+            // Prepare notification data once
+            $notificationData = [
+                'tournament_id' => $tournament->id,
+                'tournament_name' => $tournament->name,
+                'area_scope' => $tournament->area_scope,
+                'area_name' => $tournament->area_name,
+                'registration_deadline' => $tournament->registration_deadline,
+                'start_date' => $tournament->start_date,
+                'entry_fee' => $tournament->entry_fee ?? 0
+            ];
+
+            // Create all notifications with a single bulk insert
+            $notifications = $eligibleUsers->map(function($user) use ($tournament, $notificationData) {
+                return [
+                    'player_id' => $user->id,
+                    'type' => 'tournament_created',
+                    'message' => "New tournament '{$tournament->name}' is now open for registration!",
+                    'data' => json_encode($notificationData),
+                    'created_at' => now(),
+                    'updated_at' => now()
+                ];
+            })->toArray();
+
+            // Single bulk insert - much faster than loops
+            \DB::table('notifications')->insert($notifications);
+
+            \Log::info('✅ Tournament notifications sent successfully', [
+                'tournament_id' => $tournament->id,
+                'tournament_name' => $tournament->name,
+                'notifications_sent' => count($notifications),
+                'total_users' => $eligibleUsers->count()
+            ]);
+
+        } catch (\Exception $e) {
+            \Log::error('❌ Failed to send tournament notifications', [
+                'tournament_id' => $tournament->id,
+                'tournament_name' => $tournament->name,
+                'error' => $e->getMessage()
+            ]);
+        }
+    }
+
+    /**
+     * Get eligible users with optimized single query
+     */
+    private function getEligibleUsersOptimized(Tournament $tournament)
+    {
+        $query = User::select('id', 'name', 'email')
+            ->where(function($q) {
+                $q->where('is_admin', '!=', true)
+                  ->orWhereNull('is_admin');
+            });
+
+        // Apply area scope filtering efficiently
+        if (!$tournament->special && $tournament->area_scope && $tournament->area_scope !== 'national') {
+            switch ($tournament->area_scope) {
+                case 'community':
+                    if ($tournament->area_name) {
+                        $query->whereHas('community', function($q) use ($tournament) {
+                            $q->where('name', $tournament->area_name);
+                        });
+                    }
+                    break;
+                    
+                case 'county':
+                    if ($tournament->area_name) {
+                        $query->whereHas('county', function($q) use ($tournament) {
+                            $q->where('name', $tournament->area_name);
+                        });
+                    }
+                    break;
+                    
+                case 'regional':
+                    if ($tournament->area_name) {
+                        $query->whereHas('region', function($q) use ($tournament) {
+                            $q->where('name', $tournament->area_name);
+                        });
+                    }
+                    break;
+            }
+        }
+
+        return $query->get();
     }
 
     /**
