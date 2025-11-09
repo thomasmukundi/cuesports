@@ -6,6 +6,7 @@ use App\Models\Tournament;
 use App\Models\PoolMatch;
 use App\Models\User;
 use App\Models\Winner;
+use App\Models\Notification;
 use App\Events\MatchPairingCreated;
 use App\Services\TournamentUtilityService;
 use App\Services\TournamentNotificationService;
