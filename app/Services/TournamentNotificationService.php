@@ -256,8 +256,9 @@ class TournamentNotificationService
         
         // Create notification
         Notification::create([
-            'user_id' => $player->id,
+            'player_id' => $player->id,
             'type' => 'tournament_position_metrics',
+            'message' => $message,
             'title' => 'Tournament Complete - Position #' . $positionData['position'],
             'data' => [
                 'tournament_id' => $tournament->id,
@@ -346,8 +347,9 @@ class TournamentNotificationService
                 $message .= " tournament!";
                 
                 Notification::create([
-                    'user_id' => $winner->player->id,
+                    'player_id' => $winner->player->id,
                     'type' => 'tournament_position',
+                    'message' => $message,
                     'data' => [
                         'tournament_id' => $tournament->id,
                         'tournament_name' => $tournament->name,
@@ -387,8 +389,9 @@ class TournamentNotificationService
             $message .= " tournament!";
             
             Notification::create([
-                'user_id' => $playerId,
+                'player_id' => $playerId,
                 'type' => 'tournament_position',
+                'message' => $message,
                 'data' => [
                     'tournament_id' => $tournament->id,
                     'tournament_name' => $tournament->name,
@@ -422,8 +425,9 @@ class TournamentNotificationService
         
         foreach ($adminUsers as $admin) {
             Notification::create([
-                'user_id' => $admin->id,
+                'player_id' => $admin->id,
                 'type' => 'level_completion',
+                'message' => "Tournament level {$level} completed for {$tournament->name}",
                 'data' => [
                     'tournament_id' => $tournament->id,
                     'tournament_name' => $tournament->name,
@@ -454,8 +458,9 @@ class TournamentNotificationService
         
         foreach ($playersInRound as $playerId) {
             Notification::create([
-                'user_id' => $playerId,
+                'player_id' => $playerId,
                 'type' => 'round_completion',
+                'message' => "Round {$roundName} completed in {$tournament->name}",
                 'data' => [
                     'tournament_id' => $tournament->id,
                     'tournament_name' => $tournament->name,

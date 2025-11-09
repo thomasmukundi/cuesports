@@ -2896,7 +2896,7 @@ class MatchAlgorithmService
             $message .= "Congratulations on completing the tournament! 🎉";
             
             \App\Models\Notification::create([
-                'user_id' => $player->id,
+                'player_id' => $player->id,
                 'type' => 'tournament_position_final',
                 'title' => 'Tournament Complete - Position #' . $winner->position,
                 'message' => $message,
