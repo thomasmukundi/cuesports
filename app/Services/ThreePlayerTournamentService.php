@@ -1042,6 +1042,17 @@ class ThreePlayerTournamentService
         
         $groupId = TournamentUtilityService::getGroupIdFromLevelName($level, $levelName);
         
+        // First check if we need to create initial 3-player semifinal based on winner count
+        if ($this->shouldCreate3PlayerSemifinal($tournament, $level, $levelName, $groupId, $completedRound)) {
+            \Log::info("Round {$completedRound} completed with 3 winners - creating 3-player semifinal");
+            $this->create3PlayerSemifinalFromCompletedRound($tournament, $level, $levelName, $groupId, $completedRound);
+            return [
+                'status' => 'success',
+                'message' => '3-player semifinal created successfully',
+                'progression_complete' => true
+            ];
+        }
+
         switch ($completedRound) {
             case '3_winners_SF':
                 $this->handle3PlayerWinnersSFComplete($tournament, $level, $levelName, $groupId);
@@ -1330,6 +1341,116 @@ class ThreePlayerTournamentService
         
         // Tie-breaker needed if bye player won the final
         return $finalWinner === $byePlayer;
+    }
+
+    /**
+     * Check if we should create 3-player semifinal based on winner count
+     */
+    private function shouldCreate3PlayerSemifinal(Tournament $tournament, string $level, ?string $levelName, $groupId, string $completedRound): bool
+    {
+        // Don't create if this is already a 3-player specific round
+        $threePlayerRounds = ['3_winners_SF', '3_winners_final', '3_winners_tie_breaker', '3_winners_fair_chance', 
+                             'losers_3_SF', 'losers_3_final', 'losers_3_tie_breaker', 'losers_3_fair_chance'];
+        
+        if (in_array($completedRound, $threePlayerRounds)) {
+            return false;
+        }
+
+        // Get winners from the completed round
+        $winners = $this->getWinnersFromCompletedRound($tournament, $level, $groupId, $completedRound);
+        
+        \Log::info("Checking if should create 3-player semifinal", [
+            'completed_round' => $completedRound,
+            'winner_count' => $winners->count(),
+            'tournament_id' => $tournament->id
+        ]);
+
+        // Create 3-player semifinal if exactly 3 winners and no existing 3_SF match
+        if ($winners->count() === 3) {
+            $existing3SF = PoolMatch::where('tournament_id', $tournament->id)
+                ->where('level', $level)
+                ->where('group_id', $groupId)
+                ->where('round_name', '3_SF')
+                ->exists();
+                
+            return !$existing3SF;
+        }
+
+        return false;
+    }
+
+    /**
+     * Get winners from any completed round
+     */
+    private function getWinnersFromCompletedRound(Tournament $tournament, string $level, $groupId, string $completedRound)
+    {
+        $completedMatches = PoolMatch::where('tournament_id', $tournament->id)
+            ->where('level', $level)
+            ->where('group_id', $groupId)
+            ->where('round_name', $completedRound)
+            ->where('status', 'completed')
+            ->get();
+
+        $winners = collect();
+        foreach ($completedMatches as $match) {
+            if ($match->winner_id) {
+                $winner = User::find($match->winner_id);
+                if ($winner) {
+                    $winners->push($winner);
+                }
+            }
+        }
+
+        return $winners;
+    }
+
+    /**
+     * Create 3-player semifinal from any completed round with 3 winners
+     */
+    private function create3PlayerSemifinalFromCompletedRound(Tournament $tournament, string $level, ?string $levelName, $groupId, string $completedRound)
+    {
+        $winners = $this->getWinnersFromCompletedRound($tournament, $level, $groupId, $completedRound);
+
+        \Log::info("Creating 3-player semifinal from completed round", [
+            'tournament_id' => $tournament->id,
+            'level' => $level,
+            'completed_round' => $completedRound,
+            'winner_count' => $winners->count(),
+            'winners' => $winners->pluck('name')->toArray()
+        ]);
+
+        if ($winners->count() === 3) {
+            // Create 3-player semifinal match (2 players play, 1 gets bye)
+            $shuffledWinners = $winners->shuffle();
+            
+            PoolMatch::create([
+                'match_name' => '3_SF_match',
+                'player_1_id' => $shuffledWinners[0]->id,
+                'player_2_id' => $shuffledWinners[1]->id,
+                'bye_player_id' => $shuffledWinners[2]->id,
+                'level' => $level,
+                'level_name' => $levelName,
+                'round_name' => '3_SF',
+                'tournament_id' => $tournament->id,
+                'group_id' => $groupId,
+                'status' => 'pending',
+                'proposed_dates' => \App\Services\ProposedDatesService::generateProposedDates($tournament->id),
+            ]);
+
+            \Log::info("Created 3-player semifinal match", [
+                'player_1' => $shuffledWinners[0]->name,
+                'player_2' => $shuffledWinners[1]->name,
+                'bye_player' => $shuffledWinners[2]->name,
+                'round_name' => '3_SF',
+                'from_round' => $completedRound
+            ]);
+        } else {
+            \Log::error("Expected 3 winners but found {$winners->count()}", [
+                'tournament_id' => $tournament->id,
+                'level' => $level,
+                'completed_round' => $completedRound
+            ]);
+        }
     }
 
 }
