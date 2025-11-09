@@ -1590,7 +1590,7 @@ class ThreePlayerTournamentService
     /**
      * Create losers tournament for additional winners (public method for TournamentProgressionService)
      */
-    public function createLosers3PlayerTournament(Tournament $tournament, string $level, ?int $groupId, int $winnersNeeded): array
+    public function createLosers3PlayerTournamentForProgression(Tournament $tournament, string $level, ?int $groupId, int $winnersNeeded): array
     {
         \Log::info("Creating losers tournament for additional positions", [
             'winners_needed' => $winnersNeeded,

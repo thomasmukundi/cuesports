@@ -342,7 +342,7 @@ class TournamentProgressionService
             ]);
             
             // Use ThreePlayerTournamentService to create the losers tournament
-            return $this->threePlayerService->createLosers3PlayerTournament(
+            return $this->threePlayerService->createLosers3PlayerTournamentForProgression(
                 $tournament, 
                 $level, 
                 null, // groupId 
