@@ -67,48 +67,34 @@ class TournamentNotificationService
             'total_player_matches' => array_sum(array_map('count', $playerMatches))
         ]);
         
-        // Send notification to each player
+        // Send notification to each player (always send, no duplicate checking)
         foreach ($playerMatches as $playerId => $playerMatchesData) {
             $matchCount = count($playerMatchesData);
             
-            // Check if player already has a pairing notification for this tournament level
-            $existingNotification = Notification::where('player_id', $playerId)
-                ->where('type', 'pairing')
-                ->where('data->tournament_id', $tournament->id)
-                ->where('data->level', $level)
-                ->exists();
-                
-            if (!$existingNotification) {
-                $message = $matchCount === 1 
-                    ? "You have been paired for a match in {$tournament->name}. Please select your available days."
-                    : "You have been paired for {$matchCount} matches in {$tournament->name}. Please select your available days.";
-                
-                Log::info('Creating pairing notification for player', [
-                    'player_id' => $playerId,
+            $message = $matchCount === 1 
+                ? "You have been paired for a match in {$tournament->name}. Please select your available days."
+                : "You have been paired for {$matchCount} matches in {$tournament->name}. Please select your available days.";
+            
+            Log::info('Creating pairing notification for player', [
+                'player_id' => $playerId,
+                'match_count' => $matchCount,
+                'tournament_id' => $tournament->id,
+                'level' => $level
+            ]);
+            
+            Notification::create([
+                'player_id' => $playerId,
+                'type' => 'pairing',
+                'message' => $message,
+                'data' => [
+                    'tournament_id' => $tournament->id,
+                    'tournament_name' => $tournament->name,
+                    'level' => $level,
                     'match_count' => $matchCount,
-                    'tournament_id' => $tournament->id,
-                    'level' => $level
-                ]);
-                
-                Notification::create([
-                    'player_id' => $playerId,
-                    'type' => 'pairing',
-                    'message' => $message,
-                    'data' => [
-                        'tournament_id' => $tournament->id,
-                        'tournament_name' => $tournament->name,
-                        'level' => $level,
-                        'match_count' => $matchCount,
-                        'matches' => $playerMatchesData
-                    ]
-                ]);
-            } else {
-                Log::info('Skipping duplicate pairing notification for player', [
-                    'player_id' => $playerId,
-                    'tournament_id' => $tournament->id,
-                    'level' => $level
-                ]);
-            }
+                    'matches' => $playerMatchesData,
+                    'message' => $message
+                ]
+            ]);
         }
         
         Log::info('Pairing notifications completed', [

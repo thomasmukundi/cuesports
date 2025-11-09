@@ -139,7 +139,7 @@
                                 </button>
                                 
                                 <button type="button" class="btn btn-sm btn-danger" 
-                                        onclick="showDeleteConfirmation({{ $winner->id }}, '{{ addslashes($winner->player->name ?? 'N/A') }}', '{{ addslashes($winner->tournament->name ?? 'N/A') }}', {{ $winner->position }})">
+                                        onclick="showDeleteConfirmation({{ $winner->id ?? 0 }}, {{ json_encode($winner->player->name ?? 'N/A') }}, {{ json_encode($winner->tournament->name ?? 'N/A') }}, {{ $winner->position ?? 0 }})">
                                     <i class="fas fa-trash"></i> Delete
                                 </button>
                             </div>
@@ -382,12 +382,22 @@ function showWinnerDetails(winner) {
 let winnerToDelete = null;
 
 function showDeleteConfirmation(winnerId, playerName, tournamentName, position) {
+    // Validate winner ID
+    if (!winnerId || winnerId === 0) {
+        alert('Error: Invalid winner ID. Cannot delete this record.');
+        console.error('Invalid winner ID:', winnerId);
+        return;
+    }
+    
     // Store the winner ID for deletion
     winnerToDelete = winnerId;
     
+    console.log('Setting winnerToDelete to:', winnerId);
+    console.log('Player:', playerName, 'Tournament:', tournamentName, 'Position:', position);
+    
     // Populate modal with winner details
-    document.getElementById('delete-player-name').textContent = playerName;
-    document.getElementById('delete-tournament-name').textContent = tournamentName;
+    document.getElementById('delete-player-name').textContent = playerName || 'N/A';
+    document.getElementById('delete-tournament-name').textContent = tournamentName || 'N/A';
     document.getElementById('delete-position').textContent = getPositionText(position);
     
     // Reset the confirmation input and button
@@ -409,14 +419,30 @@ function getPositionText(position) {
 }
 
 function confirmDelete() {
-    if (winnerToDelete && document.getElementById('deleteConfirmationInput').value === 'DELETE') {
-        // Set the form action URL
-        const form = document.getElementById('deleteWinnerForm');
-        form.action = `/admin/winners/${winnerToDelete}`;
-        
-        // Submit the form
-        form.submit();
+    const confirmationValue = document.getElementById('deleteConfirmationInput').value;
+    
+    if (!winnerToDelete || winnerToDelete === 0) {
+        alert('Error: No winner selected for deletion.');
+        console.error('Cannot delete: winnerToDelete is invalid =', winnerToDelete);
+        return;
     }
+    
+    if (confirmationValue !== 'DELETE') {
+        alert('Please type "DELETE" to confirm deletion.');
+        console.error('Cannot delete: confirmation text is incorrect =', confirmationValue);
+        return;
+    }
+    
+    // Set the form action URL using Laravel route
+    const form = document.getElementById('deleteWinnerForm');
+    const baseUrl = '{{ route("admin.winners.index") }}';
+    form.action = `${baseUrl}/${winnerToDelete}`;
+    
+    console.log('Deleting winner with ID:', winnerToDelete);
+    console.log('Form action set to:', form.action);
+    
+    // Submit the form
+    form.submit();
 }
 
 // Enable/disable delete button based on confirmation input

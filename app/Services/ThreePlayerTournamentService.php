@@ -1412,6 +1412,9 @@ class ThreePlayerTournamentService
                 $shuffledWinners[2]->id // bye player
             );
 
+            // Send notifications to players about the new semifinal match
+            $this->sendMatchNotifications($tournament, $shuffledWinners[0]->id, $shuffledWinners[1]->id, '3_SF', 'Semifinal');
+
             \Log::info("Created 3-player semifinal match", [
                 'player_1' => $shuffledWinners[0]->name,
                 'player_2' => $shuffledWinners[1]->name,
@@ -1492,6 +1495,9 @@ class ThreePlayerTournamentService
         // Create final match: SF loser vs bye player (CORRECT FLOW)
         $this->create3PlayerMatch($tournament, $level, $groupId, $sfLoser->id, $byePlayer->id, '3_final', '3_final_match');
 
+        // Send notifications to players about the new final match
+        $this->sendMatchNotifications($tournament, $sfLoser->id, $byePlayer->id, '3_final', 'Final');
+
         \Log::info("Created 3_final match", [
             'sf_loser' => $sfLoser->name,
             'bye_player' => $byePlayer->name,
@@ -1555,6 +1561,9 @@ class ThreePlayerTournamentService
             'losers_3_SF_match',
             $shuffledLosers[2]->id // bye player
         );
+
+        // Send notifications to players about the new losers semifinal match
+        $this->sendMatchNotifications($tournament, $shuffledLosers[0]->id, $shuffledLosers[1]->id, 'losers_3_SF', 'Losers Semifinal');
 
         \Log::info("Created losers 3_SF match for positions 4, 5, 6", [
             'player_1' => $shuffledLosers[0]->name,
@@ -1666,6 +1675,9 @@ class ThreePlayerTournamentService
 
         $this->create3PlayerMatch($tournament, $level, $groupId, $byePlayer, $sfWinner, '3_tie_breaker', '3_tie_breaker_match');
 
+        // Send notifications to players about the new tie-breaker match
+        $this->sendMatchNotifications($tournament, $byePlayer, $sfWinner, '3_tie_breaker', 'Tie-Breaker');
+
         \Log::info("Created 3_tie_breaker match", [
             'bye_player' => User::find($byePlayer)->name ?? 'Unknown',
             'sf_winner' => User::find($sfWinner)->name ?? 'Unknown',
@@ -1691,6 +1703,9 @@ class ThreePlayerTournamentService
         }
 
         $this->create3PlayerMatch($tournament, $level, $groupId, $byePlayer, $sfWinner, '3_fair_chance', '3_fair_chance_match');
+
+        // Send notifications to players about the new fair chance match
+        $this->sendMatchNotifications($tournament, $byePlayer, $sfWinner, '3_fair_chance', 'Fair Chance');
 
         \Log::info("Created 3_fair_chance match", [
             'bye_player' => User::find($byePlayer)->name ?? 'Unknown',
@@ -1936,6 +1951,50 @@ class ThreePlayerTournamentService
     }
 
     /**
+     * Send match notifications to players
+     */
+    private function sendMatchNotifications(Tournament $tournament, $player1Id, $player2Id, string $roundName, string $matchType)
+    {
+        $players = [$player1Id, $player2Id];
+        
+        foreach ($players as $playerId) {
+            try {
+                $player = User::find($playerId);
+                if (!$player) continue;
+                
+                $message = "New {$matchType} match created in {$tournament->name}";
+                
+                \App\Models\Notification::create([
+                    'player_id' => $playerId,
+                    'type' => 'match_created',
+                    'message' => $message,
+                    'data' => [
+                        'tournament_id' => $tournament->id,
+                        'tournament_name' => $tournament->name,
+                        'match_type' => $matchType,
+                        'round_name' => $roundName,
+                        'message' => $message
+                    ]
+                ]);
+                
+                \Log::info("Sent match notification", [
+                    'player_id' => $playerId,
+                    'player_name' => $player->name,
+                    'match_type' => $matchType,
+                    'tournament_id' => $tournament->id
+                ]);
+                
+            } catch (\Exception $e) {
+                \Log::error("Failed to send match notification", [
+                    'player_id' => $playerId,
+                    'match_type' => $matchType,
+                    'error' => $e->getMessage()
+                ]);
+            }
+        }
+    }
+
+    /**
      * Handle losers 3_SF completion - create losers final match
      */
     private function handleLosers3PlayerSFComplete(Tournament $tournament, string $level, ?string $levelName, $groupId)
@@ -1991,6 +2050,9 @@ class ThreePlayerTournamentService
         // Create losers final match: SF loser vs bye player
         $this->create3PlayerMatch($tournament, $level, $groupId, $sfLoser->id, $byePlayer->id, 'losers_3_final', 'losers_3_final_match');
 
+        // Send notifications to players about the new losers final match
+        $this->sendMatchNotifications($tournament, $sfLoser->id, $byePlayer->id, 'losers_3_final', 'Losers Final');
+
         \Log::info("Created losers 3_final match", [
             'sf_loser' => $sfLoser->name,
             'bye_player' => $byePlayer->name,
@@ -2040,12 +2102,18 @@ class ThreePlayerTournamentService
         if ($finalWinner === $byePlayer) {
             \Log::info("LOSERS CASE 1: Bye player won losers final - creating tie-breaker with SF winner");
             $this->create3PlayerMatch($tournament, $level, $groupId, $byePlayer, $sfWinner, 'losers_3_tie_breaker', 'losers_3_tie_breaker_match');
+            
+            // Send notifications to players about the new losers tie-breaker match
+            $this->sendMatchNotifications($tournament, $byePlayer, $sfWinner, 'losers_3_tie_breaker', 'Losers Tie-Breaker');
             return;
         }
 
         // CASE 2: SF loser won the losers final (bye player lost)
         \Log::info("LOSERS CASE 2: SF loser won losers final - creating fair chance match");
         $this->create3PlayerMatch($tournament, $level, $groupId, $byePlayer, $sfWinner, 'losers_3_fair_chance', 'losers_3_fair_chance_match');
+        
+        // Send notifications to players about the new losers fair chance match
+        $this->sendMatchNotifications($tournament, $byePlayer, $sfWinner, 'losers_3_fair_chance', 'Losers Fair Chance');
     }
 
     /**
