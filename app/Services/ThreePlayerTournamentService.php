@@ -802,45 +802,6 @@ class ThreePlayerTournamentService
         $this->create3PlayerMatch($tournament, $level, $groupId, $player1Id, $player2Id, 'losers_3_fair_chance', 'losers_3_fair_chance_match');
     }
 
-    /**
-     * Create 3-player losers tournament (mirrors winners tournament)
-     */
-    public function createLosers3PlayerTournament(Tournament $tournament, string $level, ?int $groupId, $losers, int $winnersNeeded)
-    {
-        \Log::info("Creating 3-player losers tournament", [
-            'tournament_id' => $tournament->id,
-            'losers' => $losers->pluck('id')->toArray(),
-            'winners_needed' => $winnersNeeded
-        ]);
-        
-        // Create losers semifinal (2 players, 1 bye)
-        $shuffledLosers = $losers->shuffle();
-        
-        // Determine level name - null for special tournaments
-        $levelName = ($level === 'special' || $tournament->special) 
-            ? null 
-            : \App\Services\TournamentUtilityService::getLevelName($level, $groupId);
-
-        PoolMatch::create([
-            'match_name' => 'losers_3_SF_match',
-            'player_1_id' => $shuffledLosers[0]->id,
-            'player_2_id' => $shuffledLosers[1]->id,
-            'bye_player_id' => $shuffledLosers[2]->id,
-            'level' => $level,
-            'level_name' => $levelName,
-            'round_name' => 'losers_3_SF',
-            'tournament_id' => $tournament->id,
-            'group_id' => $groupId,
-            'status' => 'pending',
-            'proposed_dates' => \App\Services\ProposedDatesService::generateProposedDates($tournament->id),
-        ]);
-        
-        \Log::info("Created losers semifinal match with bye player", [
-            'player_1' => $shuffledLosers[0]->name,
-            'player_2' => $shuffledLosers[1]->name,
-            'bye_player' => $shuffledLosers[2]->name
-        ]);
-    }
 
     /**
      * Determine winners for 3-player standard tournaments
@@ -914,23 +875,26 @@ class ThreePlayerTournamentService
             'winners' => $winners
         ]);
         
-        // Create 3_winners_SF: A vs B (C gets bye) - using robust naming convention
+        // Create 3_SF: A vs B (C gets bye) - winners semifinal
         PoolMatch::create([
-            'match_name' => '3_winners_SF_match',
+            'match_name' => '3_SF_match',
             'player_1_id' => $winners[0],
             'player_2_id' => $winners[1],
             'bye_player_id' => $winners[2],
             'level' => $level,
             'level_name' => $levelName,
-            'round_name' => '3_winners_SF',
+            'round_name' => '3_SF',
             'tournament_id' => $tournament->id,
             'group_id' => $groupId,
             'status' => 'pending',
             'proposed_dates' => \App\Services\ProposedDatesService::generateProposedDates($tournament->id),
         ]);
         
+        // Send notifications to players about the new winners semifinal match
+        $this->sendMatchNotifications($tournament, $winners[0], $winners[1], '3_SF', 'Winners Semifinal');
+        
         \Log::info("3-player winners tournament matches created", [
-            'sf_match' => '3_winners_SF',
+            'sf_match' => '3_SF',
             'player_1' => $winners[0],
             'player_2' => $winners[1],
             'bye_player' => $winners[2]
