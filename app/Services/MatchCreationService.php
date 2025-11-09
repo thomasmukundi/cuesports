@@ -298,7 +298,7 @@ class MatchCreationService
             'tournament_id' => $tournament->id,
             'group_id' => $groupId,
             'status' => 'pending',
-            'proposed_dates' => \App\Services\ProposedDatesService::generateProposedDatesJson($tournament->id),
+            'proposed_dates' => \App\Services\ProposedDatesService::generateProposedDates($tournament->id),
         ]);
     }
 
@@ -389,7 +389,7 @@ class MatchCreationService
                     'tournament_id' => $tournament->id,
                     'group_id' => $groupId,
                     'status' => 'pending',
-                    'proposed_dates' => \App\Services\ProposedDatesService::generateProposedDatesJson($tournament->id),
+                    'proposed_dates' => \App\Services\ProposedDatesService::generateProposedDates($tournament->id),
                 ]);
                 $matches[] = $match;
                 $matchNumber++;
@@ -484,7 +484,7 @@ class MatchCreationService
                 'tournament_id' => $tournament->id,
                 'group_id' => $groupId,
                 'status' => 'pending',
-                'proposed_dates' => \App\Services\ProposedDatesService::generateProposedDatesJson($tournament->id),
+                'proposed_dates' => \App\Services\ProposedDatesService::generateProposedDates($tournament->id),
             ]);
             $matchNumber++;
             
@@ -511,7 +511,7 @@ class MatchCreationService
                         'tournament_id' => $tournament->id,
                         'group_id' => $groupId,
                         'status' => 'pending',
-                        'proposed_dates' => \App\Services\ProposedDatesService::generateProposedDatesJson($tournament->id),
+                        'proposed_dates' => \App\Services\ProposedDatesService::generateProposedDates($tournament->id),
                     ]);
                     $matchNumber++;
                 }
@@ -536,7 +536,7 @@ class MatchCreationService
                     'tournament_id' => $tournament->id,
                     'group_id' => $groupId,
                     'status' => 'pending',
-                    'proposed_dates' => \App\Services\ProposedDatesService::generateProposedDatesJson($tournament->id),
+                    'proposed_dates' => \App\Services\ProposedDatesService::generateProposedDates($tournament->id),
                 ]);
             }
         } else {
@@ -555,7 +555,7 @@ class MatchCreationService
                         'tournament_id' => $tournament->id,
                         'group_id' => $groupId,
                         'status' => 'pending',
-                        'proposed_dates' => \App\Services\ProposedDatesService::generateProposedDatesJson($tournament->id),
+                        'proposed_dates' => \App\Services\ProposedDatesService::generateProposedDates($tournament->id),
                     ]);
                     $matchNumber++;
                 }
@@ -666,7 +666,7 @@ class MatchCreationService
                     'tournament_id' => $tournament->id,
                     'group_id' => $groupId,
                     'status' => 'pending',
-                    'proposed_dates' => \App\Services\ProposedDatesService::generateProposedDatesJson($tournament->id),
+                    'proposed_dates' => \App\Services\ProposedDatesService::generateProposedDates($tournament->id),
                 ]);
                 
                 $matchNumber++;

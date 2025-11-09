@@ -342,7 +342,7 @@ class ThreePlayerTournamentService
             'tournament_id' => $tournament->id,
             'group_id' => $groupId,
             'status' => 'pending',
-            'proposed_dates' => \App\Services\ProposedDatesService::generateProposedDatesJson($tournament->id),
+            'proposed_dates' => \App\Services\ProposedDatesService::generateProposedDates($tournament->id),
         ]);
     }
 
@@ -366,7 +366,7 @@ class ThreePlayerTournamentService
             'tournament_id' => $tournament->id,
             'group_id' => $groupId,
             'status' => 'pending',
-            'proposed_dates' => \App\Services\ProposedDatesService::generateProposedDatesJson($tournament->id),
+            'proposed_dates' => \App\Services\ProposedDatesService::generateProposedDates($tournament->id),
         ]);
     }
 
@@ -390,7 +390,7 @@ class ThreePlayerTournamentService
             'tournament_id' => $tournament->id,
             'group_id' => $groupId,
             'status' => 'pending',
-            'proposed_dates' => \App\Services\ProposedDatesService::generateProposedDatesJson($tournament->id),
+            'proposed_dates' => \App\Services\ProposedDatesService::generateProposedDates($tournament->id),
         ]);
     }
 
@@ -419,7 +419,7 @@ class ThreePlayerTournamentService
             'tournament_id' => $tournament->id,
             'group_id' => $groupId,
             'status' => 'pending',
-            'proposed_dates' => \App\Services\ProposedDatesService::generateProposedDatesJson($tournament->id),
+            'proposed_dates' => \App\Services\ProposedDatesService::generateProposedDates($tournament->id),
         ]);
         
         \Log::info("Created 3-player tournament matches", [
@@ -762,7 +762,7 @@ class ThreePlayerTournamentService
             'tournament_id' => $tournament->id,
             'group_id' => $groupId,
             'status' => 'pending',
-            'proposed_dates' => \App\Services\ProposedDatesService::generateProposedDatesJson($tournament->id),
+            'proposed_dates' => \App\Services\ProposedDatesService::generateProposedDates($tournament->id),
         ]);
     }
 
@@ -786,7 +786,7 @@ class ThreePlayerTournamentService
             'tournament_id' => $tournament->id,
             'group_id' => $groupId,
             'status' => 'pending',
-            'proposed_dates' => \App\Services\ProposedDatesService::generateProposedDatesJson($tournament->id),
+            'proposed_dates' => \App\Services\ProposedDatesService::generateProposedDates($tournament->id),
         ]);
     }
 
@@ -810,7 +810,7 @@ class ThreePlayerTournamentService
             'tournament_id' => $tournament->id,
             'group_id' => $groupId,
             'status' => 'pending',
-            'proposed_dates' => \App\Services\ProposedDatesService::generateProposedDatesJson($tournament->id),
+            'proposed_dates' => \App\Services\ProposedDatesService::generateProposedDates($tournament->id),
         ]);
     }
 
@@ -839,7 +839,7 @@ class ThreePlayerTournamentService
             'tournament_id' => $tournament->id,
             'group_id' => $groupId,
             'status' => 'pending',
-            'proposed_dates' => \App\Services\ProposedDatesService::generateProposedDatesJson($tournament->id),
+            'proposed_dates' => \App\Services\ProposedDatesService::generateProposedDates($tournament->id),
         ]);
         
         \Log::info("Created losers semifinal match with bye player", [
@@ -961,7 +961,7 @@ class ThreePlayerTournamentService
             'tournament_id' => $tournament->id,
             'group_id' => $groupId,
             'status' => 'pending',
-            'proposed_dates' => \App\Services\ProposedDatesService::generateProposedDatesJson($tournament->id),
+            'proposed_dates' => \App\Services\ProposedDatesService::generateProposedDates($tournament->id),
         ]);
         
         \Log::info("3-player winners tournament matches created", [
@@ -1018,7 +1018,7 @@ class ThreePlayerTournamentService
             'tournament_id' => $tournament->id,
             'group_id' => $groupId,
             'status' => 'pending',
-            'proposed_dates' => \App\Services\ProposedDatesService::generateProposedDatesJson($tournament->id),
+            'proposed_dates' => \App\Services\ProposedDatesService::generateProposedDates($tournament->id),
         ]);
         
         \Log::info("3-player losers tournament matches created", [
