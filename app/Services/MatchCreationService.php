@@ -24,7 +24,7 @@ class MatchCreationService
         });
         
         $playerCount = $actualPlayers->count();
-        $levelName = TournamentUtilityService::getLevelName($level, $groupId);
+        $levelName = TournamentUtilityService::getLevelName($level, $groupId) ?? 'Special Tournament';
         
         // Debug: Log the level name being generated
         \Log::info("Creating matches for group {$groupId}: level_name = '{$levelName}'");
@@ -56,7 +56,7 @@ class MatchCreationService
      */
     public static function createSmartPairingForLevel(Tournament $tournament, Collection $players, string $level, int $groupId): array
     {
-        $levelName = TournamentUtilityService::getLevelName($level, $groupId);
+        $levelName = TournamentUtilityService::getLevelName($level, $groupId) ?? 'Special Tournament';
         $playerCount = $players->count();
         
         \Log::info("=== SMART PAIRING DECISION POINT ===", [
