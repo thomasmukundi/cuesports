@@ -531,7 +531,7 @@ class MatchAlgorithmService
         $totalMatches = 0;
 
         foreach ($groups as $groupId => $players) {
-            $matches = $this->createMatchesForGroup($tournament, $players, $level, $groupId);
+            $matches = MatchCreationService::createMatchesForGroup($tournament, $players, $level, $groupId);
             $totalMatches += count($matches ?? []);
         }
 
@@ -580,7 +580,7 @@ class MatchAlgorithmService
 
             foreach ($groups as $communityId => $communityPlayers) {
                 if ($communityPlayers->count() >= 2) {
-                    $this->createMatchesForGroup($tournament, $communityPlayers, 'community', $communityId);
+                    MatchCreationService::createMatchesForGroup($tournament, $communityPlayers, 'community', $communityId);
                     $totalMatches += $this->calculateMatchesCreated($communityPlayers->count());
                     $totalGroups++;
                 } elseif ($communityPlayers->count() == 1) {
@@ -643,7 +643,7 @@ class MatchAlgorithmService
             ]);
 
             // Create matches for all players in one group (no grouping for special tournaments)
-            $this->createMatchesForGroup($tournament, $players, 'special', null);
+            MatchCreationService::createMatchesForGroup($tournament, $players, 'special', null);
             $totalMatches = $this->calculateMatchesCreated($players->count());
 
             DB::commit();
