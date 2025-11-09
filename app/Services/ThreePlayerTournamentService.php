@@ -1032,7 +1032,7 @@ class ThreePlayerTournamentService
     /**
      * Check 3-player tournament progression and generate next matches
      */
-    public function check3PlayerTournamentProgression(Tournament $tournament, string $level, ?string $levelName, string $completedRound)
+    public function check3PlayerTournamentProgression(Tournament $tournament, string $level, ?string $levelName, string $completedRound): array
     {
         \Log::info("=== CHECK 3-PLAYER TOURNAMENT PROGRESSION START ===", [
             'completed_round' => $completedRound,
@@ -1071,9 +1071,20 @@ class ThreePlayerTournamentService
                 
             default:
                 \Log::info("No specific progression logic for round: {$completedRound}");
+                return [
+                    'status' => 'success',
+                    'message' => "Round {$completedRound} completed, no further progression needed",
+                    'progression_complete' => false
+                ];
         }
         
         \Log::info("=== CHECK 3-PLAYER TOURNAMENT PROGRESSION END ===");
+        
+        return [
+            'status' => 'success', 
+            'message' => 'Tournament progression handled successfully',
+            'progression_complete' => true
+        ];
     }
 
     /**
