@@ -849,49 +849,21 @@ class ThreePlayerTournamentService
         $sfLoser = ($sfMatch->player_1_id === $sfWinner) ? $sfMatch->player_2_id : $sfMatch->player_1_id;
         $byePlayer = $sfMatch->bye_player_id;
         
-        // Position 1: SF winner
-        Winner::create([
-            'player_id' => $sfWinner,
-            'position' => 1,
-            'level' => $level,
-            'level_id' => $groupId,
-            'tournament_id' => $tournament->id,
-        ]);
+        // DO NOT CREATE POSITIONS HERE - Tournament is not complete yet!
+        // Positions should only be created after final, tie-breaker, or fair chance matches complete
         
-        // Position 2: SF loser
-        Winner::create([
-            'player_id' => $sfLoser,
-            'position' => 2,
-            'level' => $level,
-            'level_id' => $groupId,
-            'tournament_id' => $tournament->id,
-        ]);
-        
-        // Position 3: Bye player
-        if ($byePlayer) {
-            Winner::create([
-                'player_id' => $byePlayer,
-                'position' => 3,
-                'level' => $level,
-                'level_id' => $groupId,
-                'tournament_id' => $tournament->id,
-            ]);
-        }
-        
-        \Log::info("3-player standard winners determined", [
+        \Log::info("3-player SF completed - tournament flow will continue automatically", [
             'sf_winner' => $sfWinner,
             'sf_loser' => $sfLoser,
             'bye_player' => $byePlayer,
             'tournament_id' => $tournament->id,
+            'message' => 'Positions will be determined after final tournament flow completes'
         ]);
         
-        // Send notifications
-        $positions = [
-            1 => $sfWinner,
-            2 => $sfLoser,
-            3 => $byePlayer
-        ];
-        $this->sendPositionNotifications($tournament, $level, TournamentUtilityService::getLevelName($level, $groupId), $positions);
+        // The automated flow will handle:
+        // 1. Create final match (SF loser vs bye player)
+        // 2. Create tie-breaker or fair chance match based on final result
+        // 3. Determine final positions only after all matches complete
     }
 
     /**
