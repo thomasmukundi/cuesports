@@ -118,6 +118,17 @@ class TournamentProgressionService
      */
     private function routeToTournamentHandler(Tournament $tournament, string $level, ?string $levelName, string $roundName, Collection $matches, int $winnerCount): array
     {
+        // Check if this is a 3-player tournament round - handle specially regardless of winner count
+        $threePlayerRounds = ['3_SF', '3_final', '3_tie_breaker', '3_fair_chance', 'losers_3_SF', 'losers_3_final', 'losers_3_tie_breaker', 'losers_3_fair_chance'];
+        
+        if (in_array($roundName, $threePlayerRounds)) {
+            Log::info("Processing 3-player tournament round", [
+                'round_name' => $roundName,
+                'winner_count' => $winnerCount
+            ]);
+            return $this->threePlayerService->check3PlayerTournamentProgression($tournament, $level, $levelName, $roundName);
+        }
+
         switch ($winnerCount) {
             case 1:
                 Log::info("Processing 1 winner scenario");
