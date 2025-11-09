@@ -435,7 +435,7 @@ function confirmDelete() {
     
     // Set the form action URL using Laravel route
     const form = document.getElementById('deleteWinnerForm');
-    const baseUrl = '{{ route("admin.winners.index") }}';
+    const baseUrl = '{{ route("admin.winners") }}';
     form.action = `${baseUrl}/${winnerToDelete}`;
     
     console.log('Deleting winner with ID:', winnerToDelete);

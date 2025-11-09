@@ -329,9 +329,32 @@ class TournamentProgressionService
      */
     private function checkThreeSemifinalsComplete(Tournament $tournament, string $level, ?string $levelName): array
     {
-        // Implementation for 3 semifinals check
         Log::info("Checking three semifinals completion for 5-6 winners");
-        return ['status' => 'pending', 'message' => 'Three semifinals check not yet complete'];
+        
+        $winnersNeeded = $tournament->winners ?? 3;
+        
+        // We have 3 winners, need 5-6 winners, so we need to create losers tournament
+        if ($winnersNeeded >= 5 && $winnersNeeded <= 6) {
+            Log::info("Creating 3-player losers tournament for additional winners", [
+                'current_winners' => 3,
+                'winners_needed' => $winnersNeeded,
+                'additional_needed' => $winnersNeeded - 3
+            ]);
+            
+            // Use ThreePlayerTournamentService to create the losers tournament
+            return $this->threePlayerService->createLosers3PlayerTournament(
+                $tournament, 
+                $level, 
+                null, // groupId 
+                $winnersNeeded
+            );
+        }
+        
+        Log::warning("Unexpected winners needed count for three semifinals", [
+            'winners_needed' => $winnersNeeded
+        ]);
+        
+        return ['status' => 'error', 'message' => 'Unexpected winners configuration'];
     }
 
     /**

@@ -29,12 +29,14 @@ class ThreePlayerTournamentService
         // Handle winners tournament (A, B, C) first
         $winnersPositions = $this->handle3PlayerWinnersTournament($tournament, $level, $groupId);
         
-        // If we need more than 3 winners, handle losers tournament (D, E, F)
+        // If we need more than 3 winners, create losers tournament (D, E, F)
         if ($winnersNeeded > 3) {
-            \Log::info("Handling losers tournament for positions 4-6", [
+            \Log::info("Creating losers tournament for positions 4-6", [
                 'winners_needed' => $winnersNeeded
             ]);
-            $losersPositions = $this->handle3PlayerLosersTournament($tournament, $level, $groupId, $winnersNeeded);
+            // Don't call deprecated method - positions will be created automatically
+            // when losers matches complete via the progression system
+            \Log::info("Losers tournament will be created automatically when needed");
         } else {
             \Log::info("Only 3 winners needed - skipping losers tournament", [
                 'winners_needed' => $winnersNeeded
@@ -606,18 +608,22 @@ class ThreePlayerTournamentService
             return null; // Wait for tie breaker to complete
         }
         
-        // Tie breaker completed - assign positions 4, 5, 6
+        // DEPRECATED: Positions should be created by handleLosers3PlayerTieBreakerComplete instead
+        \Log::warning("DEPRECATED: handle3PlayerLosersSubcase1a should not create positions - use progression system instead");
+        
+        // Tie breaker completed - return positions but don't create them
         $tieBreakerWinner = $tieBreakerMatch->winner_id;
         $tieBreakerLoser = ($tieBreakerMatch->player_1_id === $tieBreakerWinner) ? $tieBreakerMatch->player_2_id : $tieBreakerMatch->player_1_id;
         
         // Position 4: Tie breaker winner
         // Position 5: Tie breaker loser  
         // Position 6: SF loser (E)
-        $this->createWinnerPositions($tournament, $level, $groupId, [
-            4 => $tieBreakerWinner,
-            5 => $tieBreakerLoser,
-            6 => $sfLoser
-        ]);
+        // DON'T CREATE POSITIONS HERE - let the progression system handle it
+        // $this->createWinnerPositions($tournament, $level, $groupId, [
+        //     4 => $tieBreakerWinner,
+        //     5 => $tieBreakerLoser,
+        //     6 => $sfLoser
+        // ]);
         
         \Log::info("Losers Subcase 1a positions assigned", [
             'position_4' => $tieBreakerWinner,
@@ -656,15 +662,19 @@ class ThreePlayerTournamentService
             // Triple tie scenario - all three players have 1 win each
             return $this->handle3PlayerLosersTripleTie($tournament, $level, $groupId, $sfWinner, $sfLoser, $byePlayer->id);
         } else {
+            // DEPRECATED: Positions should be created by handleLosers3PlayerFairChanceComplete instead
+            \Log::warning("DEPRECATED: handle3PlayerLosersSubcase1b should not create positions - use progression system instead");
+            
             // Standard positions:
             // Position 4: SF winner (D) - won fair chance
             // Position 5: SF loser (E) - won final
             // Position 6: Bye player (F) - lost both final and fair chance
-            $this->createWinnerPositions($tournament, $level, $groupId, [
-                4 => $sfWinner,
-                5 => $sfLoser,
-                6 => $byePlayer->id
-            ]);
+            // DON'T CREATE POSITIONS HERE - let the progression system handle it
+            // $this->createWinnerPositions($tournament, $level, $groupId, [
+            //     4 => $sfWinner,
+            //     5 => $sfLoser,
+            //     6 => $byePlayer->id
+            // ]);
             
             \Log::info("Losers Subcase 1b standard positions assigned", [
                 'position_4' => $sfWinner,
@@ -739,12 +749,16 @@ class ThreePlayerTournamentService
         
         $sortedPlayers = array_keys($playerMetrics);
         
+        // DEPRECATED: Positions should be created by handleLosers3PlayerFairChanceComplete instead
+        \Log::warning("DEPRECATED: handle3PlayerLosersTripleTie should not create positions - use progression system instead");
+        
         // Assign positions 4, 5, 6 based on metrics
-        $this->createWinnerPositions($tournament, $level, $groupId, [
-            4 => $sortedPlayers[0],
-            5 => $sortedPlayers[1],
-            6 => $sortedPlayers[2]
-        ]);
+        // DON'T CREATE POSITIONS HERE - let the progression system handle it
+        // $this->createWinnerPositions($tournament, $level, $groupId, [
+        //     4 => $sortedPlayers[0],
+        //     5 => $sortedPlayers[1],
+        //     6 => $sortedPlayers[2]
+        // ]);
         
         \Log::info("Losers triple tie positions assigned using metrics", [
             'position_4' => $sortedPlayers[0],
@@ -1232,8 +1246,9 @@ class ThreePlayerTournamentService
     {
         \Log::info("3-player losers tournament complete - determining winners");
         
-        // Use the robust losers tournament logic
-        $this->handle3PlayerLosersTournament($tournament, $level, $groupId, $tournament->winners ?? 6);
+        // Positions will be determined automatically by the progression system
+        // when losers tie-breaker or fair chance matches complete
+        \Log::info("Losers tournament positions will be determined automatically");
     }
 
     /**
@@ -1570,6 +1585,62 @@ class ThreePlayerTournamentService
             'player_2' => $shuffledLosers[1]->name,
             'bye_player' => $shuffledLosers[2]->name
         ]);
+    }
+
+    /**
+     * Create losers tournament for additional winners (public method for TournamentProgressionService)
+     */
+    public function createLosers3PlayerTournament(Tournament $tournament, string $level, ?int $groupId, int $winnersNeeded): array
+    {
+        \Log::info("Creating losers tournament for additional positions", [
+            'winners_needed' => $winnersNeeded,
+            'tournament_id' => $tournament->id
+        ]);
+
+        // Get the 3 losers from the initial round that created the 3 winners
+        $losers = $this->getLosersFromInitialRound($tournament, $level, $groupId);
+        
+        if ($losers->count() !== 3) {
+            \Log::error("Expected 3 losers for losers tournament but found {$losers->count()}");
+            return ['status' => 'error', 'message' => 'Could not find 3 losers for losers tournament'];
+        }
+
+        // Check if losers SF already exists
+        $existingLosersSF = PoolMatch::where('tournament_id', $tournament->id)
+            ->where('level', $level)
+            ->where('group_id', $groupId)
+            ->where('round_name', 'losers_3_SF')
+            ->exists();
+
+        if ($existingLosersSF) {
+            \Log::info("Losers 3_SF already exists");
+            return ['status' => 'success', 'message' => 'Losers semifinal already exists'];
+        }
+
+        // Create losers semifinal (same structure as winners)
+        $shuffledLosers = $losers->shuffle();
+        
+        $this->create3PlayerMatch(
+            $tournament,
+            $level,
+            $groupId,
+            $shuffledLosers[0]->id,
+            $shuffledLosers[1]->id,
+            'losers_3_SF',
+            'losers_3_SF_match',
+            $shuffledLosers[2]->id // bye player
+        );
+
+        // Send notifications to players about the new losers semifinal match
+        $this->sendMatchNotifications($tournament, $shuffledLosers[0]->id, $shuffledLosers[1]->id, 'losers_3_SF', 'Losers Semifinal');
+
+        \Log::info("Created losers 3_SF match for positions 4, 5, 6", [
+            'player_1' => $shuffledLosers[0]->name,
+            'player_2' => $shuffledLosers[1]->name,
+            'bye_player' => $shuffledLosers[2]->name
+        ]);
+
+        return ['status' => 'success', 'message' => 'Losers semifinal created successfully'];
     }
 
     /**
