@@ -1040,9 +1040,7 @@ class MatchController extends Controller
                 ]);
                 
                 // Create progression controller to handle winner generation
-                $progressionController = new \App\Http\Controllers\Api\TournamentProgressionController(
-                    new \App\Services\MatchAlgorithmService()
-                );
+                $progressionController = app(\App\Http\Controllers\Api\TournamentProgressionController::class);
                 
                 // Call the comprehensive semifinals check method
                 $progressionController->checkComprehensiveSemifinalsComplete(
@@ -1056,9 +1054,7 @@ class MatchController extends Controller
             }
             
             // Create progression controller
-            $progressionController = new \App\Http\Controllers\Api\TournamentProgressionController(
-                new \App\Services\MatchAlgorithmService()
-            );
+            $progressionController = app(\App\Http\Controllers\Api\TournamentProgressionController::class);
             
             \Log::info("Processing standard tournament progression");
             

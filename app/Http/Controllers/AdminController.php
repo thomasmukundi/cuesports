@@ -1993,7 +1993,7 @@ class AdminController extends Controller
                 }
                 
                 // Initialize special tournament using MatchAlgorithmService
-                $matchService = new \App\Services\MatchAlgorithmService();
+                $matchService = app(\App\Services\MatchAlgorithmService::class);
                 $result = $matchService->initialize($tournament->id, 'special');
                 
                 // Update tournament status if needed
@@ -2023,7 +2023,7 @@ class AdminController extends Controller
             }
             
             // Initialize tournament level using MatchAlgorithmService
-            $matchService = new \App\Services\MatchAlgorithmService();
+            $matchService = app(\App\Services\MatchAlgorithmService::class);
             $result = $matchService->initialize($tournament->id, $level);
             
             // Update tournament status if needed
