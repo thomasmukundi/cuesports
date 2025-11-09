@@ -2362,4 +2362,56 @@ class AdminController extends Controller
         }
     }
 
+    /**
+     * Delete a winner record
+     */
+    public function deleteWinner(Winner $winner)
+    {
+        try {
+            DB::beginTransaction();
+
+            \Log::info("Admin deleting winner record", [
+                'winner_id' => $winner->id,
+                'player_id' => $winner->player_id,
+                'tournament_id' => $winner->tournament_id,
+                'position' => $winner->position,
+                'admin_user' => auth()->user()->id ?? 'unknown'
+            ]);
+
+            // Store winner info for logging before deletion
+            $winnerInfo = [
+                'player_name' => $winner->player->name ?? 'Unknown',
+                'tournament_name' => $winner->tournament->name ?? 'Unknown',
+                'position' => $winner->position,
+                'prize_amount' => $winner->prize_amount
+            ];
+
+            // Delete the winner record
+            $winner->delete();
+
+            DB::commit();
+
+            \Log::info("Winner record deleted successfully", [
+                'winner_info' => $winnerInfo,
+                'admin_user' => auth()->user()->id ?? 'unknown'
+            ]);
+
+            return redirect()->route('admin.winners')
+                ->with('success', "Winner record for {$winnerInfo['player_name']} (Position {$winnerInfo['position']}) has been deleted successfully.");
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            
+            \Log::error("Failed to delete winner record", [
+                'winner_id' => $winner->id ?? 'unknown',
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+                'admin_user' => auth()->user()->id ?? 'unknown'
+            ]);
+
+            return redirect()->route('admin.winners')
+                ->with('error', 'Failed to delete winner record: ' . $e->getMessage());
+        }
+    }
+
 }

@@ -4,6 +4,21 @@
 @section('page-title', 'Tournament Winners')
 
 @section('content')
+<!-- Success/Error Messages -->
+@if(session('success'))
+<div class="alert alert-success alert-dismissible fade show" role="alert">
+    <i class="fas fa-check-circle"></i> {{ session('success') }}
+    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+</div>
+@endif
+
+@if(session('error'))
+<div class="alert alert-danger alert-dismissible fade show" role="alert">
+    <i class="fas fa-exclamation-circle"></i> {{ session('error') }}
+    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+</div>
+@endif
+
 <div class="content-card">
     <div class="card-header">
         <h3 class="card-title">Tournament Winners</h3>
@@ -98,29 +113,36 @@
                         </td>
                         <td><strong>KSh {{ number_format($winner->prize_amount ?? 0, 2) }}</strong></td>
                         <td>
-                            <button type="button" class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#winnerModal" 
-                                    onclick="showWinnerDetails({{ json_encode([
-                                        'id' => $winner->id,
-                                        'player_name' => $winner->player->name ?? 'N/A',
-                                        'player_id' => $winner->player->id ?? null,
-                                        'tournament_name' => $winner->tournament->name ?? 'N/A',
-                                        'tournament_id' => $winner->tournament->id ?? null,
-                                        'position' => $winner->position,
-                                        'position_text' => $positionData['text'],
-                                        'points' => $winner->calculated_points ?? 0,
-                                        'wins' => $winner->calculated_wins ?? 0,
-                                        'prize_amount' => $winner->prize_amount ?? 0,
-                                        'level' => $winner->level ?? 'N/A',
-                                        'level_name' => $winner->level_name ?? 'N/A',
-                                        'date' => $winner->created_at->format('M d, Y'),
-                                        'community' => $winner->player->community->name ?? 'N/A',
-                                        'county' => $winner->player->community->county->name ?? 'N/A',
-                                        'region' => $winner->player->community->region->name ?? 'N/A',
-                                        'is_special' => $winner->tournament->special ?? false,
-                                        'tournament_area_scope' => $winner->tournament->area_scope ?? 'N/A'
-                                    ]) }})">
-                                <i class="fas fa-eye"></i> View
-                            </button>
+                            <div class="btn-group" role="group">
+                                <button type="button" class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#winnerModal" 
+                                        onclick="showWinnerDetails({{ json_encode([
+                                            'id' => $winner->id,
+                                            'player_name' => $winner->player->name ?? 'N/A',
+                                            'player_id' => $winner->player->id ?? null,
+                                            'tournament_name' => $winner->tournament->name ?? 'N/A',
+                                            'tournament_id' => $winner->tournament->id ?? null,
+                                            'position' => $winner->position,
+                                            'position_text' => $positionData['text'],
+                                            'points' => $winner->calculated_points ?? 0,
+                                            'wins' => $winner->calculated_wins ?? 0,
+                                            'prize_amount' => $winner->prize_amount ?? 0,
+                                            'level' => $winner->level ?? 'N/A',
+                                            'level_name' => $winner->level_name ?? 'N/A',
+                                            'date' => $winner->created_at->format('M d, Y'),
+                                            'community' => $winner->player->community->name ?? 'N/A',
+                                            'county' => $winner->player->community->county->name ?? 'N/A',
+                                            'region' => $winner->player->community->region->name ?? 'N/A',
+                                            'is_special' => $winner->tournament->special ?? false,
+                                            'tournament_area_scope' => $winner->tournament->area_scope ?? 'N/A'
+                                        ]) }})">
+                                    <i class="fas fa-eye"></i> View
+                                </button>
+                                
+                                <button type="button" class="btn btn-sm btn-danger" 
+                                        onclick="showDeleteConfirmation({{ $winner->id }}, '{{ addslashes($winner->player->name ?? 'N/A') }}', '{{ addslashes($winner->tournament->name ?? 'N/A') }}', {{ $winner->position }})">
+                                    <i class="fas fa-trash"></i> Delete
+                                </button>
+                            </div>
                         </td>
                     </tr>
                     @empty
@@ -272,6 +294,56 @@
     </div>
 </div>
 
+<!-- Delete Confirmation Modal -->
+<div class="modal fade" id="deleteConfirmationModal" tabindex="-1" aria-labelledby="deleteConfirmationModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-danger text-white">
+                <h5 class="modal-title" id="deleteConfirmationModalLabel">
+                    <i class="fas fa-exclamation-triangle"></i> Confirm Delete Winner
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="alert alert-warning">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    <strong>Warning:</strong> This action cannot be undone!
+                </div>
+                
+                <p>You are about to delete the winner record for:</p>
+                <ul class="list-unstyled">
+                    <li><strong>Player:</strong> <span id="delete-player-name"></span></li>
+                    <li><strong>Tournament:</strong> <span id="delete-tournament-name"></span></li>
+                    <li><strong>Position:</strong> <span id="delete-position"></span></li>
+                </ul>
+                
+                <div class="mt-4">
+                    <label for="deleteConfirmationInput" class="form-label">
+                        <strong>Type "DELETE" to confirm:</strong>
+                    </label>
+                    <input type="text" class="form-control" id="deleteConfirmationInput" 
+                           placeholder="Type DELETE to confirm" autocomplete="off">
+                    <div class="form-text text-danger">
+                        This will permanently remove this winner record from the database.
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-danger" id="confirmDeleteBtn" disabled onclick="confirmDelete()">
+                    <i class="fas fa-trash"></i> Delete Winner
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Hidden form for deletion -->
+<form id="deleteWinnerForm" method="POST" style="display: none;">
+    @csrf
+    @method('DELETE')
+</form>
+
 <script>
 function showWinnerDetails(winner) {
     // Player Information
@@ -305,5 +377,65 @@ function showWinnerDetails(winner) {
     document.getElementById('modal-prize').textContent = 'KSh ' + new Intl.NumberFormat().format(winner.prize_amount);
     document.getElementById('modal-date').textContent = winner.date;
 }
+
+// Global variable to store winner ID for deletion
+let winnerToDelete = null;
+
+function showDeleteConfirmation(winnerId, playerName, tournamentName, position) {
+    // Store the winner ID for deletion
+    winnerToDelete = winnerId;
+    
+    // Populate modal with winner details
+    document.getElementById('delete-player-name').textContent = playerName;
+    document.getElementById('delete-tournament-name').textContent = tournamentName;
+    document.getElementById('delete-position').textContent = getPositionText(position);
+    
+    // Reset the confirmation input and button
+    document.getElementById('deleteConfirmationInput').value = '';
+    document.getElementById('confirmDeleteBtn').disabled = true;
+    
+    // Show the modal
+    const modal = new bootstrap.Modal(document.getElementById('deleteConfirmationModal'));
+    modal.show();
+}
+
+function getPositionText(position) {
+    switch(position) {
+        case 1: return '🥇 1st Place';
+        case 2: return '🥈 2nd Place';
+        case 3: return '🥉 3rd Place';
+        default: return `#${position}`;
+    }
+}
+
+function confirmDelete() {
+    if (winnerToDelete && document.getElementById('deleteConfirmationInput').value === 'DELETE') {
+        // Set the form action URL
+        const form = document.getElementById('deleteWinnerForm');
+        form.action = `/admin/winners/${winnerToDelete}`;
+        
+        // Submit the form
+        form.submit();
+    }
+}
+
+// Enable/disable delete button based on confirmation input
+document.addEventListener('DOMContentLoaded', function() {
+    const confirmationInput = document.getElementById('deleteConfirmationInput');
+    const confirmDeleteBtn = document.getElementById('confirmDeleteBtn');
+    
+    if (confirmationInput && confirmDeleteBtn) {
+        confirmationInput.addEventListener('input', function() {
+            confirmDeleteBtn.disabled = this.value !== 'DELETE';
+        });
+        
+        // Allow Enter key to trigger delete if confirmation is correct
+        confirmationInput.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter' && this.value === 'DELETE') {
+                confirmDelete();
+            }
+        });
+    }
+});
 </script>
 @endsection
