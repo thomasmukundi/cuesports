@@ -335,12 +335,17 @@ class ThreePlayerTournamentService
             'bye_player' => $byePlayerId
         ]);
         
+        // Determine level name - null for special tournaments, proper level name for regular tournaments
+        $levelName = ($level === 'special' || $tournament->special) 
+            ? null 
+            : \App\Services\TournamentUtilityService::getLevelName($level, $groupId);
+
         $matchData = [
             'match_name' => $matchName,
             'player_1_id' => $player1Id,
             'player_2_id' => $player2Id,
             'level' => $level,
-            'level_name' => $this->getLevelName($level, $groupId),
+            'level_name' => $levelName,
             'round_name' => $roundName,
             'tournament_id' => $tournament->id,
             'group_id' => $groupId,
@@ -431,8 +436,11 @@ class ThreePlayerTournamentService
             ]);
         }
         
-        // Send notifications
-        $this->sendPositionNotifications($tournament, $level, TournamentUtilityService::getLevelName($level, $groupId), $positions);
+        // Send notifications - determine proper level name
+        $levelName = ($level === 'special' || $tournament->special) 
+            ? null 
+            : \App\Services\TournamentUtilityService::getLevelName($level, $groupId);
+        $this->sendPositionNotifications($tournament, $level, $levelName, $positions);
     }
 
     /**
@@ -794,13 +802,18 @@ class ThreePlayerTournamentService
         // Create losers semifinal (2 players, 1 bye)
         $shuffledLosers = $losers->shuffle();
         
+        // Determine level name - null for special tournaments
+        $levelName = ($level === 'special' || $tournament->special) 
+            ? null 
+            : \App\Services\TournamentUtilityService::getLevelName($level, $groupId);
+
         PoolMatch::create([
             'match_name' => 'losers_3_SF_match',
             'player_1_id' => $shuffledLosers[0]->id,
             'player_2_id' => $shuffledLosers[1]->id,
             'bye_player_id' => $shuffledLosers[2]->id,
             'level' => $level,
-            'level_name' => $this->getLevelName($level, $groupId),
+            'level_name' => $levelName,
             'round_name' => 'losers_3_SF',
             'tournament_id' => $tournament->id,
             'group_id' => $groupId,
