@@ -216,8 +216,31 @@ class TournamentProgressionService
             Log::info("3 winners needed - using 3-player service");
             return $this->threePlayerService->check3PlayerTournamentProgression($tournament, $level, $levelName, $roundName);
         } else {
-            Log::info("More than 3 winners needed - checking comprehensive semifinals");
-            return $this->checkComprehensiveSemifinalsComplete($tournament, $level, $levelName);
+            Log::info("More than 3 winners needed - creating comprehensive 3-player tournament");
+            
+            // Get the 3 winners from the completed matches
+            $winners = [];
+            foreach ($matches as $match) {
+                if ($match->winner_id) {
+                    $winners[] = $match->winner_id;
+                }
+            }
+            
+            if (count($winners) !== 3) {
+                Log::error("Expected 3 winners but found " . count($winners));
+                return ['status' => 'error', 'message' => 'Invalid winner count for comprehensive tournament'];
+            }
+            
+            // Create comprehensive tournament (both winners and losers sides)
+            $this->threePlayerService->generateComprehensive3PlayerTournament(
+                $tournament, 
+                $level, 
+                $levelName, 
+                $winners, 
+                $winnersNeeded
+            );
+            
+            return ['status' => 'success', 'message' => 'Comprehensive 3-player tournament created'];
         }
     }
 
