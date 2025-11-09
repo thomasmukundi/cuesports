@@ -43,7 +43,7 @@ class MatchAlgorithmService
         
         // Handle special tournaments
         if ($level === 'special' || $tournament->special) {
-            return $this->initializeSpecialTournament($tournament);
+            return $this->initializeSpecialLevel($tournamentId);
         }
         
         // Check if tournament is already initialized for this level
