@@ -590,6 +590,9 @@ class FourPlayerTournamentService
             '4player_round1_match1'
         );
         
+        // Send notifications for Match 1
+        $this->sendMatchNotifications($tournament, $shuffledWinners[0]->id, $shuffledWinners[1]->id, '4player_round1', '4-Player Round 1');
+        
         // Create 4player_round1_match2: Winner C vs Winner D
         \App\Services\MatchCreationService::createMatch(
             $tournament,
@@ -602,6 +605,9 @@ class FourPlayerTournamentService
             null,
             '4player_round1_match2'
         );
+        
+        // Send notifications for Match 2
+        $this->sendMatchNotifications($tournament, $shuffledWinners[2]->id, $shuffledWinners[3]->id, '4player_round1', '4-Player Round 1');
     }
 
     /**
@@ -622,6 +628,9 @@ class FourPlayerTournamentService
                 null,
                 '4player_losers_round1_match1'
             );
+            
+            // Send notifications for Losers Match 1
+            $this->sendMatchNotifications($tournament, $shuffledLosers[0]->id, $shuffledLosers[1]->id, '4player_losers_round1', 'Losers Round 1');
         }
         
         if ($winnersNeeded >= 6) {
@@ -637,6 +646,9 @@ class FourPlayerTournamentService
                 null,
                 '4player_losers_round1_match2'
             );
+            
+            // Send notifications for Losers Match 2
+            $this->sendMatchNotifications($tournament, $shuffledLosers[2]->id, $shuffledLosers[3]->id, '4player_losers_round1', 'Losers Round 1');
         }
     }
 
@@ -698,6 +710,9 @@ class FourPlayerTournamentService
             '4player_round1_match1'
         );
         
+        // Send notifications for Match 1
+        $this->sendMatchNotifications($tournament, $shuffledWinners[0]->id, $shuffledWinners[1]->id, '4player_round1', '4-Player Round 1');
+        
         // Create Round 1 Match 2: C vs D
         \App\Services\MatchCreationService::createMatch(
             $tournament,
@@ -710,6 +725,9 @@ class FourPlayerTournamentService
             null,
             '4player_round1_match2'
         );
+        
+        // Send notifications for Match 2
+        $this->sendMatchNotifications($tournament, $shuffledWinners[2]->id, $shuffledWinners[3]->id, '4player_round1', '4-Player Round 1');
     }
 
     /**
@@ -834,6 +852,9 @@ class FourPlayerTournamentService
             'winners_final'
         );
         
+        // Send notifications for winners final
+        $this->sendMatchNotifications($tournament, $match1->winner_id, $match2->winner_id, 'winners_final', 'Winners Final');
+        
         // Create losers semifinal: Loser of match1 vs Loser of match2
         $loser1 = ($match1->player_1_id === $match1->winner_id) ? $match1->player_2_id : $match1->player_1_id;
         $loser2 = ($match2->player_1_id === $match2->winner_id) ? $match2->player_2_id : $match2->player_1_id;
@@ -849,6 +870,9 @@ class FourPlayerTournamentService
             null,
             'losers_semifinal'
         );
+        
+        // Send notifications for losers semifinal
+        $this->sendMatchNotifications($tournament, $loser1, $loser2, 'losers_semifinal', 'Losers Semifinal');
     }
 
     /**
@@ -1155,6 +1179,40 @@ class FourPlayerTournamentService
         ]);
 
         return $winners;
+    }
+
+    /**
+     * Send match notifications to players
+     */
+    private function sendMatchNotifications(Tournament $tournament, $player1Id, $player2Id, string $roundName, string $matchType)
+    {
+        $players = [$player1Id, $player2Id];
+        
+        foreach ($players as $playerId) {
+            $player = User::find($playerId);
+            if ($player) {
+                // Create notification record
+                $notification = Notification::create([
+                    'user_id' => $player->id,
+                    'type' => 'match_created',
+                    'title' => 'New Match Created',
+                    'message' => "You have a new {$matchType} match in {$tournament->name}",
+                    'data' => json_encode([
+                        'tournament_id' => $tournament->id,
+                        'tournament_name' => $tournament->name,
+                        'match_type' => $matchType,
+                        'round_name' => $roundName
+                    ])
+                ]);
+
+                \Log::info("Sent match notification", [
+                    'player_id' => $player->id,
+                    'player_name' => $player->name,
+                    'match_type' => $matchType,
+                    'tournament_id' => $tournament->id
+                ]);
+            }
+        }
     }
 
 }
