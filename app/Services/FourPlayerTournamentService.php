@@ -1194,9 +1194,8 @@ class FourPlayerTournamentService
             if ($player) {
                 // Create notification record
                 $notification = Notification::create([
-                    'user_id' => $player->id,
+                    'player_id' => $player->id,
                     'type' => 'match_created',
-                    'title' => 'New Match Created',
                     'message' => "You have a new {$matchType} match in {$tournament->name}",
                     'data' => json_encode([
                         'tournament_id' => $tournament->id,
