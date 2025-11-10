@@ -632,9 +632,8 @@ class FourPlayerTournamentService
             
             // Send notifications for Losers Match 3
             $this->sendMatchNotifications($tournament, $shuffledLosers[0]->id, $shuffledLosers[1]->id, '4player_round1', 'Losers Round 1');
-        }
-        
-        if ($winnersNeeded >= 6) {
+            
+            // Always create match 4 when we need 5+ winners (all 4 losers need to play)
             // Create 4player_round1_match4: Loser C vs Loser D (Losers bracket)
             \App\Services\MatchCreationService::createMatch(
                 $tournament,
@@ -650,6 +649,11 @@ class FourPlayerTournamentService
             
             // Send notifications for Losers Match 4
             $this->sendMatchNotifications($tournament, $shuffledLosers[2]->id, $shuffledLosers[3]->id, '4player_round1', 'Losers Round 1');
+            
+            \Log::info("Created both losers bracket matches", [
+                'match3_players' => [$shuffledLosers[0]->name, $shuffledLosers[1]->name],
+                'match4_players' => [$shuffledLosers[2]->name, $shuffledLosers[3]->name]
+            ]);
         }
     }
 
@@ -902,35 +906,29 @@ class FourPlayerTournamentService
         // Send notifications for losers semifinal
         $this->sendMatchNotifications($tournament, $loser1, $loser2, 'losers_semifinal', 'Losers Semifinal');
         
-        // If we need 5+ winners and have match3, create losers final for positions 5-6
-        if ($winnersNeeded >= 5 && $match3) {
-            if ($winnersNeeded >= 6 && $match4) {
-                // Both match3 and match4 exist - create losers final
-                \App\Services\MatchCreationService::createMatch(
-                    $tournament,
-                    User::find($match3->winner_id),
-                    User::find($match4->winner_id),
-                    'losers_final',
-                    $level,
-                    $groupId,
-                    $levelName,
-                    null,
-                    'losers_final'
-                );
-                
-                // Send notifications for losers final
-                $this->sendMatchNotifications($tournament, $match3->winner_id, $match4->winner_id, 'losers_final', 'Losers Final');
-                
-                \Log::info("Created losers final for positions 5-6", [
-                    'match3_winner' => $match3->winner_id,
-                    'match4_winner' => $match4->winner_id
-                ]);
-            } else {
-                // Only match3 exists - winner gets position 5 automatically
-                \Log::info("Match3 winner gets position 5 automatically", [
-                    'match3_winner' => $match3->winner_id
-                ]);
-            }
+        // If we need 5+ winners and have match3 and match4, create losers final
+        if ($winnersNeeded >= 5 && $match3 && $match4) {
+            // Both match3 and match4 exist - create losers final for positions 5-6
+            \App\Services\MatchCreationService::createMatch(
+                $tournament,
+                User::find($match3->winner_id),
+                User::find($match4->winner_id),
+                'losers_final',
+                $level,
+                $groupId,
+                $levelName,
+                null,
+                'losers_final'
+            );
+            
+            // Send notifications for losers final
+            $this->sendMatchNotifications($tournament, $match3->winner_id, $match4->winner_id, 'losers_final', 'Losers Final');
+            
+            \Log::info("Created losers final for positions 5-6", [
+                'match3_winner' => $match3->winner_id,
+                'match4_winner' => $match4->winner_id,
+                'winners_needed' => $winnersNeeded
+            ]);
         }
     }
 
@@ -1110,7 +1108,7 @@ class FourPlayerTournamentService
                 $positions[5] = $losersFinal->winner_id;
                 
                 if ($winnersNeeded >= 6) {
-                    // Position 6: Loser of losers final
+                    // Position 6: Loser of losers final (only if 6 winners needed)
                     $losersFinalLoser = ($losersFinal->player_1_id === $losersFinal->winner_id) ? $losersFinal->player_2_id : $losersFinal->player_1_id;
                     Winner::create([
                         'tournament_id' => $tournament->id,
@@ -1121,6 +1119,10 @@ class FourPlayerTournamentService
                     ]);
                     
                     $positions[6] = $losersFinalLoser;
+                    
+                    \Log::info("Created position 6 for 6-winner tournament", [
+                        'player_id' => $losersFinalLoser
+                    ]);
                 }
             } else {
                 // Check if there's a match3 winner for automatic position 5
