@@ -128,6 +128,17 @@ class TournamentProgressionService
             ]);
             return $this->threePlayerService->check3PlayerTournamentProgression($tournament, $level, $levelName, $roundName);
         }
+        
+        // Check if this is a 4-player tournament round - handle specially regardless of winner count
+        $fourPlayerRounds = ['4player_round1', 'winners_final', 'losers_semifinal', 'losers_final', '4_final'];
+        
+        if (in_array($roundName, $fourPlayerRounds)) {
+            Log::info("Processing 4-player tournament round", [
+                'round_name' => $roundName,
+                'winner_count' => $winnerCount
+            ]);
+            return $this->fourPlayerService->check4PlayerTournamentProgression($tournament, $level, $levelName, $roundName);
+        }
 
         switch ($winnerCount) {
             case 1:
