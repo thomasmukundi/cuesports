@@ -1170,7 +1170,7 @@ class MatchAlgorithmService
     /**
      * Handle large group progression (>4 players) with odd number handling
      */
-    private function handleLargeGroupProgression(Tournament $tournament, Collection $winners, string $level, $groupId, Collection $currentRoundMatches)
+    public function handleLargeGroupProgression(Tournament $tournament, Collection $winners, string $level, $groupId, Collection $currentRoundMatches)
     {
         $levelName = TournamentUtilityService::getLevelName($level, $groupId);
         $currentRoundName = $currentRoundMatches->first()->round_name;

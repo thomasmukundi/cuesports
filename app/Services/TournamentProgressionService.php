@@ -317,8 +317,9 @@ class TournamentProgressionService
 
         $groupId = TournamentUtilityService::getGroupIdFromLevelName($level, $levelName);
         
-        // Create matches for next round using MatchCreationService
-        MatchCreationService::createMatchesForGroup($tournament, $winners, $level, $groupId);
+        // Use MatchAlgorithmService for proper round progression and best loser logic
+        $matchAlgorithmService = app(\App\Services\MatchAlgorithmService::class);
+        $matchAlgorithmService->handleLargeGroupProgression($tournament, $winners, $level, $groupId, $matches);
         
         // Send notifications
         TournamentNotificationService::sendPairingNotifications($tournament, $level);
