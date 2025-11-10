@@ -342,24 +342,17 @@ class ThreePlayerTournamentService
             ? null 
             : \App\Services\TournamentUtilityService::getLevelName($level, $groupId);
 
-        $matchData = [
-            'match_name' => $matchName,
-            'player_1_id' => $player1Id,
-            'player_2_id' => $player2Id,
-            'level' => $level,
-            'level_name' => $levelName,
-            'round_name' => $roundName,
-            'tournament_id' => $tournament->id,
-            'group_id' => $groupId,
-            'status' => 'pending',
-            'proposed_dates' => \App\Services\ProposedDatesService::generateProposedDates($tournament->id),
-        ];
-        
-        if ($byePlayerId) {
-            $matchData['bye_player_id'] = $byePlayerId;
-        }
-        
-        PoolMatch::create($matchData);
+        \App\Services\MatchCreationService::createMatch(
+            $tournament,
+            User::find($player1Id),
+            User::find($player2Id),
+            $roundName,
+            $level,
+            $groupId,
+            $levelName,
+            $byePlayerId,
+            $matchName
+        );
     }
 
     /**
@@ -403,19 +396,17 @@ class ThreePlayerTournamentService
         ]);
         
         // Create semifinal match with bye player
-        PoolMatch::create([
-            'match_name' => '3_SF_match',
-            'player_1_id' => $pairedPlayers[0]->id,
-            'player_2_id' => $pairedPlayers[1]->id,
-            'bye_player_id' => $pairedPlayers[2]->id,
-            'level' => $level,
-            'level_name' => $levelName,
-            'round_name' => '3_SF',
-            'tournament_id' => $tournament->id,
-            'group_id' => $groupId,
-            'status' => 'pending',
-            'proposed_dates' => \App\Services\ProposedDatesService::generateProposedDates($tournament->id),
-        ]);
+        \App\Services\MatchCreationService::createMatch(
+            $tournament,
+            $pairedPlayers[0],
+            $pairedPlayers[1],
+            '3_SF',
+            $level,
+            $groupId,
+            $levelName,
+            $pairedPlayers[2]->id,
+            '3_SF_match'
+        );
         
         \Log::info("Created 3-player tournament matches", [
             'sf_match' => $pairedPlayers[0]->name . ' vs ' . $pairedPlayers[1]->name,
@@ -876,19 +867,17 @@ class ThreePlayerTournamentService
         ]);
         
         // Create 3_SF: A vs B (C gets bye) - winners semifinal
-        PoolMatch::create([
-            'match_name' => '3_SF_match',
-            'player_1_id' => $winners[0],
-            'player_2_id' => $winners[1],
-            'bye_player_id' => $winners[2],
-            'level' => $level,
-            'level_name' => $levelName,
-            'round_name' => '3_SF',
-            'tournament_id' => $tournament->id,
-            'group_id' => $groupId,
-            'status' => 'pending',
-            'proposed_dates' => \App\Services\ProposedDatesService::generateProposedDates($tournament->id),
-        ]);
+        \App\Services\MatchCreationService::createMatch(
+            $tournament,
+            User::find($winners[0]),
+            User::find($winners[1]),
+            '3_SF',
+            $level,
+            $groupId,
+            $levelName,
+            $winners[2],
+            '3_SF_match'
+        );
         
         // Send notifications to players about the new winners semifinal match
         $this->sendMatchNotifications($tournament, $winners[0], $winners[1], '3_SF', 'Winners Semifinal');
@@ -936,19 +925,17 @@ class ThreePlayerTournamentService
         $losersArray = $losers->take(3)->unique()->values()->toArray();
         
         // Create losers_3_SF: D vs E (F gets bye)
-        PoolMatch::create([
-            'match_name' => 'losers_3_SF_match',
-            'player_1_id' => $losersArray[0],
-            'player_2_id' => $losersArray[1],
-            'bye_player_id' => $losersArray[2],
-            'level' => $level,
-            'level_name' => $levelName,
-            'round_name' => 'losers_3_SF',
-            'tournament_id' => $tournament->id,
-            'group_id' => $groupId,
-            'status' => 'pending',
-            'proposed_dates' => \App\Services\ProposedDatesService::generateProposedDates($tournament->id),
-        ]);
+        \App\Services\MatchCreationService::createMatch(
+            $tournament,
+            User::find($losersArray[0]),
+            User::find($losersArray[1]),
+            'losers_3_SF',
+            $level,
+            $groupId,
+            $levelName,
+            $losersArray[2],
+            'losers_3_SF_match'
+        );
         
         \Log::info("3-player losers tournament matches created", [
             'sf_match' => 'losers_3_SF',

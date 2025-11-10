@@ -304,197 +304,34 @@ class MatchAlgorithmService
 
 
     /**
-     * Handle special progression cases for 2, 3, and 4 player tournaments
+     * Handle special progression cases for 2+ player tournaments
      */
     private function handleSpecialProgression(Tournament $tournament, Collection $winners, string $level, $groupId, Collection $currentRoundMatches, $levelName)
     {
         $currentRound = $currentRoundMatches->first()->round_name;
-        $originalPlayerCount = $this->getTotalPlayersInTournament($tournament, $level, $groupId);
         $currentWinnerCount = $winners->count();
         
         \Log::info("Special progression analysis", [
             'current_round' => $currentRound,
-            'original_player_count' => $originalPlayerCount,
             'current_winner_count' => $currentWinnerCount,
             'tournament_id' => $tournament->id
         ]);
         
-        // Use current winner count for progression logic, not original player count
+        // Use current winner count for progression logic
         switch ($currentWinnerCount) {
             case 2:
                 // 2-player tournament ends after 2_final - no progression needed
                 return;
                 
             case 3:
-                // Use ThreePlayerTournamentService for 3-player special progression
-                $this->threePlayerService->determine3PlayerWinnersRobust($tournament, $level, $groupId);
-                break;
-                
             case 4:
-                if ($currentRound === 'round_1' && $originalPlayerCount > 4) {
-                    // 4 winners from larger tournament - create new Round 1 for these 4 players
-                    \Log::info("Creating 4-player tournament from winners", [
-                        'winners' => $winners->pluck('id')->toArray(),
-                        'original_player_count' => $originalPlayerCount
-                    ]);
-                    
-                    $this->fourPlayerService->create4PlayerTournamentFromWinners($tournament, $winners, $level, $groupId, $levelName);
-                    return;
-                    
-                } elseif ($currentRound === 'round_1' && $originalPlayerCount === 4) {
-                    // Original 4-player tournament - create winners final and losers semifinal
-                    $matches = $currentRoundMatches->sortBy('match_name');
-                    $match1 = $matches->first();
-                    $match2 = $matches->last();
-                    
-                    $winner1 = $match1->winner_id;
-                    $loser1 = ($match1->player_1_id === $winner1) ? $match1->player_2_id : $match1->player_1_id;
-                    
-                    $winner2 = $match2->winner_id;
-                    $loser2 = ($match2->player_1_id === $winner2) ? $match2->player_2_id : $match2->player_1_id;
-                    
-                    // Create winners final (SF winners)
-                    PoolMatch::create([
-                        'match_name' => 'winners_final_match',
-                        'player_1_id' => $winner1,
-                        'player_2_id' => $winner2,
-                        'level' => $level,
-                        'level_name' => $levelName,
-                        'round_name' => 'winners_final',
-                        'tournament_id' => $tournament->id,
-                        'group_id' => $groupId,
-                        'status' => 'pending',
-                        'proposed_dates' => \App\Services\ProposedDatesService::generateProposedDatesJson($tournament->id),
-                    ]);
-                    
-                    // Create losers semifinal (SF losers)
-                    PoolMatch::create([
-                        'match_name' => 'losers_semifinal_match',
-                        'player_1_id' => $loser1,
-                        'player_2_id' => $loser2,
-                        'level' => $level,
-                        'level_name' => $levelName,
-                        'round_name' => 'losers_semifinal',
-                        'tournament_id' => $tournament->id,
-                        'group_id' => $groupId,
-                        'status' => 'pending',
-                        'proposed_dates' => \App\Services\ProposedDatesService::generateProposedDatesJson($tournament->id),
-                    ]);
-                    
-                } elseif ($currentRound === '4player_round1') {
-                    // 4-player Round 1 completed - create winners final and losers semifinal
-                    $matches = $currentRoundMatches->sortBy('match_name');
-                    $match1 = $matches->first();
-                    $match2 = $matches->last();
-                    
-                    $winner1 = $match1->winner_id;
-                    $loser1 = ($match1->player_1_id === $winner1) ? $match1->player_2_id : $match1->player_1_id;
-                    
-                    $winner2 = $match2->winner_id;
-                    $loser2 = ($match2->player_1_id === $winner2) ? $match2->player_2_id : $match2->player_1_id;
-                    
-                    // Create winners final (SF winners)
-                    PoolMatch::create([
-                        'match_name' => 'winners_final_match',
-                        'player_1_id' => $winner1,
-                        'player_2_id' => $winner2,
-                        'level' => $level,
-                        'level_name' => $levelName,
-                        'round_name' => 'winners_final',
-                        'tournament_id' => $tournament->id,
-                        'group_id' => $groupId,
-                        'status' => 'pending',
-                        'proposed_dates' => \App\Services\ProposedDatesService::generateProposedDatesJson($tournament->id),
-                    ]);
-                    
-                    // Create losers semifinal (SF losers)
-                    PoolMatch::create([
-                        'match_name' => 'losers_semifinal_match',
-                        'player_1_id' => $loser1,
-                        'player_2_id' => $loser2,
-                        'level' => $level,
-                        'level_name' => $levelName,
-                        'round_name' => 'losers_semifinal',
-                        'tournament_id' => $tournament->id,
-                        'group_id' => $groupId,
-                        'status' => 'pending',
-                        'proposed_dates' => \App\Services\ProposedDatesService::generateProposedDatesJson($tournament->id),
-                    ]);
-                    
-                } elseif ($currentRound === 'winners_final' || $currentRound === 'losers_semifinal') {
-                    // Check if both winners final and losers semifinal matches are complete
-                    $winnersFinal = PoolMatch::where('tournament_id', $tournament->id)
-                        ->where('level', $level)
-                        ->where('level_name', $levelName)
-                        ->where('round_name', 'winners_final')
-                        ->where('status', 'completed')
-                        ->first();
-                        
-                    $losersSemifinal = PoolMatch::where('tournament_id', $tournament->id)
-                        ->where('level', $level)
-                        ->where('level_name', $levelName)
-                        ->where('round_name', 'losers_semifinal')
-                        ->where('status', 'completed')
-                        ->first();
-                    
-                    if ($winnersFinal && $losersSemifinal) {
-                        // Both matches complete - determine positions directly
-                        // No additional matches needed - positions determined from these two matches
-                        \Log::info("4-player tournament complete - determining final positions", [
-                            'winners_final_winner' => $winnersFinal->winner_id,
-                            'winners_final_loser' => ($winnersFinal->player_1_id === $winnersFinal->winner_id) ? $winnersFinal->player_2_id : $winnersFinal->player_1_id,
-                            'losers_semifinal_winner' => $losersSemifinal->winner_id,
-                            'losers_semifinal_loser' => ($losersSemifinal->player_1_id === $losersSemifinal->winner_id) ? $losersSemifinal->player_2_id : $losersSemifinal->player_1_id
-                        ]);
-                    }
-                }
-                break;
-        }
-    }
-
-    /**
-     * Get total players in tournament for a specific level and group
-     */
-    private function getTotalPlayersInTournament(Tournament $tournament, string $level, $groupId)
-    {
-        return $this->getOriginalPlayersForTournament($tournament, $level, $groupId)->count();
-    }
-
-    /**
-     * Get original players for a tournament level/group
-     */
-    private function getOriginalPlayersForTournament(Tournament $tournament, string $level, ?int $groupId)
-    {
-        if ($level === 'community') {
-            return $tournament->approvedPlayers->where('community_id', $groupId);
-        } elseif ($level === 'special') {
-            // For special tournaments, get all approved players (no previous level)
-            return $tournament->approvedPlayers;
-        } else {
-            // For higher levels, get winners from previous level
-            return Winner::where('tournament_id', $tournament->id)
-                ->where('level', $this->getPreviousLevel($level))
-                ->with('player')
-                ->get()
-                ->pluck('player')
-                ->where($this->getLevelColumn($level), $groupId);
-        }
-    }
-
-    /**
-     * Get the column name for filtering players by level
-     */
-    private function getLevelColumn(string $level): string
-    {
-        switch ($level) {
-            case 'county':
-                return 'county_id';
-            case 'regional':
-                return 'region_id';
-            case 'national':
-                return 'country_id';
+                // Delegate to TournamentProgressionService for tournament-specific progression
+                return $this->progressionService->handleRoundCompletion($tournament, $level, $levelName, $currentRound);
+                
             default:
-                return 'community_id';
+                // For larger groups, continue with normal progression
+                $this->handleLargeGroupProgression($tournament, $winners, $level, $groupId, $currentRoundMatches);
+                break;
         }
     }
 
@@ -847,25 +684,21 @@ class MatchAlgorithmService
     
 
     /**
-     * Create a single match with proper structure
+     * Create a single match using MatchCreationService (single source of truth)
      */
     private function createMatch(Tournament $tournament, $player1, $player2, string $roundName, string $level, int $groupId, string $levelName, ?int $byePlayerId = null, ?string $matchName = null): \App\Models\PoolMatch
     {
-        $matchName = $matchName ?? "{$roundName}_match";
-        
-        return \App\Models\PoolMatch::create([
-            'match_name' => $matchName,
-            'player_1_id' => $player1->id,
-            'player_2_id' => $player2->id,
-            'bye_player_id' => $byePlayerId,
-            'level' => $level,
-            'level_name' => $levelName,
-            'round_name' => $roundName,
-            'tournament_id' => $tournament->id,
-            'group_id' => $groupId,
-            'status' => 'pending',
-            'proposed_dates' => \App\Services\ProposedDatesService::generateProposedDates($tournament->id),
-        ]);
+        return \App\Services\MatchCreationService::createMatch(
+            $tournament,
+            $player1,
+            $player2,
+            $roundName,
+            $level,
+            $groupId,
+            $levelName,
+            $byePlayerId,
+            $matchName
+        );
     }
 
     /**
@@ -1148,18 +981,17 @@ class MatchAlgorithmService
             }
             $firstOpponent = $playerArray[$firstOpponentIndex];
             
-            $match1 = PoolMatch::create([
-                'match_name' => "{$roundName}_M{$matchNumber}",
-                'player_1_id' => $doublePlayer->id,
-                'player_2_id' => $firstOpponent->id,
-                'level' => $level,
-                'level_name' => $levelName,
-                'round_name' => $roundName,
-                'tournament_id' => $tournament->id,
-                'group_id' => $groupId,
-                'status' => 'pending',
-                'proposed_dates' => \App\Services\ProposedDatesService::generateProposedDatesJson($tournament->id),
-            ]);
+            $match1 = \App\Services\MatchCreationService::createMatch(
+                $tournament,
+                $doublePlayer,
+                $firstOpponent,
+                $roundName,
+                $level,
+                $groupId,
+                $levelName,
+                null,
+                "{$roundName}_M{$matchNumber}"
+            );
             
             \Log::info("Created match #{$matchNumber}", [
                 'match_id' => $match1->id,
@@ -1184,18 +1016,17 @@ class MatchAlgorithmService
             if ($secondOpponentIndex != -1) {
                 $secondOpponent = $playerArray[$secondOpponentIndex];
                 
-                $match2 = PoolMatch::create([
-                    'match_name' => "{$roundName}_M{$matchNumber}",
-                    'player_1_id' => $doublePlayer->id,
-                    'player_2_id' => $secondOpponent->id,
-                    'level' => $level,
-                    'level_name' => $levelName,
-                    'round_name' => $roundName,
-                    'tournament_id' => $tournament->id,
-                    'group_id' => $groupId,
-                    'status' => 'pending',
-                    'proposed_dates' => \App\Services\ProposedDatesService::generateProposedDatesJson($tournament->id),
-                ]);
+                $match2 = \App\Services\MatchCreationService::createMatch(
+                    $tournament,
+                    $doublePlayer,
+                    $secondOpponent,
+                    $roundName,
+                    $level,
+                    $groupId,
+                    $levelName,
+                    null,
+                    "{$roundName}_M{$matchNumber}"
+                );
                 
                 \Log::info("Created match #{$matchNumber} (double player's second match)", [
                     'match_id' => $match2->id,
@@ -1222,18 +1053,17 @@ class MatchAlgorithmService
             
             for ($i = 0; $i < count($remainingPlayers); $i += 2) {
                 if (isset($remainingPlayers[$i + 1])) {
-                    $match = PoolMatch::create([
-                        'match_name' => "{$roundName}_M{$matchNumber}",
-                        'player_1_id' => $remainingPlayers[$i]->id,
-                        'player_2_id' => $remainingPlayers[$i + 1]->id,
-                        'level' => $level,
-                        'level_name' => $levelName,
-                        'round_name' => $roundName,
-                        'tournament_id' => $tournament->id,
-                        'group_id' => $groupId,
-                        'status' => 'pending',
-                        'proposed_dates' => \App\Services\ProposedDatesService::generateProposedDatesJson($tournament->id),
-                    ]);
+                    $match = \App\Services\MatchCreationService::createMatch(
+                        $tournament,
+                        $remainingPlayers[$i],
+                        $remainingPlayers[$i + 1],
+                        $roundName,
+                        $level,
+                        $groupId,
+                        $levelName,
+                        null,
+                        "{$roundName}_M{$matchNumber}"
+                    );
                     
                     \Log::info("Created match #{$matchNumber}", [
                         'match_id' => $match->id,
@@ -1254,18 +1084,17 @@ class MatchAlgorithmService
                     'last_player_id' => $lastPlayer->id
                 ]);
                 
-                $finalMatch = PoolMatch::create([
-                    'match_name' => "{$roundName}_M{$matchNumber}",
-                    'player_1_id' => $doublePlayer->id,
-                    'player_2_id' => $lastPlayer->id,
-                    'level' => $level,
-                    'level_name' => $levelName,
-                    'round_name' => $roundName,
-                    'tournament_id' => $tournament->id,
-                    'group_id' => $groupId,
-                    'status' => 'pending',
-                    'proposed_dates' => \App\Services\ProposedDatesService::generateProposedDatesJson($tournament->id),
-                ]);
+                $finalMatch = \App\Services\MatchCreationService::createMatch(
+                    $tournament,
+                    $doublePlayer,
+                    $lastPlayer,
+                    $roundName,
+                    $level,
+                    $groupId,
+                    $levelName,
+                    null,
+                    "{$roundName}_M{$matchNumber}"
+                );
                 
                 \Log::info("Created final match #{$matchNumber}", [
                     'match_id' => $finalMatch->id,
@@ -1285,18 +1114,17 @@ class MatchAlgorithmService
             
             for ($i = 0; $i < $playerCount; $i += 2) {
                 if (isset($playerArray[$i + 1])) {
-                    $match = PoolMatch::create([
-                        'match_name' => "{$roundName}_M{$matchNumber}",
-                        'player_1_id' => $playerArray[$i]->id,
-                        'player_2_id' => $playerArray[$i + 1]->id,
-                        'level' => $level,
-                        'level_name' => $levelName,
-                        'round_name' => $roundName,
-                        'tournament_id' => $tournament->id,
-                        'group_id' => $groupId,
-                        'status' => 'pending',
-                        'proposed_dates' => \App\Services\ProposedDatesService::generateProposedDatesJson($tournament->id),
-                    ]);
+                    $match = \App\Services\MatchCreationService::createMatch(
+                        $tournament,
+                        $playerArray[$i],
+                        $playerArray[$i + 1],
+                        $roundName,
+                        $level,
+                        $groupId,
+                        $levelName,
+                        null,
+                        "{$roundName}_M{$matchNumber}"
+                    );
                     
                     \Log::info("Created even-pairing match #{$matchNumber}", [
                         'match_id' => $match->id,
@@ -1579,63 +1407,27 @@ class MatchAlgorithmService
             case 2:
                 // Create final match
                 $finalRoundName = $roundName ?? '2_final';
-                PoolMatch::create([
-                    'match_name' => $finalRoundName . '_match',
-                    'player_1_id' => $players->first()->id,
-                    'player_2_id' => $players->last()->id,
-                    'level' => $level,
-                    'level_name' => $levelName,
-                    'round_name' => $finalRoundName,
-                    'tournament_id' => $tournament->id,
-                    'group_id' => $groupId,
-                    'status' => 'pending',
-                    'proposed_dates' => \App\Services\ProposedDatesService::generateProposedDatesJson($tournament->id),
-                ]);
+                \App\Services\MatchCreationService::createMatch(
+                    $tournament,
+                    $players->first(),
+                    $players->last(),
+                    $finalRoundName,
+                    $level,
+                    $groupId,
+                    $levelName,
+                    null,
+                    $finalRoundName . '_match'
+                );
                 break;
                 
             case 3:
-                // Use ThreePlayerTournamentService to generate 3-player matches
+                // Delegate to ThreePlayerTournamentService
                 $this->threePlayerService->generate3PlayerMatches($tournament, $players, $level, $groupId, $levelName);
                 break;
                 
             case 4:
-                // Create two first round matches
-                $r1RoundName = $roundName ?? 'round_1';
-                $shuffledPlayers = $players->shuffle();
-                
-                \Log::info("Creating 4-player matches", [
-                    'round_name' => $r1RoundName,
-                    'level_name' => $levelName,
-                    'players' => $shuffledPlayers->map(function($p) {
-                        return ['id' => $p->id, 'name' => $p->name];
-                    })->toArray()
-                ]);
-                
-                PoolMatch::create([
-                    'match_name' => $r1RoundName . '_M1',
-                    'player_1_id' => $shuffledPlayers[0]->id,
-                    'player_2_id' => $shuffledPlayers[1]->id,
-                    'level' => $level,
-                    'level_name' => $levelName,
-                    'round_name' => $r1RoundName,
-                    'tournament_id' => $tournament->id,
-                    'group_id' => $groupId,
-                    'status' => 'pending',
-                    'proposed_dates' => \App\Services\ProposedDatesService::generateProposedDatesJson($tournament->id),
-                ]);
-                
-                PoolMatch::create([
-                    'match_name' => $r1RoundName . '_M2',
-                    'player_1_id' => $shuffledPlayers[2]->id,
-                    'player_2_id' => $shuffledPlayers[3]->id,
-                    'level' => $level,
-                    'level_name' => $levelName,
-                    'round_name' => $r1RoundName,
-                    'tournament_id' => $tournament->id,
-                    'group_id' => $groupId,
-                    'status' => 'pending',
-                    'proposed_dates' => \App\Services\ProposedDatesService::generateProposedDatesJson($tournament->id),
-                ]);
+                // Delegate to FourPlayerTournamentService
+                $this->fourPlayerService->generateComprehensive4PlayerTournament($tournament, $level, $levelName, $players->toArray(), 4);
                 break;
         }
     }
@@ -1887,18 +1679,17 @@ class MatchAlgorithmService
             // Create first match with double player
             $opponent1 = $shuffled->where('id', '!=', $doublePlayer->id)->first();
             $matchName = $roundName . '_' . $suffix . '_match' . $matchNumber;
-            PoolMatch::create([
-                'match_name' => $matchName,
-                'player_1_id' => $doublePlayer->id,
-                'player_2_id' => $opponent1->id,
-                'level' => $level,
-                'level_name' => $levelName ?? $this->getLevelName($level, $groupId),
-                'round_name' => $roundName,
-                'tournament_id' => $tournament->id,
-                'group_id' => $groupId,
-                'status' => 'pending',
-                'proposed_dates' => \App\Services\ProposedDatesService::generateProposedDatesJson($tournament->id),
-            ]);
+            \App\Services\MatchCreationService::createMatch(
+                $tournament,
+                $doublePlayer,
+                $opponent1,
+                $roundName,
+                $level,
+                $groupId,
+                $levelName ?? $this->getLevelName($level, $groupId),
+                null,
+                $matchName
+            );
             $matchNumber++;
             
             // Remove the first opponent from remaining players
@@ -1907,18 +1698,17 @@ class MatchAlgorithmService
             // Create second match with double player and another opponent
             $opponent2 = $remainingPlayers->where('id', '!=', $doublePlayer->id)->first();
             $matchName = $roundName . '_' . $suffix . '_match' . $matchNumber;
-            PoolMatch::create([
-                'match_name' => $matchName,
-                'player_1_id' => $doublePlayer->id,
-                'player_2_id' => $opponent2->id,
-                'level' => $level,
-                'level_name' => $levelName ?? $this->getLevelName($level, $groupId),
-                'round_name' => $roundName,
-                'tournament_id' => $tournament->id,
-                'group_id' => $groupId,
-                'status' => 'pending',
-                'proposed_dates' => \App\Services\ProposedDatesService::generateProposedDatesJson($tournament->id),
-            ]);
+            \App\Services\MatchCreationService::createMatch(
+                $tournament,
+                $doublePlayer,
+                $opponent2,
+                $roundName,
+                $level,
+                $groupId,
+                $levelName ?? $this->getLevelName($level, $groupId),
+                null,
+                $matchName
+            );
             $matchNumber++;
             
             // Remove double player and second opponent from remaining players
@@ -1931,18 +1721,17 @@ class MatchAlgorithmService
         $remainingArray = $remainingPlayers->values();
         for ($i = 0; $i < $remainingArray->count() - 1; $i += 2) {
             $matchName = $roundName . '_' . $suffix . '_match' . $matchNumber;
-            PoolMatch::create([
-                'match_name' => $matchName,
-                'player_1_id' => $remainingArray[$i]->id,
-                'player_2_id' => $remainingArray[$i + 1]->id,
-                'level' => $level,
-                'level_name' => $levelName ?? $this->getLevelName($level, $groupId),
-                'round_name' => $roundName,
-                'tournament_id' => $tournament->id,
-                'group_id' => $groupId,
-                'status' => 'pending',
-                'proposed_dates' => \App\Services\ProposedDatesService::generateProposedDatesJson($tournament->id),
-            ]);
+            \App\Services\MatchCreationService::createMatch(
+                $tournament,
+                $remainingArray[$i],
+                $remainingArray[$i + 1],
+                $roundName,
+                $level,
+                $groupId,
+                $levelName ?? $this->getLevelName($level, $groupId),
+                null,
+                $matchName
+            );
             $matchNumber++;
         }
     }
@@ -2403,16 +2192,14 @@ class MatchAlgorithmService
                 break;
                 
             case 3:
-                $this->threePlayerService->determine3PlayerWinnersRobust($tournament, $level, $groupId);
-                break;
-                
             case 4:
-                $this->fourPlayerService->determine4PlayerWinners($tournament, $level, $groupId);
+                // Delegate to WinnerDeterminationService for tournament-specific logic
+                return $this->winnerService->determineWinners($tournament, $level, $groupId);
                 break;
                 
             default:
-                // Standard tournament - determine winners from final matches
-                $this->determineStandardWinners($tournament, $level, $groupId);
+                // Delegate to WinnerDeterminationService for standard tournaments
+                return $this->winnerService->determineWinners($tournament, $level, $groupId);
                 break;
         }
         

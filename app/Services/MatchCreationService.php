@@ -396,15 +396,46 @@ class MatchCreationService
             }
         }
         
-        // Handle odd player if any
+        // Handle odd player if any - one player must play twice
         if ($playerCount % 2 === 1) {
             $oddPlayer = $playerArray[$playerCount - 1];
-            \Log::info("Handling odd player", [
+            \Log::info("Handling odd player - creating additional matches", [
                 'odd_player_id' => $oddPlayer->id,
-                'odd_player_name' => $oddPlayer->name
+                'odd_player_name' => $oddPlayer->name,
+                'total_players' => $playerCount
             ]);
             
-            // Create bye or additional match logic here if needed
+            // Pick a random player to play twice (avoid the odd player)
+            $doublePlayerIndex = rand(0, $playerCount - 2); // Exclude the odd player
+            $doublePlayer = $playerArray[$doublePlayerIndex];
+            
+            \Log::info("Player will play twice", [
+                'double_player_id' => $doublePlayer->id,
+                'double_player_name' => $doublePlayer->name
+            ]);
+            
+            // Create additional match: double player vs odd player
+            $match = PoolMatch::create([
+                'match_name' => "{$roundName}_M{$matchNumber}",
+                'player_1_id' => $doublePlayer->id,
+                'player_2_id' => $oddPlayer->id,
+                'level' => $level,
+                'level_name' => $levelName,
+                'round_name' => $roundName,
+                'tournament_id' => $tournament->id,
+                'group_id' => $groupId,
+                'status' => 'pending',
+                'proposed_dates' => \App\Services\ProposedDatesService::generateProposedDates($tournament->id),
+            ]);
+            $matches[] = $match;
+            $matchNumber++;
+            
+            \Log::info("Created additional match for odd player", [
+                'match_id' => $match->id,
+                'match_name' => $match->match_name,
+                'double_player' => $doublePlayer->name,
+                'odd_player' => $oddPlayer->name
+            ]);
         }
         
         \Log::info("Created " . count($matches) . " standard matches for {$playerCount} players");

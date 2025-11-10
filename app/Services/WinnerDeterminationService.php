@@ -27,6 +27,23 @@ class WinnerDeterminationService
     }
 
     /**
+     * Main entry point for winner determination (called from MatchAlgorithmService)
+     */
+    public function determineWinners(Tournament $tournament, string $level, ?int $groupId): array
+    {
+        Log::info("WinnerDeterminationService::determineWinners called", [
+            'tournament_id' => $tournament->id,
+            'level' => $level,
+            'group_id' => $groupId
+        ]);
+
+        // Convert groupId to levelName for consistency
+        $levelName = TournamentUtilityService::getLevelNameFromGroupId($level, $groupId);
+        
+        return $this->determineFinalPositions($tournament, $level, $levelName);
+    }
+
+    /**
      * Determine final positions for completed tournaments
      */
     public function determineFinalPositions(Tournament $tournament, string $level, ?string $levelName): array

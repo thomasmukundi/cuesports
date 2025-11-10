@@ -32,32 +32,30 @@ class FourPlayerTournamentService
         ]);
         
         // Create Round 1 Match 1: A vs B
-        PoolMatch::create([
-            'match_name' => '4player_round1_match1',
-            'player_1_id' => $winnersArray[0]->id,
-            'player_2_id' => $winnersArray[1]->id,
-            'level' => $level,
-            'level_name' => $levelName,
-            'round_name' => '4player_round1',
-            'tournament_id' => $tournament->id,
-            'group_id' => $groupId,
-            'status' => 'pending',
-            'proposed_dates' => \App\Services\ProposedDatesService::generateProposedDates($tournament->id),
-        ]);
+        \App\Services\MatchCreationService::createMatch(
+            $tournament,
+            $winnersArray[0],
+            $winnersArray[1],
+            '4player_round1',
+            $level,
+            $groupId,
+            $levelName,
+            null,
+            '4player_round1_match1'
+        );
         
         // Create Round 1 Match 2: C vs D
-        PoolMatch::create([
-            'match_name' => '4player_round1_match2',
-            'player_1_id' => $winnersArray[2]->id,
-            'player_2_id' => $winnersArray[3]->id,
-            'level' => $level,
-            'level_name' => $levelName,
-            'round_name' => '4player_round1',
-            'tournament_id' => $tournament->id,
-            'group_id' => $groupId,
-            'status' => 'pending',
-            'proposed_dates' => \App\Services\ProposedDatesService::generateProposedDates($tournament->id),
-        ]);
+        \App\Services\MatchCreationService::createMatch(
+            $tournament,
+            $winnersArray[2],
+            $winnersArray[3],
+            '4player_round1',
+            $level,
+            $groupId,
+            $levelName,
+            null,
+            '4player_round1_match2'
+        );
         
         \Log::info("Created 4-player tournament matches from winners", [
             'match_1' => $winnersArray[0]->name . ' vs ' . $winnersArray[1]->name,
@@ -101,18 +99,17 @@ class FourPlayerTournamentService
                     'tournament_id' => $tournament->id
                 ]);
                 
-                PoolMatch::create([
-                    'match_name' => 'winners_final_match',
-                    'player_1_id' => $winner1,
-                    'player_2_id' => $winner2,
-                    'level' => $level,
-                    'level_name' => $this->getLevelName($level, $groupId),
-                    'round_name' => 'winners_final',
-                    'tournament_id' => $tournament->id,
-                    'group_id' => $groupId,
-                    'status' => 'pending',
-                    'proposed_dates' => \App\Services\ProposedDatesService::generateProposedDates($tournament->id),
-                ]);
+                \App\Services\MatchCreationService::createMatch(
+                    $tournament,
+                    User::find($winner1),
+                    User::find($winner2),
+                    'winners_final',
+                    $level,
+                    $groupId,
+                    $this->getLevelName($level, $groupId),
+                    null,
+                    'winners_final_match'
+                );
             }
             
             if (!$losersSemifinal) {
@@ -123,18 +120,17 @@ class FourPlayerTournamentService
                     'tournament_id' => $tournament->id
                 ]);
                 
-                PoolMatch::create([
-                    'match_name' => 'losers_semifinal_match',
-                    'player_1_id' => $loser1,
-                    'player_2_id' => $loser2,
-                    'level' => $level,
-                    'level_name' => $this->getLevelName($level, $groupId),
-                    'round_name' => 'losers_semifinal',
-                    'tournament_id' => $tournament->id,
-                    'group_id' => $groupId,
-                    'status' => 'pending',
-                    'proposed_dates' => \App\Services\ProposedDatesService::generateProposedDates($tournament->id),
-                ]);
+                \App\Services\MatchCreationService::createMatch(
+                    $tournament,
+                    User::find($loser1),
+                    User::find($loser2),
+                    'losers_semifinal',
+                    $level,
+                    $groupId,
+                    $this->getLevelName($level, $groupId),
+                    null,
+                    'losers_semifinal_match'
+                );
             }
             
             return; // Wait for additional matches to complete
@@ -291,32 +287,30 @@ class FourPlayerTournamentService
         $shuffledLosers = $losers->shuffle()->values();
         
         // Create losers Round 1 Match 1: D vs E
-        PoolMatch::create([
-            'match_name' => 'losers_round1_match1',
-            'player_1_id' => $shuffledLosers[0]->id,
-            'player_2_id' => $shuffledLosers[1]->id,
-            'level' => $level,
-            'level_name' => $this->getLevelName($level, $groupId),
-            'round_name' => 'losers_round1',
-            'tournament_id' => $tournament->id,
-            'group_id' => $groupId,
-            'status' => 'pending',
-            'proposed_dates' => \App\Services\ProposedDatesService::generateProposedDates($tournament->id),
-        ]);
+        \App\Services\MatchCreationService::createMatch(
+            $tournament,
+            $shuffledLosers[0],
+            $shuffledLosers[1],
+            'losers_round1',
+            $level,
+            $groupId,
+            $this->getLevelName($level, $groupId),
+            null,
+            'losers_round1_match1'
+        );
         
         // Create losers Round 1 Match 2: F vs G
-        PoolMatch::create([
-            'match_name' => 'losers_round1_match2',
-            'player_1_id' => $shuffledLosers[2]->id,
-            'player_2_id' => $shuffledLosers[3]->id,
-            'level' => $level,
-            'level_name' => $this->getLevelName($level, $groupId),
-            'round_name' => 'losers_round1',
-            'tournament_id' => $tournament->id,
-            'group_id' => $groupId,
-            'status' => 'pending',
-            'proposed_dates' => \App\Services\ProposedDatesService::generateProposedDates($tournament->id),
-        ]);
+        \App\Services\MatchCreationService::createMatch(
+            $tournament,
+            $shuffledLosers[2],
+            $shuffledLosers[3],
+            'losers_round1',
+            $level,
+            $groupId,
+            $this->getLevelName($level, $groupId),
+            null,
+            'losers_round1_match2'
+        );
         
         \Log::info("Created 4-player losers initial matches", [
             'match_1' => $shuffledLosers[0]->name . ' vs ' . $shuffledLosers[1]->name,
@@ -343,18 +337,17 @@ class FourPlayerTournamentService
                 'tournament_id' => $tournament->id
             ]);
             
-            PoolMatch::create([
-                'match_name' => 'losers_winners_final_match',
-                'player_1_id' => $winner1,
-                'player_2_id' => $winner2,
-                'level' => $level,
-                'level_name' => $this->getLevelName($level, $groupId),
-                'round_name' => 'losers_winners_final',
-                'tournament_id' => $tournament->id,
-                'group_id' => $groupId,
-                'status' => 'pending',
-                'proposed_dates' => \App\Services\ProposedDatesService::generateProposedDates($tournament->id),
-            ]);
+            \App\Services\MatchCreationService::createMatch(
+                $tournament,
+                User::find($winner1),
+                User::find($winner2),
+                'losers_winners_final',
+                $level,
+                $groupId,
+                $this->getLevelName($level, $groupId),
+                null,
+                'losers_winners_final_match'
+            );
             
         } elseif ($losersRound1->count() === 2 && $losersWinnersFinal) {
             // Determine positions 5-6
@@ -407,32 +400,30 @@ class FourPlayerTournamentService
         ]);
         
         // Create Match 1: A vs B
-        PoolMatch::create([
-            'match_name' => $r1RoundName . '_match1',
-            'player_1_id' => $shuffledPlayers[0]->id,
-            'player_2_id' => $shuffledPlayers[1]->id,
-            'level' => $level,
-            'level_name' => $levelName,
-            'round_name' => $r1RoundName,
-            'tournament_id' => $tournament->id,
-            'group_id' => $groupId,
-            'status' => 'pending',
-            'proposed_dates' => \App\Services\ProposedDatesService::generateProposedDates($tournament->id),
-        ]);
+        \App\Services\MatchCreationService::createMatch(
+            $tournament,
+            $shuffledPlayers[0],
+            $shuffledPlayers[1],
+            $r1RoundName,
+            $level,
+            $groupId,
+            $levelName,
+            null,
+            $r1RoundName . '_match1'
+        );
         
         // Create Match 2: C vs D
-        PoolMatch::create([
-            'match_name' => $r1RoundName . '_match2',
-            'player_1_id' => $shuffledPlayers[2]->id,
-            'player_2_id' => $shuffledPlayers[3]->id,
-            'level' => $level,
-            'level_name' => $levelName,
-            'round_name' => $r1RoundName,
-            'tournament_id' => $tournament->id,
-            'group_id' => $groupId,
-            'status' => 'pending',
-            'proposed_dates' => \App\Services\ProposedDatesService::generateProposedDates($tournament->id),
-        ]);
+        \App\Services\MatchCreationService::createMatch(
+            $tournament,
+            $shuffledPlayers[2],
+            $shuffledPlayers[3],
+            $r1RoundName,
+            $level,
+            $groupId,
+            $levelName,
+            null,
+            $r1RoundName . '_match2'
+        );
         
         \Log::info("Created 4-player tournament matches", [
             'match_1' => $shuffledPlayers[0]->name . ' vs ' . $shuffledPlayers[1]->name,
@@ -558,32 +549,30 @@ class FourPlayerTournamentService
     private function createWinnersBracket(Tournament $tournament, string $level, ?string $levelName, $groupId, $shuffledWinners)
     {
         // Create 4player_round1_match1: Winner A vs Winner B
-        PoolMatch::create([
-            'match_name' => '4player_round1_match1',
-            'player_1_id' => $shuffledWinners[0]->id,
-            'player_2_id' => $shuffledWinners[1]->id,
-            'level' => $level,
-            'level_name' => $levelName,
-            'round_name' => '4player_round1',
-            'tournament_id' => $tournament->id,
-            'group_id' => $groupId,
-            'status' => 'pending',
-            'proposed_dates' => \App\Services\ProposedDatesService::generateProposedDates($tournament->id),
-        ]);
+        \App\Services\MatchCreationService::createMatch(
+            $tournament,
+            $shuffledWinners[0],
+            $shuffledWinners[1],
+            '4player_round1',
+            $level,
+            $groupId,
+            $levelName,
+            null,
+            '4player_round1_match1'
+        );
         
         // Create 4player_round1_match2: Winner C vs Winner D
-        PoolMatch::create([
-            'match_name' => '4player_round1_match2',
-            'player_1_id' => $shuffledWinners[2]->id,
-            'player_2_id' => $shuffledWinners[3]->id,
-            'level' => $level,
-            'level_name' => $levelName,
-            'round_name' => '4player_round1',
-            'tournament_id' => $tournament->id,
-            'group_id' => $groupId,
-            'status' => 'pending',
-            'proposed_dates' => \App\Services\ProposedDatesService::generateProposedDates($tournament->id),
-        ]);
+        \App\Services\MatchCreationService::createMatch(
+            $tournament,
+            $shuffledWinners[2],
+            $shuffledWinners[3],
+            '4player_round1',
+            $level,
+            $groupId,
+            $levelName,
+            null,
+            '4player_round1_match2'
+        );
     }
 
     /**
@@ -593,34 +582,32 @@ class FourPlayerTournamentService
     {
         if ($winnersNeeded >= 5) {
             // Create 4player_losers_round1_match1: Loser A vs Loser B
-            PoolMatch::create([
-                'match_name' => '4player_losers_round1_match1',
-                'player_1_id' => $shuffledLosers[0]->id,
-                'player_2_id' => $shuffledLosers[1]->id,
-                'level' => $level,
-                'level_name' => $levelName,
-                'round_name' => '4player_losers_round1',
-                'tournament_id' => $tournament->id,
-                'group_id' => $groupId,
-                'status' => 'pending',
-                'proposed_dates' => \App\Services\ProposedDatesService::generateProposedDates($tournament->id),
-            ]);
+            \App\Services\MatchCreationService::createMatch(
+                $tournament,
+                $shuffledLosers[0],
+                $shuffledLosers[1],
+                '4player_losers_round1',
+                $level,
+                $groupId,
+                $levelName,
+                null,
+                '4player_losers_round1_match1'
+            );
         }
         
         if ($winnersNeeded >= 6) {
             // Create 4player_losers_round1_match2: Loser C vs Loser D
-            PoolMatch::create([
-                'match_name' => '4player_losers_round1_match2',
-                'player_1_id' => $shuffledLosers[2]->id,
-                'player_2_id' => $shuffledLosers[3]->id,
-                'level' => $level,
-                'level_name' => $levelName,
-                'round_name' => '4player_losers_round1',
-                'tournament_id' => $tournament->id,
-                'group_id' => $groupId,
-                'status' => 'pending',
-                'proposed_dates' => \App\Services\ProposedDatesService::generateProposedDates($tournament->id),
-            ]);
+            \App\Services\MatchCreationService::createMatch(
+                $tournament,
+                $shuffledLosers[2],
+                $shuffledLosers[3],
+                '4player_losers_round1',
+                $level,
+                $groupId,
+                $levelName,
+                null,
+                '4player_losers_round1_match2'
+            );
         }
     }
 
@@ -657,32 +644,30 @@ class FourPlayerTournamentService
         ]);
         
         // Create Round 1 Match 1: A vs B
-        PoolMatch::create([
-            'match_name' => '4player_round1_match1',
-            'player_1_id' => $shuffledWinners[0]->id,
-            'player_2_id' => $shuffledWinners[1]->id,
-            'level' => $level,
-            'level_name' => $levelName,
-            'round_name' => '4player_round1',
-            'tournament_id' => $tournament->id,
-            'group_id' => $groupId,
-            'status' => 'pending',
-            'proposed_dates' => \App\Services\ProposedDatesService::generateProposedDates($tournament->id),
-        ]);
+        \App\Services\MatchCreationService::createMatch(
+            $tournament,
+            $shuffledWinners[0],
+            $shuffledWinners[1],
+            '4player_round1',
+            $level,
+            $groupId,
+            $levelName,
+            null,
+            '4player_round1_match1'
+        );
         
         // Create Round 1 Match 2: C vs D
-        PoolMatch::create([
-            'match_name' => '4player_round1_match2',
-            'player_1_id' => $shuffledWinners[2]->id,
-            'player_2_id' => $shuffledWinners[3]->id,
-            'level' => $level,
-            'level_name' => $levelName,
-            'round_name' => '4player_round1',
-            'tournament_id' => $tournament->id,
-            'group_id' => $groupId,
-            'status' => 'pending',
-            'proposed_dates' => \App\Services\ProposedDatesService::generateProposedDates($tournament->id),
-        ]);
+        \App\Services\MatchCreationService::createMatch(
+            $tournament,
+            $shuffledWinners[2],
+            $shuffledWinners[3],
+            '4player_round1',
+            $level,
+            $groupId,
+            $levelName,
+            null,
+            '4player_round1_match2'
+        );
     }
 
     /**
@@ -785,35 +770,33 @@ class FourPlayerTournamentService
         ]);
         
         // Create winners final: Winner of match1 vs Winner of match2
-        PoolMatch::create([
-            'match_name' => 'winners_final',
-            'player_1_id' => $match1->winner_id,
-            'player_2_id' => $match2->winner_id,
-            'level' => $level,
-            'level_name' => $levelName,
-            'round_name' => 'winners_final',
-            'tournament_id' => $tournament->id,
-            'group_id' => $groupId,
-            'status' => 'pending',
-            'proposed_dates' => \App\Services\ProposedDatesService::generateProposedDates($tournament->id),
-        ]);
+        \App\Services\MatchCreationService::createMatch(
+            $tournament,
+            User::find($match1->winner_id),
+            User::find($match2->winner_id),
+            'winners_final',
+            $level,
+            $groupId,
+            $levelName,
+            null,
+            'winners_final'
+        );
         
         // Create losers semifinal: Loser of match1 vs Loser of match2
         $loser1 = ($match1->player_1_id === $match1->winner_id) ? $match1->player_2_id : $match1->player_1_id;
         $loser2 = ($match2->player_1_id === $match2->winner_id) ? $match2->player_2_id : $match2->player_1_id;
         
-        PoolMatch::create([
-            'match_name' => 'losers_semifinal',
-            'player_1_id' => $loser1,
-            'player_2_id' => $loser2,
-            'level' => $level,
-            'level_name' => $levelName,
-            'round_name' => 'losers_semifinal',
-            'tournament_id' => $tournament->id,
-            'group_id' => $groupId,
-            'status' => 'pending',
-            'proposed_dates' => \App\Services\ProposedDatesService::generateProposedDates($tournament->id),
-        ]);
+        \App\Services\MatchCreationService::createMatch(
+            $tournament,
+            User::find($loser1),
+            User::find($loser2),
+            'losers_semifinal',
+            $level,
+            $groupId,
+            $levelName,
+            null,
+            'losers_semifinal'
+        );
     }
 
     /**
@@ -870,18 +853,17 @@ class FourPlayerTournamentService
         }
         
         // Create final match: Loser of winners final vs Winner of losers semifinal
-        PoolMatch::create([
-            'match_name' => '4_final',
-            'player_1_id' => $winnersLoser,
-            'player_2_id' => $losersSF->winner_id,
-            'level' => $level,
-            'level_name' => $levelName,
-            'round_name' => '4_final',
-            'tournament_id' => $tournament->id,
-            'group_id' => $groupId,
-            'status' => 'pending',
-            'proposed_dates' => \App\Services\ProposedDatesService::generateProposedDates($tournament->id),
-        ]);
+        \App\Services\MatchCreationService::createMatch(
+            $tournament,
+            User::find($winnersLoser),
+            User::find($losersSF->winner_id),
+            '4_final',
+            $level,
+            $groupId,
+            $levelName,
+            null,
+            '4_final'
+        );
     }
 
     /**
