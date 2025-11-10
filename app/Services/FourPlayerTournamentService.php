@@ -524,6 +524,11 @@ class FourPlayerTournamentService
         $shuffledLosers = $losers->shuffle()->values();
         $groupId = TournamentUtilityService::getGroupIdFromLevelName($level, $levelName);
         
+        // For special tournaments, use a default groupId of 1 if null
+        if ($groupId === null && ($level === 'special' || $tournament->special)) {
+            $groupId = 1;
+        }
+        
         \Log::info("=== CREATING COMPREHENSIVE 4-PLAYER TOURNAMENT ===", [
             'tournament_id' => $tournament->id,
             'level' => $level,
@@ -637,6 +642,11 @@ class FourPlayerTournamentService
         $shuffledWinners = $winners->shuffle()->values();
         $groupId = TournamentUtilityService::getGroupIdFromLevelName($level, $levelName);
         
+        // For special tournaments, use a default groupId of 1 if null
+        if ($groupId === null && ($level === 'special' || $tournament->special)) {
+            $groupId = 1;
+        }
+        
         \Log::info("=== GENERATING 4-PLAYER ROUND 1 ===", [
             'tournament_id' => $tournament->id,
             'level' => $level,
@@ -703,6 +713,11 @@ class FourPlayerTournamentService
         
         $groupId = TournamentUtilityService::getGroupIdFromLevelName($level, $levelName);
         
+        // For special tournaments, use a default groupId of 1 if null
+        if ($groupId === null && ($level === 'special' || $tournament->special)) {
+            $groupId = 1;
+        }
+        
         // Position 1: Winner of winners_final
         Winner::create([
             'tournament_id' => $tournament->id,
@@ -762,6 +777,11 @@ class FourPlayerTournamentService
         $match2 = $sortedMatches->last();
         $groupId = TournamentUtilityService::getGroupIdFromLevelName($level, $levelName);
         
+        // For special tournaments, use a default groupId of 1 if null
+        if ($groupId === null && ($level === 'special' || $tournament->special)) {
+            $groupId = 1;
+        }
+        
         \Log::info("=== GENERATING 4-PLAYER SEMIFINALS ===", [
             'tournament_id' => $tournament->id,
             'level' => $level,
@@ -805,6 +825,11 @@ class FourPlayerTournamentService
     public function generate4PlayerFinal(Tournament $tournament, string $level, ?string $levelName)
     {
         $groupId = TournamentUtilityService::getGroupIdFromLevelName($level, $levelName);
+        
+        // For special tournaments, use a default groupId of 1 if null
+        if ($groupId === null && ($level === 'special' || $tournament->special)) {
+            $groupId = 1;
+        }
         
         $winnersSFQuery = PoolMatch::where('tournament_id', $tournament->id)
             ->where('level', $level)
@@ -872,6 +897,11 @@ class FourPlayerTournamentService
     public function create4PlayerPositions(Tournament $tournament, string $level, ?string $levelName)
     {
         $groupId = TournamentUtilityService::getGroupIdFromLevelName($level, $levelName);
+        
+        // For special tournaments, use a default groupId of 1 if null
+        if ($groupId === null && ($level === 'special' || $tournament->special)) {
+            $groupId = 1;
+        }
         
         // Get all required matches
         $winnersSF = PoolMatch::where('tournament_id', $tournament->id)

@@ -846,6 +846,11 @@ class ThreePlayerTournamentService
         
         $groupId = TournamentUtilityService::getGroupIdFromLevelName($level, $levelName);
         
+        // For special tournaments, use a default groupId of 1 if null
+        if ($groupId === null && ($level === 'special' || $tournament->special)) {
+            $groupId = 1;
+        }
+        
         // Generate winners tournament (A, B, C) - positions 1, 2, 3
         $this->generate3PlayerWinnersTournament($tournament, $level, $levelName, $winners, $groupId);
         
@@ -957,6 +962,15 @@ class ThreePlayerTournamentService
         ]);
         
         $groupId = TournamentUtilityService::getGroupIdFromLevelName($level, $levelName);
+        
+        // For special tournaments, use a default groupId of 1 if null
+        if ($groupId === null && ($level === 'special' || $tournament->special)) {
+            $groupId = 1;
+            \Log::info("Using default groupId=1 for special tournament", [
+                'tournament_id' => $tournament->id,
+                'level' => $level
+            ]);
+        }
         
         // First check if we need to create initial 3-player semifinal based on winner count
         if ($this->shouldCreate3PlayerSemifinal($tournament, $level, $levelName, $groupId, $completedRound)) {
@@ -1216,6 +1230,11 @@ class ThreePlayerTournamentService
         
         $groupId = TournamentUtilityService::getGroupIdFromLevelName($level, $levelName);
         
+        // For special tournaments, use a default groupId of 1 if null
+        if ($groupId === null && ($level === 'special' || $tournament->special)) {
+            $groupId = 1;
+        }
+        
         // Position 1: Winner of winners_final
         Winner::create([
             'tournament_id' => $tournament->id,
@@ -1260,6 +1279,11 @@ class ThreePlayerTournamentService
     public function checkIfTieBreakerNeeded(int $tournamentId, string $level, ?string $levelName): bool
     {
         $groupId = TournamentUtilityService::getGroupIdFromLevelName($level, $levelName);
+        
+        // For special tournaments, use a default groupId of 1 if null
+        if ($groupId === null && $level === 'special') {
+            $groupId = 1;
+        }
         
         $sfMatch = PoolMatch::where('tournament_id', $tournamentId)
             ->where('level', $level)
