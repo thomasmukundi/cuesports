@@ -337,10 +337,13 @@ class ThreePlayerTournamentService
             'bye_player' => $byePlayerId
         ]);
         
-        // Determine level name - null for special tournaments, proper level name for regular tournaments
-        $levelName = ($level === 'special' || $tournament->special) 
-            ? null 
-            : \App\Services\TournamentUtilityService::getLevelName($level, $groupId);
+        // Handle special tournaments - provide defaults for null values
+        if ($level === 'special' || $tournament->special) {
+            $levelName = 'Special Tournament';
+            $groupId = $groupId ?? 1; // Default groupId for special tournaments
+        } else {
+            $levelName = \App\Services\TournamentUtilityService::getLevelName($level, $groupId);
+        }
 
         \App\Services\MatchCreationService::createMatch(
             $tournament,

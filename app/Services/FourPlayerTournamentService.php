@@ -1014,7 +1014,11 @@ class FourPlayerTournamentService
                 
             if (!$existing4PlayerRound1) {
                 \Log::info("Creating 4-player tournament from {$completedRound} with 4 winners");
-                $this->generate4PlayerRound1($tournament, $level, $levelName, $winners->toArray());
+                
+                // Handle special tournaments - provide default levelName if null
+                $safeLevelName = $levelName ?? 'Special Tournament';
+                
+                $this->generate4PlayerRound1($tournament, $level, $safeLevelName, $winners->toArray());
                 return [
                     'status' => 'success',
                     'message' => '4-player tournament created from completed round',
@@ -1034,7 +1038,10 @@ class FourPlayerTournamentService
                     ->where('status', 'completed')
                     ->get();
                     
-                $this->generate4PlayerSemifinals($tournament, $level, $levelName, $matches);
+                // Handle special tournaments - provide default levelName if null
+                $safeLevelName = $levelName ?? 'Special Tournament';
+                
+                $this->generate4PlayerSemifinals($tournament, $level, $safeLevelName, $matches);
                 return [
                     'status' => 'success',
                     'message' => '4-player semifinals created',
@@ -1044,7 +1051,11 @@ class FourPlayerTournamentService
             case 'winners_final':
             case 'losers_semifinal':
                 \Log::info("4-player semifinals completed - creating positions");
-                $this->create4PlayerPositions($tournament, $level, $levelName);
+                
+                // Handle special tournaments - provide default levelName if null
+                $safeLevelName = $levelName ?? 'Special Tournament';
+                
+                $this->create4PlayerPositions($tournament, $level, $safeLevelName);
                 return [
                     'status' => 'success',
                     'message' => '4-player positions determined',
