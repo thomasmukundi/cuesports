@@ -509,15 +509,55 @@ class FourPlayerTournamentService
             }
         }
         
-        // Get the 4 losers from ALL completed matches in tournament - SIMPLIFIED
+        // Get losers from the final round that produced the 4 winners (NOT from all rounds)
         $allCompletedMatches = PoolMatch::where('tournament_id', $tournament->id)
             ->where('status', 'completed')
-            ->whereNotIn('round_name', ['4player_round1', 'winners_final', 'losers_semifinal'])
+            ->whereNotIn('round_name', ['4player_round1', 'winners_final', 'losers_semifinal', 'losers_round1', 'losers_final'])
             ->get();
+
+        // Group matches by round name and count winners per round
+        $roundWinners = [];
+        foreach ($allCompletedMatches as $match) {
+            if ($match->winner_id) {
+                $roundName = $match->round_name;
+                if (!isset($roundWinners[$roundName])) {
+                    $roundWinners[$roundName] = [];
+                }
+                $roundWinners[$roundName][] = $match->winner_id;
+            }
+        }
+
+        // Find the round that has exactly 4 winners (the final round)
+        $finalRoundName = null;
+        foreach ($roundWinners as $roundName => $winners) {
+            if (count(array_unique($winners)) === 4) {
+                $finalRoundName = $roundName;
+                break;
+            }
+        }
+
+        if (!$finalRoundName) {
+            \Log::error("Could not find round with exactly 4 winners for 4-player tournament", [
+                'round_winners' => $roundWinners
+            ]);
+            return;
+        }
+
+        \Log::info("Found final round that produced 4 winners", [
+            'final_round' => $finalRoundName,
+            'winners_in_round' => array_unique($roundWinners[$finalRoundName])
+        ]);
+
+        // Get winners from the final round to exclude them from losers
+        $finalRoundWinners = collect(array_unique($roundWinners[$finalRoundName]));
+
+        // Get matches from the final round only
+        $finalRoundMatches = $allCompletedMatches->where('round_name', $finalRoundName);
             
         \Log::info("Found matches for 4-player losers extraction", [
-            'match_count' => $allCompletedMatches->count(),
-            'matches' => $allCompletedMatches->map(function($match) {
+            'final_round' => $finalRoundName,
+            'match_count' => $finalRoundMatches->count(),
+            'matches' => $finalRoundMatches->map(function($match) {
                 return [
                     'id' => $match->id,
                     'round_name' => $match->round_name,
@@ -529,18 +569,22 @@ class FourPlayerTournamentService
         ]);
         
         $losers = collect();
-        foreach ($allCompletedMatches as $match) {
+        foreach ($finalRoundMatches as $match) {
             if ($match->winner_id) {
                 $loserId = ($match->player_1_id === $match->winner_id) ? $match->player_2_id : $match->player_1_id;
-                $loser = User::find($loserId);
-                if ($loser) {
-                    $losers->push($loser);
-                    \Log::info("Added 4-player loser", [
-                        'loser_id' => $loserId,
-                        'loser_name' => $loser->name,
-                        'from_match' => $match->id,
-                        'winner_was' => $match->winner_id
-                    ]);
+                
+                // Only include as loser if they're not a winner in the final round
+                if (!$finalRoundWinners->contains($loserId)) {
+                    $loser = User::find($loserId);
+                    if ($loser) {
+                        $losers->push($loser);
+                        \Log::info("Added 4-player loser", [
+                            'loser_id' => $loserId,
+                            'loser_name' => $loser->name,
+                            'from_match' => $match->id,
+                            'winner_was' => $match->winner_id
+                        ]);
+                    }
                 }
             }
         }

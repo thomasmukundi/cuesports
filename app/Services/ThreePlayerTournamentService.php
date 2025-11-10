@@ -1701,32 +1701,92 @@ class ThreePlayerTournamentService
     }
 
     /**
-     * Get losers from the initial round that produced the 3 winners
+     * Get losers from the final round that produced the 3 winners
      */
     private function getLosersFromInitialRound(Tournament $tournament, string $level, $groupId)
     {
-        // Find the round that produced exactly 3 winners
-        $completedMatches = PoolMatch::where('tournament_id', $tournament->id)
+        // First, find which round produced exactly 3 winners
+        $allCompletedMatches = PoolMatch::where('tournament_id', $tournament->id)
             ->where('level', $level)
             ->where('group_id', $groupId)
             ->where('status', 'completed')
             ->whereNotIn('round_name', ['3_SF', '3_final', '3_tie_breaker', '3_fair_chance', 'losers_3_SF', 'losers_3_final', 'losers_3_tie_breaker', 'losers_3_fair_chance'])
             ->get();
 
-        $losers = collect();
-        foreach ($completedMatches as $match) {
+        // Group matches by round name and count winners per round
+        $roundWinners = [];
+        foreach ($allCompletedMatches as $match) {
             if ($match->winner_id) {
-                // Get the loser
+                $roundName = $match->round_name;
+                if (!isset($roundWinners[$roundName])) {
+                    $roundWinners[$roundName] = [];
+                }
+                $roundWinners[$roundName][] = $match->winner_id;
+            }
+        }
+
+        // Find the round that has exactly 3 winners (the final round)
+        $finalRoundName = null;
+        foreach ($roundWinners as $roundName => $winners) {
+            if (count(array_unique($winners)) === 3) {
+                $finalRoundName = $roundName;
+                break;
+            }
+        }
+
+        if (!$finalRoundName) {
+            \Log::error("Could not find round with exactly 3 winners", [
+                'round_winners' => $roundWinners
+            ]);
+            return collect();
+        }
+
+        \Log::info("Found final round that produced 3 winners", [
+            'final_round' => $finalRoundName,
+            'winners_in_round' => array_unique($roundWinners[$finalRoundName])
+        ]);
+
+        // Get winners from the final round to exclude them from losers
+        $finalRoundWinners = collect(array_unique($roundWinners[$finalRoundName]));
+
+        // Get matches from the final round only
+        $finalRoundMatches = $allCompletedMatches->where('round_name', $finalRoundName);
+
+        $losers = collect();
+        foreach ($finalRoundMatches as $match) {
+            if ($match->winner_id) {
+                // Get the loser from this match
                 $loserId = ($match->player_1_id === $match->winner_id) 
                     ? $match->player_2_id 
                     : $match->player_1_id;
                 
-                $loser = User::find($loserId);
-                if ($loser) {
-                    $losers->push($loser);
+                // Only include as loser if they're not a winner in the final round
+                if (!$finalRoundWinners->contains($loserId)) {
+                    $loser = User::find($loserId);
+                    if ($loser) {
+                        $losers->push($loser);
+                        \Log::info("Added loser", [
+                            'loser_id' => $loserId,
+                            'from_match' => $match->id,
+                            'winner_was' => $match->winner_id
+                        ]);
+                    }
                 }
             }
         }
+
+        \Log::info("Found matches for losers extraction", [
+            'match_count' => $allCompletedMatches->count(),
+            'matches' => $allCompletedMatches->map(function($match) {
+                return [
+                    'id' => $match->id,
+                    'round_name' => $match->round_name,
+                    'winner_id' => $match->winner_id,
+                    'player_1_id' => $match->player_1_id,
+                    'player_2_id' => $match->player_2_id
+                ];
+            })->toArray()
+        ]);
 
         return $losers;
     }
