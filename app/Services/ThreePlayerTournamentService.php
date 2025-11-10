@@ -951,21 +951,21 @@ class ThreePlayerTournamentService
         // Create losers_3_SF: D vs E (F gets bye)
         \App\Services\MatchCreationService::createMatch(
             $tournament,
-            User::find($losersArray[0]),
-            User::find($losersArray[1]),
+            $losersArray[0],  // Already User objects, no need for User::find()
+            $losersArray[1],  // Already User objects, no need for User::find()
             'losers_3_SF',
             $level,
             $groupId,
             $levelName,
-            $losersArray[2],
+            $losersArray[2]->id,  // Extract user ID for bye player
             'losers_3_SF_match'
         );
         
         \Log::info("3-player losers tournament matches created", [
             'sf_match' => 'losers_3_SF',
-            'player_1' => $losersArray[0],
-            'player_2' => $losersArray[1],
-            'bye_player' => $losersArray[2]
+            'player_1' => $losersArray[0]->id,
+            'player_2' => $losersArray[1]->id,
+            'bye_player' => $losersArray[2]->id
         ]);
     }
 
