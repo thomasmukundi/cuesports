@@ -508,14 +508,38 @@ class FourPlayerTournamentService
             }
         }
         
-        // Get the 4 losers from the completed matches
+        // Get the 4 losers from ALL completed matches in tournament - SIMPLIFIED
+        $allCompletedMatches = PoolMatch::where('tournament_id', $tournament->id)
+            ->where('status', 'completed')
+            ->whereNotIn('round_name', ['4player_round1', 'winners_final', 'losers_semifinal', '4player_losers_round1'])
+            ->get();
+            
+        \Log::info("Found matches for 4-player losers extraction", [
+            'match_count' => $allCompletedMatches->count(),
+            'matches' => $allCompletedMatches->map(function($match) {
+                return [
+                    'id' => $match->id,
+                    'round_name' => $match->round_name,
+                    'winner_id' => $match->winner_id,
+                    'player_1_id' => $match->player_1_id,
+                    'player_2_id' => $match->player_2_id
+                ];
+            })->toArray()
+        ]);
+        
         $losers = collect();
-        foreach ($matches as $match) {
+        foreach ($allCompletedMatches as $match) {
             if ($match->winner_id) {
                 $loserId = ($match->player_1_id === $match->winner_id) ? $match->player_2_id : $match->player_1_id;
                 $loser = User::find($loserId);
                 if ($loser) {
                     $losers->push($loser);
+                    \Log::info("Added 4-player loser", [
+                        'loser_id' => $loserId,
+                        'loser_name' => $loser->name,
+                        'from_match' => $match->id,
+                        'winner_was' => $match->winner_id
+                    ]);
                 }
             }
         }
