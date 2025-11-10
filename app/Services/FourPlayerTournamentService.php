@@ -320,6 +320,95 @@ class FourPlayerTournamentService
     }
 
     /**
+     * Get losers from the specific round that produced the given winners
+     */
+    private function getLosersFromWinnersRound(Tournament $tournament, string $level, $groupId, Collection $winners)
+    {
+        $winnerIds = $winners->pluck('id')->toArray();
+        
+        \Log::info("Finding round that produced these specific 4 winners", [
+            'winner_ids' => $winnerIds,
+            'winner_count' => count($winnerIds)
+        ]);
+
+        // Get all completed matches (excluding tournament-specific rounds)
+        $allCompletedMatches = PoolMatch::where('tournament_id', $tournament->id)
+            ->where('status', 'completed')
+            ->whereNotIn('round_name', ['4player_round1', 'winners_final', 'losers_semifinal', 'losers_round1', 'losers_final'])
+            ->get();
+
+        // Find which round contains matches where ALL our winners won
+        $targetRoundName = null;
+        $roundsWithWinners = [];
+        
+        foreach ($allCompletedMatches as $match) {
+            if ($match->winner_id && in_array($match->winner_id, $winnerIds)) {
+                $roundName = $match->round_name;
+                if (!isset($roundsWithWinners[$roundName])) {
+                    $roundsWithWinners[$roundName] = [];
+                }
+                $roundsWithWinners[$roundName][] = $match->winner_id;
+            }
+        }
+
+        // Find the round that has ALL our winners
+        foreach ($roundsWithWinners as $roundName => $roundWinners) {
+            $uniqueWinners = array_unique($roundWinners);
+            if (count($uniqueWinners) === count($winnerIds) && 
+                count(array_intersect($uniqueWinners, $winnerIds)) === count($winnerIds)) {
+                $targetRoundName = $roundName;
+                break;
+            }
+        }
+
+        if (!$targetRoundName) {
+            \Log::error("Could not find round that produced the specific 4 winners", [
+                'winner_ids' => $winnerIds,
+                'rounds_with_winners' => $roundsWithWinners
+            ]);
+            return collect();
+        }
+
+        \Log::info("Found target round that produced the 4 winners", [
+            'target_round' => $targetRoundName,
+            'winners_in_round' => array_unique($roundsWithWinners[$targetRoundName])
+        ]);
+
+        // Get matches from the target round only
+        $targetRoundMatches = $allCompletedMatches->where('round_name', $targetRoundName);
+
+        $losers = collect();
+        foreach ($targetRoundMatches as $match) {
+            if ($match->winner_id) {
+                // Get the loser from this match
+                $loserId = ($match->player_1_id === $match->winner_id) 
+                    ? $match->player_2_id 
+                    : $match->player_1_id;
+                
+                $loser = User::find($loserId);
+                if ($loser) {
+                    $losers->push($loser);
+                    \Log::info("Added 4-player loser from target round", [
+                        'loser_id' => $loserId,
+                        'loser_name' => $loser->name,
+                        'from_match' => $match->id,
+                        'round_name' => $targetRoundName,
+                        'winner_was' => $match->winner_id
+                    ]);
+                }
+            }
+        }
+
+        \Log::info("4-player losers extraction completed", [
+            'target_round' => $targetRoundName,
+            'losers_found' => $losers->count(),
+            'loser_names' => $losers->pluck('name')->toArray()
+        ]);
+
+        return $losers;
+    }
+
+    /**
      * Determine positions 5-6 from 4-player losers tournament
      */
     public function determineLosers4PlayerPositions(Tournament $tournament, string $level, ?int $groupId, $losersRound1, $losersWinnersFinal, int $winnersNeeded)
@@ -509,85 +598,8 @@ class FourPlayerTournamentService
             }
         }
         
-        // Get losers from the final round that produced the 4 winners (NOT from all rounds)
-        $allCompletedMatches = PoolMatch::where('tournament_id', $tournament->id)
-            ->where('status', 'completed')
-            ->whereNotIn('round_name', ['4player_round1', 'winners_final', 'losers_semifinal', 'losers_round1', 'losers_final'])
-            ->get();
-
-        // Group matches by round name and count winners per round
-        $roundWinners = [];
-        foreach ($allCompletedMatches as $match) {
-            if ($match->winner_id) {
-                $roundName = $match->round_name;
-                if (!isset($roundWinners[$roundName])) {
-                    $roundWinners[$roundName] = [];
-                }
-                $roundWinners[$roundName][] = $match->winner_id;
-            }
-        }
-
-        // Find the round that has exactly 4 winners (the final round)
-        $finalRoundName = null;
-        foreach ($roundWinners as $roundName => $winners) {
-            if (count(array_unique($winners)) === 4) {
-                $finalRoundName = $roundName;
-                break;
-            }
-        }
-
-        if (!$finalRoundName) {
-            \Log::error("Could not find round with exactly 4 winners for 4-player tournament", [
-                'round_winners' => $roundWinners
-            ]);
-            return;
-        }
-
-        \Log::info("Found final round that produced 4 winners", [
-            'final_round' => $finalRoundName,
-            'winners_in_round' => array_unique($roundWinners[$finalRoundName])
-        ]);
-
-        // Get winners from the final round to exclude them from losers
-        $finalRoundWinners = collect(array_unique($roundWinners[$finalRoundName]));
-
-        // Get matches from the final round only
-        $finalRoundMatches = $allCompletedMatches->where('round_name', $finalRoundName);
-            
-        \Log::info("Found matches for 4-player losers extraction", [
-            'final_round' => $finalRoundName,
-            'match_count' => $finalRoundMatches->count(),
-            'matches' => $finalRoundMatches->map(function($match) {
-                return [
-                    'id' => $match->id,
-                    'round_name' => $match->round_name,
-                    'winner_id' => $match->winner_id,
-                    'player_1_id' => $match->player_1_id,
-                    'player_2_id' => $match->player_2_id
-                ];
-            })->toArray()
-        ]);
-        
-        $losers = collect();
-        foreach ($finalRoundMatches as $match) {
-            if ($match->winner_id) {
-                $loserId = ($match->player_1_id === $match->winner_id) ? $match->player_2_id : $match->player_1_id;
-                
-                // Only include as loser if they're not a winner in the final round
-                if (!$finalRoundWinners->contains($loserId)) {
-                    $loser = User::find($loserId);
-                    if ($loser) {
-                        $losers->push($loser);
-                        \Log::info("Added 4-player loser", [
-                            'loser_id' => $loserId,
-                            'loser_name' => $loser->name,
-                            'from_match' => $match->id,
-                            'winner_was' => $match->winner_id
-                        ]);
-                    }
-                }
-            }
-        }
+        // Use the new method to get losers from the specific round that produced the winners
+        $losers = $this->getLosersFromWinnersRound($tournament, $level, $groupId, $winners);
         
         $shuffledWinners = $winners->shuffle()->values();
         $shuffledLosers = $losers->shuffle()->values();

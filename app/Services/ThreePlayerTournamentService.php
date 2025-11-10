@@ -859,7 +859,15 @@ class ThreePlayerTournamentService
         
         // Generate losers tournament (D, E, F) - positions 4, 5, 6 (only if we need more than 3 winners)
         if ($winnersNeeded > 3) {
-            $this->generate3PlayerLosersTournament($tournament, $level, $levelName, $winnersNeeded, $groupId);
+            // Convert winners array to collection for losers tournament
+            $winnersCollection = collect();
+            foreach ($winners as $winnerId) {
+                $winner = User::find($winnerId);
+                if ($winner) {
+                    $winnersCollection->push($winner);
+                }
+            }
+            $this->generate3PlayerLosersTournament($tournament, $level, $levelName, $winnersNeeded, $groupId, $winnersCollection);
         }
         
         \Log::info("=== GENERATE COMPREHENSIVE 3-PLAYER TOURNAMENT END ===");
@@ -901,41 +909,33 @@ class ThreePlayerTournamentService
     /**
      * Generate 3-player losers tournament (D, E, F) for positions 4, 5, 6
      */
-    public function generate3PlayerLosersTournament(Tournament $tournament, string $level, ?string $levelName, int $winnersNeeded, $groupId)
+    public function generate3PlayerLosersTournament(Tournament $tournament, string $level, ?string $levelName, int $winnersNeeded, $groupId, Collection $winners = null)
     {
         \Log::info("Generating 3-player losers tournament", [
-            'winners_needed' => $winnersNeeded
+            'winners_needed' => $winnersNeeded,
+            'winners_provided' => $winners ? $winners->count() : 0
         ]);
         
-        // Get losers from the completed matches - SIMPLIFIED: no level/group restrictions
-        $completedMatches = PoolMatch::where('tournament_id', $tournament->id)
-            ->where('status', 'completed')
-            ->whereNotIn('round_name', ['losers_3_SF', 'losers_3_final', 'losers_3_tie_breaker', 'losers_3_fair_chance', '3_SF', '3_final'])
-            ->get();
-        
-        \Log::info("Found matches for losers extraction", [
-            'match_count' => $completedMatches->count(),
-            'matches' => $completedMatches->map(function($match) {
-                return [
-                    'id' => $match->id,
-                    'round_name' => $match->round_name,
-                    'winner_id' => $match->winner_id,
-                    'player_1_id' => $match->player_1_id,
-                    'player_2_id' => $match->player_2_id
-                ];
-            })->toArray()
-        ]);
-        
-        $losers = collect();
-        foreach ($completedMatches as $match) {
-            if ($match->winner_id) {
-                $loserId = ($match->player_1_id === $match->winner_id) ? $match->player_2_id : $match->player_1_id;
-                $losers->push($loserId);
-                \Log::info("Added loser", [
-                    'loser_id' => $loserId,
-                    'from_match' => $match->id,
-                    'winner_was' => $match->winner_id
-                ]);
+        // Use the new method to get losers from the specific round that produced the winners
+        if ($winners && $winners->count() === 3) {
+            $losers = $this->getLosersFromWinnersRound($tournament, $level, $groupId, $winners);
+        } else {
+            \Log::warning("No winners provided for losers tournament, falling back to deprecated method");
+            // Fallback to old method for backward compatibility
+            $completedMatches = PoolMatch::where('tournament_id', $tournament->id)
+                ->where('status', 'completed')
+                ->whereNotIn('round_name', ['losers_3_SF', 'losers_3_final', 'losers_3_tie_breaker', 'losers_3_fair_chance', '3_SF', '3_final'])
+                ->get();
+            
+            $losers = collect();
+            foreach ($completedMatches as $match) {
+                if ($match->winner_id) {
+                    $loserId = ($match->player_1_id === $match->winner_id) ? $match->player_2_id : $match->player_1_id;
+                    $loser = User::find($loserId);
+                    if ($loser) {
+                        $losers->push($loser);
+                    }
+                }
             }
         }
         
@@ -1647,15 +1647,22 @@ class ThreePlayerTournamentService
     /**
      * Create losers tournament for additional winners (public method for TournamentProgressionService)
      */
-    public function createLosers3PlayerTournamentForProgression(Tournament $tournament, string $level, ?int $groupId, int $winnersNeeded): array
+    public function createLosers3PlayerTournamentForProgression(Tournament $tournament, string $level, ?int $groupId, int $winnersNeeded, Collection $winners = null): array
     {
         \Log::info("Creating losers tournament for additional positions", [
             'winners_needed' => $winnersNeeded,
-            'tournament_id' => $tournament->id
+            'tournament_id' => $tournament->id,
+            'winners_provided' => $winners ? $winners->count() : 0
         ]);
 
-        // Get the 3 losers from the initial round that created the 3 winners
-        $losers = $this->getLosersFromInitialRound($tournament, $level, $groupId);
+        // Get the losers from the specific round that produced the winners
+        if ($winners && $winners->count() === 3) {
+            $losers = $this->getLosersFromWinnersRound($tournament, $level, $groupId, $winners);
+        } else {
+            // Fallback to old method for backward compatibility
+            \Log::warning("No winners provided, falling back to deprecated method");
+            $losers = $this->getLosersFromInitialRound($tournament, $level, $groupId);
+        }
         
         if ($losers->count() !== 3) {
             \Log::error("Expected 3 losers for losers tournament but found {$losers->count()}");
@@ -1701,11 +1708,18 @@ class ThreePlayerTournamentService
     }
 
     /**
-     * Get losers from the final round that produced the 3 winners
+     * Get losers from the specific round that produced the given winners
      */
-    private function getLosersFromInitialRound(Tournament $tournament, string $level, $groupId)
+    private function getLosersFromWinnersRound(Tournament $tournament, string $level, $groupId, Collection $winners)
     {
-        // First, find which round produced exactly 3 winners
+        $winnerIds = $winners->pluck('id')->toArray();
+        
+        \Log::info("Finding round that produced these specific winners", [
+            'winner_ids' => $winnerIds,
+            'winner_count' => count($winnerIds)
+        ]);
+
+        // Get all completed matches (excluding tournament-specific rounds)
         $allCompletedMatches = PoolMatch::where('tournament_id', $tournament->id)
             ->where('level', $level)
             ->where('group_id', $groupId)
@@ -1713,7 +1727,94 @@ class ThreePlayerTournamentService
             ->whereNotIn('round_name', ['3_SF', '3_final', '3_tie_breaker', '3_fair_chance', 'losers_3_SF', 'losers_3_final', 'losers_3_tie_breaker', 'losers_3_fair_chance'])
             ->get();
 
-        // Group matches by round name and count winners per round
+        // Find which round contains matches where ALL our winners won
+        $targetRoundName = null;
+        $roundsWithWinners = [];
+        
+        foreach ($allCompletedMatches as $match) {
+            if ($match->winner_id && in_array($match->winner_id, $winnerIds)) {
+                $roundName = $match->round_name;
+                if (!isset($roundsWithWinners[$roundName])) {
+                    $roundsWithWinners[$roundName] = [];
+                }
+                $roundsWithWinners[$roundName][] = $match->winner_id;
+            }
+        }
+
+        // Find the round that has ALL our winners
+        foreach ($roundsWithWinners as $roundName => $roundWinners) {
+            $uniqueWinners = array_unique($roundWinners);
+            if (count($uniqueWinners) === count($winnerIds) && 
+                count(array_intersect($uniqueWinners, $winnerIds)) === count($winnerIds)) {
+                $targetRoundName = $roundName;
+                break;
+            }
+        }
+
+        if (!$targetRoundName) {
+            \Log::error("Could not find round that produced the specific winners", [
+                'winner_ids' => $winnerIds,
+                'rounds_with_winners' => $roundsWithWinners
+            ]);
+            return collect();
+        }
+
+        \Log::info("Found target round that produced the winners", [
+            'target_round' => $targetRoundName,
+            'winners_in_round' => array_unique($roundsWithWinners[$targetRoundName])
+        ]);
+
+        // Get matches from the target round only
+        $targetRoundMatches = $allCompletedMatches->where('round_name', $targetRoundName);
+
+        $losers = collect();
+        foreach ($targetRoundMatches as $match) {
+            if ($match->winner_id) {
+                // Get the loser from this match
+                $loserId = ($match->player_1_id === $match->winner_id) 
+                    ? $match->player_2_id 
+                    : $match->player_1_id;
+                
+                $loser = User::find($loserId);
+                if ($loser) {
+                    $losers->push($loser);
+                    \Log::info("Added loser from target round", [
+                        'loser_id' => $loserId,
+                        'loser_name' => $loser->name,
+                        'from_match' => $match->id,
+                        'round_name' => $targetRoundName,
+                        'winner_was' => $match->winner_id
+                    ]);
+                }
+            }
+        }
+
+        \Log::info("Losers extraction completed", [
+            'target_round' => $targetRoundName,
+            'losers_found' => $losers->count(),
+            'loser_names' => $losers->pluck('name')->toArray()
+        ]);
+
+        return $losers;
+    }
+
+    /**
+     * Get losers from the initial round that produced the 3 winners (DEPRECATED - use getLosersFromWinnersRound)
+     */
+    private function getLosersFromInitialRound(Tournament $tournament, string $level, $groupId)
+    {
+        // This method is deprecated - we should use getLosersFromWinnersRound with actual winners
+        \Log::warning("Using deprecated getLosersFromInitialRound method - should use getLosersFromWinnersRound");
+        
+        // For backward compatibility, try to find 3 winners and delegate
+        $allCompletedMatches = PoolMatch::where('tournament_id', $tournament->id)
+            ->where('level', $level)
+            ->where('group_id', $groupId)
+            ->where('status', 'completed')
+            ->whereNotIn('round_name', ['3_SF', '3_final', '3_tie_breaker', '3_fair_chance', 'losers_3_SF', 'losers_3_final', 'losers_3_tie_breaker', 'losers_3_fair_chance'])
+            ->get();
+
+        // Try to find the most recent round with 3 unique winners
         $roundWinners = [];
         foreach ($allCompletedMatches as $match) {
             if ($match->winner_id) {
@@ -1725,70 +1826,27 @@ class ThreePlayerTournamentService
             }
         }
 
-        // Find the round that has exactly 3 winners (the final round)
         $finalRoundName = null;
         foreach ($roundWinners as $roundName => $winners) {
             if (count(array_unique($winners)) === 3) {
                 $finalRoundName = $roundName;
-                break;
             }
         }
 
         if (!$finalRoundName) {
-            \Log::error("Could not find round with exactly 3 winners", [
-                'round_winners' => $roundWinners
-            ]);
             return collect();
         }
 
-        \Log::info("Found final round that produced 3 winners", [
-            'final_round' => $finalRoundName,
-            'winners_in_round' => array_unique($roundWinners[$finalRoundName])
-        ]);
-
-        // Get winners from the final round to exclude them from losers
-        $finalRoundWinners = collect(array_unique($roundWinners[$finalRoundName]));
-
-        // Get matches from the final round only
-        $finalRoundMatches = $allCompletedMatches->where('round_name', $finalRoundName);
-
-        $losers = collect();
-        foreach ($finalRoundMatches as $match) {
-            if ($match->winner_id) {
-                // Get the loser from this match
-                $loserId = ($match->player_1_id === $match->winner_id) 
-                    ? $match->player_2_id 
-                    : $match->player_1_id;
-                
-                // Only include as loser if they're not a winner in the final round
-                if (!$finalRoundWinners->contains($loserId)) {
-                    $loser = User::find($loserId);
-                    if ($loser) {
-                        $losers->push($loser);
-                        \Log::info("Added loser", [
-                            'loser_id' => $loserId,
-                            'from_match' => $match->id,
-                            'winner_was' => $match->winner_id
-                        ]);
-                    }
-                }
+        // Get the winners and delegate to the new method
+        $winners = collect();
+        foreach (array_unique($roundWinners[$finalRoundName]) as $winnerId) {
+            $winner = User::find($winnerId);
+            if ($winner) {
+                $winners->push($winner);
             }
         }
 
-        \Log::info("Found matches for losers extraction", [
-            'match_count' => $allCompletedMatches->count(),
-            'matches' => $allCompletedMatches->map(function($match) {
-                return [
-                    'id' => $match->id,
-                    'round_name' => $match->round_name,
-                    'winner_id' => $match->winner_id,
-                    'player_1_id' => $match->player_1_id,
-                    'player_2_id' => $match->player_2_id
-                ];
-            })->toArray()
-        ]);
-
-        return $losers;
+        return $this->getLosersFromWinnersRound($tournament, $level, $groupId, $winners);
     }
 
     /**
