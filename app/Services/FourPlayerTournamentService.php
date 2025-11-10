@@ -643,15 +643,18 @@ class FourPlayerTournamentService
     /**
      * Generate 4-player round 1 matches from winners of larger tournament
      */
-    public function generate4PlayerRound1(Tournament $tournament, string $level, ?string $levelName, $matches)
+    public function generate4PlayerRound1(Tournament $tournament, string $level, ?string $levelName, $winnersArray)
     {
-        // Get the 4 winners from the completed matches
+        // Convert winners array to collection of User objects
         $winners = collect();
-        foreach ($matches as $match) {
-            if ($match->winner_id) {
-                $winner = User::find($match->winner_id);
-                if ($winner) {
-                    $winners->push($winner);
+        foreach ($winnersArray as $winner) {
+            if ($winner instanceof User) {
+                $winners->push($winner);
+            } else {
+                // If it's a user ID, find the user
+                $user = User::find($winner);
+                if ($user) {
+                    $winners->push($user);
                 }
             }
         }
