@@ -1720,24 +1720,42 @@ class ThreePlayerTournamentService
         ]);
 
         // Get all completed matches (excluding tournament-specific rounds)
+        // Note: Don't filter by level/group_id as they might be inconsistent in special tournaments
         $allCompletedMatches = PoolMatch::where('tournament_id', $tournament->id)
-            ->where('level', $level)
-            ->where('group_id', $groupId)
             ->where('status', 'completed')
             ->whereNotIn('round_name', ['3_SF', '3_final', '3_tie_breaker', '3_fair_chance', 'losers_3_SF', 'losers_3_final', 'losers_3_tie_breaker', 'losers_3_fair_chance'])
             ->get();
+            
+        \Log::info("Searching for winners in all completed matches", [
+            'tournament_id' => $tournament->id,
+            'total_matches' => $allCompletedMatches->count(),
+            'looking_for_winners' => $winnerIds
+        ]);
 
         // Find which round contains matches where ALL our winners won
         $targetRoundName = null;
         $roundsWithWinners = [];
         
         foreach ($allCompletedMatches as $match) {
+            \Log::debug("Checking match for winner", [
+                'match_id' => $match->id,
+                'round_name' => $match->round_name,
+                'winner_id' => $match->winner_id,
+                'is_target_winner' => in_array($match->winner_id, $winnerIds)
+            ]);
+            
             if ($match->winner_id && in_array($match->winner_id, $winnerIds)) {
                 $roundName = $match->round_name;
                 if (!isset($roundsWithWinners[$roundName])) {
                     $roundsWithWinners[$roundName] = [];
                 }
                 $roundsWithWinners[$roundName][] = $match->winner_id;
+                
+                \Log::info("Found target winner in round", [
+                    'winner_id' => $match->winner_id,
+                    'round_name' => $roundName,
+                    'match_id' => $match->id
+                ]);
             }
         }
 

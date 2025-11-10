@@ -332,22 +332,42 @@ class FourPlayerTournamentService
         ]);
 
         // Get all completed matches (excluding tournament-specific rounds)
+        // Note: Don't filter by level/group_id as they might be inconsistent in special tournaments
         $allCompletedMatches = PoolMatch::where('tournament_id', $tournament->id)
             ->where('status', 'completed')
             ->whereNotIn('round_name', ['4player_round1', 'winners_final', 'losers_semifinal', 'losers_round1', 'losers_final'])
             ->get();
+            
+        \Log::info("Searching for 4-player winners in all completed matches", [
+            'tournament_id' => $tournament->id,
+            'total_matches' => $allCompletedMatches->count(),
+            'looking_for_winners' => $winnerIds
+        ]);
 
         // Find which round contains matches where ALL our winners won
         $targetRoundName = null;
         $roundsWithWinners = [];
         
         foreach ($allCompletedMatches as $match) {
+            \Log::debug("Checking 4-player match for winner", [
+                'match_id' => $match->id,
+                'round_name' => $match->round_name,
+                'winner_id' => $match->winner_id,
+                'is_target_winner' => in_array($match->winner_id, $winnerIds)
+            ]);
+            
             if ($match->winner_id && in_array($match->winner_id, $winnerIds)) {
                 $roundName = $match->round_name;
                 if (!isset($roundsWithWinners[$roundName])) {
                     $roundsWithWinners[$roundName] = [];
                 }
                 $roundsWithWinners[$roundName][] = $match->winner_id;
+                
+                \Log::info("Found target 4-player winner in round", [
+                    'winner_id' => $match->winner_id,
+                    'round_name' => $roundName,
+                    'match_id' => $match->id
+                ]);
             }
         }
 
