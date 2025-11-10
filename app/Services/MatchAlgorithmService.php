@@ -1173,6 +1173,12 @@ class MatchAlgorithmService
     public function handleLargeGroupProgression(Tournament $tournament, Collection $winners, string $level, $groupId, Collection $currentRoundMatches)
     {
         $levelName = TournamentUtilityService::getLevelName($level, $groupId);
+        
+        // Handle special tournaments where levelName might be null
+        if ($levelName === null) {
+            $levelName = 'Special Tournament';
+        }
+        
         $currentRoundName = $currentRoundMatches->first()->round_name;
         $nextRoundName = $this->getNextRoundName($currentRoundName);
         
