@@ -692,12 +692,31 @@ class FourPlayerTournamentService
             $groupId = 1;
         }
         
+        // Check how many winners are needed for this tournament
+        $winnersNeeded = $tournament->winners ?? 4;
+        
         \Log::info("=== GENERATING 4-PLAYER ROUND 1 ===", [
             'tournament_id' => $tournament->id,
             'level' => $level,
+            'winners_needed' => $winnersNeeded,
             'winners' => $shuffledWinners->pluck('name')->toArray()
         ]);
         
+        // If we need 5 or 6 winners, create comprehensive tournament with losers bracket
+        if ($winnersNeeded > 4) {
+            \Log::info("Creating comprehensive 4-player tournament for {$winnersNeeded} winners");
+            
+            // Create mock matches array with winners for the comprehensive tournament
+            $mockMatches = $shuffledWinners->map(function($winner) {
+                return (object)[
+                    'winner_id' => $winner->id
+                ];
+            });
+            
+            return $this->generateComprehensive4PlayerTournament($tournament, $level, $levelName, $mockMatches, $winnersNeeded);
+        }
+        
+        // Standard 4-player tournament (4 winners needed)
         // Create Round 1 Match 1: A vs B
         \App\Services\MatchCreationService::createMatch(
             $tournament,
