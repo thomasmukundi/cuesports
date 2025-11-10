@@ -1745,8 +1745,8 @@ class MatchAlgorithmService
             // Initial round: random pairing with unpaired player
             return $this->handleInitialOddPlayers($players, $tournament, $level, $groupId);
         } else {
-            // Progression round: promote a random loser
-            return $this->promoteRandomLoser($players, $tournament, $level, $groupId, $roundName);
+            // Progression round: promote best performing loser
+            return $this->promoteBestLoser($players, $tournament, $level, $groupId, $roundName);
         }
     }
     
@@ -1788,9 +1788,9 @@ class MatchAlgorithmService
     }
     
     /**
-     * Promote a random loser to make even number of winners
+     * Promote the best performing loser to make even number of winners
      */
-    private function promoteRandomLoser(Collection $winners, Tournament $tournament, string $level, $groupId, string $roundName)
+    private function promoteBestLoser(Collection $winners, Tournament $tournament, string $level, $groupId, string $roundName)
     {
         // Get previous round matches to find losers
         $previousRoundName = $this->getPreviousRoundName($roundName);
