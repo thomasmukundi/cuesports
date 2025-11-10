@@ -6,6 +6,7 @@ use App\Models\PoolMatch;
 use App\Models\Tournament;
 use App\Models\Winner;
 use App\Models\User;
+use App\Models\Notification;
 use App\Services\TournamentUtilityService;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Log;
