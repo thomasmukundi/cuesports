@@ -1223,10 +1223,167 @@ class MatchAlgorithmService
             })->toArray()
         ]);
         
-        // For odd numbers ≤ 3, let one player play twice (handled in createStandardMatches)
-        $this->createStandardMatches($tournament, $winners, $level, $groupId, $nextRoundName, $levelName);
+        // Check if we have odd number of winners
+        if ($winners->count() % 2 === 1) {
+            if ($winners->count() <= 3) {
+                \Log::info("Odd number ≤ 3 winners - one player will play twice");
+                $this->createStandardMatches($tournament, $winners, $level, $groupId, $nextRoundName, $levelName);
+            } else {
+                \Log::info("Odd number > 3 winners - finding best loser to make even number");
+                $bestLoser = $this->findBestLoser($tournament, $level, $groupId, $roundName);
+                
+                if ($bestLoser) {
+                    \Log::info("Found best loser - adding to next round", [
+                        'best_loser_id' => $bestLoser->id,
+                        'best_loser_name' => $bestLoser->name
+                    ]);
+                    
+                    $winners->push($bestLoser);
+                    $this->createStandardMatches($tournament, $winners, $level, $groupId, $nextRoundName, $levelName);
+                } else {
+                    \Log::warning("No best loser found - falling back to double play");
+                    $this->createStandardMatches($tournament, $winners, $level, $groupId, $nextRoundName, $levelName);
+                }
+            }
+        } else {
+            \Log::info("Even number of winners - creating standard matches");
+            $this->createStandardMatches($tournament, $winners, $level, $groupId, $nextRoundName, $levelName);
+        }
         
         \Log::info("=== LARGE GROUP PROGRESSION END ===");
+    }
+
+    /**
+     * Find the best loser from the completed round based on points and win rate
+     */
+    private function findBestLoser(Tournament $tournament, string $level, $groupId, string $roundName)
+    {
+        \Log::info("=== FINDING BEST LOSER ===", [
+            'tournament_id' => $tournament->id,
+            'level' => $level,
+            'round_name' => $roundName
+        ]);
+        
+        // Get all completed matches from the round
+        $completedMatches = PoolMatch::where('tournament_id', $tournament->id)
+            ->where('level', $level)
+            ->where('round_name', $roundName)
+            ->where('status', 'completed')
+            ->get();
+            
+        if ($completedMatches->isEmpty()) {
+            \Log::warning("No completed matches found for best loser selection");
+            return null;
+        }
+        
+        // Get all losers from the completed matches
+        $losers = collect();
+        foreach ($completedMatches as $match) {
+            $loserId = ($match->player_1_id === $match->winner_id) ? $match->player_2_id : $match->player_1_id;
+            $loser = User::find($loserId);
+            if ($loser) {
+                $losers->push([
+                    'user' => $loser,
+                    'points_in_match' => ($match->player_1_id === $loserId) ? $match->player_2_points : $match->player_1_points,
+                    'match_id' => $match->id
+                ]);
+            }
+        }
+        
+        if ($losers->isEmpty()) {
+            \Log::warning("No losers found for best loser selection");
+            return null;
+        }
+        
+        \Log::info("Found losers for evaluation", [
+            'loser_count' => $losers->count(),
+            'losers' => $losers->map(function($l) {
+                return [
+                    'id' => $l['user']->id,
+                    'name' => $l['user']->name,
+                    'points_in_match' => $l['points_in_match']
+                ];
+            })->toArray()
+        ]);
+        
+        // Sort by points in the match (highest first), then by overall tournament performance
+        $bestLosers = $losers->sortByDesc(function($loser) {
+            return $loser['points_in_match'];
+        });
+        
+        // Get the highest points among losers
+        $highestPoints = $bestLosers->first()['points_in_match'];
+        $topLosers = $bestLosers->filter(function($loser) use ($highestPoints) {
+            return $loser['points_in_match'] === $highestPoints;
+        });
+        
+        if ($topLosers->count() === 1) {
+            $bestLoser = $topLosers->first()['user'];
+            \Log::info("Best loser selected by points", [
+                'best_loser_id' => $bestLoser->id,
+                'best_loser_name' => $bestLoser->name,
+                'points' => $highestPoints
+            ]);
+            return $bestLoser;
+        }
+        
+        // If tied on points, check win rate in tournament
+        \Log::info("Multiple losers tied on points - checking win rates", [
+            'tied_count' => $topLosers->count(),
+            'points' => $highestPoints
+        ]);
+        
+        $bestLoser = null;
+        $bestWinRate = -1;
+        $bestTotalPoints = -1;
+        
+        foreach ($topLosers as $loserData) {
+            $user = $loserData['user'];
+            
+            // Calculate win rate and total points for this user in the tournament
+            $userMatches = PoolMatch::where('tournament_id', $tournament->id)
+                ->where('level', $level)
+                ->where('status', 'completed')
+                ->where(function($query) use ($user) {
+                    $query->where('player_1_id', $user->id)
+                          ->orWhere('player_2_id', $user->id);
+                })
+                ->get();
+                
+            $wins = $userMatches->where('winner_id', $user->id)->count();
+            $totalMatches = $userMatches->count();
+            $winRate = $totalMatches > 0 ? $wins / $totalMatches : 0;
+            
+            $totalPoints = 0;
+            foreach ($userMatches as $match) {
+                $totalPoints += ($match->player_1_id === $user->id) ? $match->player_1_points : $match->player_2_points;
+            }
+            
+            \Log::info("Evaluating tied loser", [
+                'user_id' => $user->id,
+                'user_name' => $user->name,
+                'win_rate' => $winRate,
+                'total_points' => $totalPoints,
+                'total_matches' => $totalMatches
+            ]);
+            
+            // Select best based on win rate, then total points
+            if ($winRate > $bestWinRate || 
+                ($winRate === $bestWinRate && $totalPoints > $bestTotalPoints)) {
+                $bestLoser = $user;
+                $bestWinRate = $winRate;
+                $bestTotalPoints = $totalPoints;
+            }
+        }
+        
+        \Log::info("Best loser selected after tiebreaker", [
+            'best_loser_id' => $bestLoser->id,
+            'best_loser_name' => $bestLoser->name,
+            'win_rate' => $bestWinRate,
+            'total_points' => $bestTotalPoints
+        ]);
+        
+        return $bestLoser;
     }
 
     /**
