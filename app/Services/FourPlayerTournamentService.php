@@ -512,7 +512,7 @@ class FourPlayerTournamentService
         // Get the 4 losers from ALL completed matches in tournament - SIMPLIFIED
         $allCompletedMatches = PoolMatch::where('tournament_id', $tournament->id)
             ->where('status', 'completed')
-            ->whereNotIn('round_name', ['4player_round1', 'winners_final', 'losers_semifinal', '4player_losers_round1'])
+            ->whereNotIn('round_name', ['4player_round1', 'winners_final', 'losers_semifinal'])
             ->get();
             
         \Log::info("Found matches for 4-player losers extraction", [
@@ -565,7 +565,7 @@ class FourPlayerTournamentService
         ]);
         
         // Create winners bracket matches (for positions 1-4)
-        $this->createWinnersBracket($tournament, $level, $levelName, $groupId, $shuffledWinners);
+        $this->createWinnersBracket($tournament, $level, $levelName, $groupId, $shuffledWinners, $winnersNeeded);
         
         // Create losers bracket matches only if we need 5 or 6 winners
         if ($winnersNeeded > 4) {
@@ -576,9 +576,9 @@ class FourPlayerTournamentService
     /**
      * Create winners bracket for 4-player tournament
      */
-    private function createWinnersBracket(Tournament $tournament, string $level, ?string $levelName, $groupId, $shuffledWinners)
+    private function createWinnersBracket(Tournament $tournament, string $level, ?string $levelName, $groupId, $shuffledWinners, int $winnersNeeded)
     {
-        // Create 4player_round1_match1: Winner A vs Winner B
+        // Create 4player_round1_match1: Winner A vs Winner B (Winners bracket)
         \App\Services\MatchCreationService::createMatch(
             $tournament,
             $shuffledWinners[0],
@@ -594,7 +594,7 @@ class FourPlayerTournamentService
         // Send notifications for Match 1
         $this->sendMatchNotifications($tournament, $shuffledWinners[0]->id, $shuffledWinners[1]->id, '4player_round1', '4-Player Round 1');
         
-        // Create 4player_round1_match2: Winner C vs Winner D
+        // Create 4player_round1_match2: Winner C vs Winner D (Winners bracket)
         \App\Services\MatchCreationService::createMatch(
             $tournament,
             $shuffledWinners[2],
@@ -617,39 +617,39 @@ class FourPlayerTournamentService
     private function createLosersBracket(Tournament $tournament, string $level, ?string $levelName, $groupId, $shuffledLosers, int $winnersNeeded)
     {
         if ($winnersNeeded >= 5) {
-            // Create 4player_losers_round1_match1: Loser A vs Loser B
+            // Create 4player_round1_match3: Loser A vs Loser B (Losers bracket)
             \App\Services\MatchCreationService::createMatch(
                 $tournament,
                 $shuffledLosers[0],
                 $shuffledLosers[1],
-                '4player_losers_round1',
+                '4player_round1',
                 $level,
                 $groupId,
                 $levelName,
                 null,
-                '4player_losers_round1_match1'
+                '4player_round1_match3'
             );
             
-            // Send notifications for Losers Match 1
-            $this->sendMatchNotifications($tournament, $shuffledLosers[0]->id, $shuffledLosers[1]->id, '4player_losers_round1', 'Losers Round 1');
+            // Send notifications for Losers Match 3
+            $this->sendMatchNotifications($tournament, $shuffledLosers[0]->id, $shuffledLosers[1]->id, '4player_round1', 'Losers Round 1');
         }
         
         if ($winnersNeeded >= 6) {
-            // Create 4player_losers_round1_match2: Loser C vs Loser D
+            // Create 4player_round1_match4: Loser C vs Loser D (Losers bracket)
             \App\Services\MatchCreationService::createMatch(
                 $tournament,
                 $shuffledLosers[2],
                 $shuffledLosers[3],
-                '4player_losers_round1',
+                '4player_round1',
                 $level,
                 $groupId,
                 $levelName,
                 null,
-                '4player_losers_round1_match2'
+                '4player_round1_match4'
             );
             
-            // Send notifications for Losers Match 2
-            $this->sendMatchNotifications($tournament, $shuffledLosers[2]->id, $shuffledLosers[3]->id, '4player_losers_round1', 'Losers Round 1');
+            // Send notifications for Losers Match 4
+            $this->sendMatchNotifications($tournament, $shuffledLosers[2]->id, $shuffledLosers[3]->id, '4player_round1', 'Losers Round 1');
         }
     }
 
