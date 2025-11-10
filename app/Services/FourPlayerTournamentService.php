@@ -1187,7 +1187,6 @@ class FourPlayerTournamentService
             // Check if 4player_round1 already exists
             $existing4PlayerRound1 = PoolMatch::where('tournament_id', $tournament->id)
                 ->where('level', $level)
-                ->where('group_id', $groupId)
                 ->where('round_name', '4player_round1')
                 ->exists();
                 
@@ -1212,15 +1211,38 @@ class FourPlayerTournamentService
                 \Log::info("4-player round 1 completed - generating semifinals");
                 $matches = PoolMatch::where('tournament_id', $tournament->id)
                     ->where('level', $level)
-                    ->where('group_id', $groupId)
                     ->where('round_name', '4player_round1')
                     ->where('status', 'completed')
                     ->get();
                     
+                \Log::info("Found 4player_round1 matches for semifinals", [
+                    'match_count' => $matches->count(),
+                    'matches' => $matches->map(function($match) {
+                        return [
+                            'id' => $match->id,
+                            'match_name' => $match->match_name,
+                            'winner_id' => $match->winner_id,
+                            'group_id' => $match->group_id
+                        ];
+                    })->toArray()
+                ]);
+                    
                 // Handle special tournaments - provide default levelName if null
                 $safeLevelName = $levelName ?? 'Special Tournament';
                 
-                $this->generate4PlayerSemifinals($tournament, $level, $safeLevelName, $matches);
+                if ($matches->count() >= 2) {
+                    \Log::info("Generating 4-player semifinals with matches", [
+                        'match_count' => $matches->count(),
+                        'tournament_id' => $tournament->id
+                    ]);
+                    
+                    $this->generate4PlayerSemifinals($tournament, $level, $safeLevelName, $matches);
+                } else {
+                    \Log::warning("Not enough matches found for 4-player semifinals", [
+                        'match_count' => $matches->count(),
+                        'tournament_id' => $tournament->id
+                    ]);
+                }
                 return [
                     'status' => 'success',
                     'message' => '4-player semifinals created',
