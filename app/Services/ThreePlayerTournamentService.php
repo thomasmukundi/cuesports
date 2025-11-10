@@ -946,13 +946,13 @@ class ThreePlayerTournamentService
             return;
         }
         
-        $losersArray = $losers->take(3)->unique()->values()->toArray();
+        $losersArray = $losers->take(3)->unique()->values();  // Keep as Collection, don't convert to array
         
         // Create losers_3_SF: D vs E (F gets bye)
         \App\Services\MatchCreationService::createMatch(
             $tournament,
-            $losersArray[0],  // Already User objects, no need for User::find()
-            $losersArray[1],  // Already User objects, no need for User::find()
+            $losersArray[0],  // User objects from Collection
+            $losersArray[1],  // User objects from Collection
             'losers_3_SF',
             $level,
             $groupId,
