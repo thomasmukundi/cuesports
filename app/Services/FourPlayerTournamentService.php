@@ -643,18 +643,23 @@ class FourPlayerTournamentService
     /**
      * Generate 4-player round 1 matches from winners of larger tournament
      */
-    public function generate4PlayerRound1(Tournament $tournament, string $level, ?string $levelName, $winnersArray)
+    public function generate4PlayerRound1(Tournament $tournament, string $level, ?string $levelName, $winnersData)
     {
-        // Convert winners array to collection of User objects
-        $winners = collect();
-        foreach ($winnersArray as $winner) {
-            if ($winner instanceof User) {
-                $winners->push($winner);
-            } else {
-                // If it's a user ID, find the user
-                $user = User::find($winner);
-                if ($user) {
-                    $winners->push($user);
+        // Handle both Collection and array inputs
+        if ($winnersData instanceof \Illuminate\Support\Collection) {
+            $winners = $winnersData;
+        } else {
+            // Convert winners array to collection of User objects
+            $winners = collect();
+            foreach ($winnersData as $winner) {
+                if ($winner instanceof User) {
+                    $winners->push($winner);
+                } else {
+                    // If it's a user ID, find the user
+                    $user = User::find($winner);
+                    if ($user) {
+                        $winners->push($user);
+                    }
                 }
             }
         }
@@ -1045,7 +1050,7 @@ class FourPlayerTournamentService
                 // Handle special tournaments - provide default levelName if null
                 $safeLevelName = $levelName ?? 'Special Tournament';
                 
-                $this->generate4PlayerRound1($tournament, $level, $safeLevelName, $winners->toArray());
+                $this->generate4PlayerRound1($tournament, $level, $safeLevelName, $winners);
                 return [
                     'status' => 'success',
                     'message' => '4-player tournament created from completed round',
