@@ -474,13 +474,13 @@ class FourPlayerTournamentService
                 \App\Models\Notification::create([
                     'player_id' => $positionData['player_id'],
                     'type' => 'tournament_position',
-                    'data' => [
+                    'message' => $message,
+                    'data' => json_encode([
                         'tournament_id' => $tournament->id,
                         'tournament_name' => $tournament->name,
                         'level' => $level,
-                        'position' => $position,
-                        'message' => $message
-                    ]
+                        'position' => $position
+                    ])
                 ]);
                 
             } catch (\Exception $e) {
