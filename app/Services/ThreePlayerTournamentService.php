@@ -1376,29 +1376,28 @@ class ThreePlayerTournamentService
     }
 
     /**
-     * Get winners from any completed round
+     * Get winners from any completed round - SIMPLIFIED: Just get winners from completed round
      */
     private function getWinnersFromCompletedRound(Tournament $tournament, string $level, $groupId, string $completedRound)
     {
-        \Log::info("=== GETTING WINNERS FROM COMPLETED ROUND ===", [
+        \Log::info("=== GETTING WINNERS FROM COMPLETED ROUND (SIMPLIFIED) ===", [
             'tournament_id' => $tournament->id,
-            'level' => $level,
-            'group_id' => $groupId,
             'completed_round' => $completedRound
         ]);
 
+        // Get ALL completed matches for this tournament and round - no level/group restrictions
         $completedMatches = PoolMatch::where('tournament_id', $tournament->id)
-            ->where('level', $level)
-            ->where('group_id', $groupId)
             ->where('round_name', $completedRound)
             ->where('status', 'completed')
             ->get();
 
-        \Log::info("Found completed matches", [
+        \Log::info("Found completed matches (no level/group filter)", [
             'match_count' => $completedMatches->count(),
             'matches' => $completedMatches->map(function($match) {
                 return [
                     'id' => $match->id,
+                    'level' => $match->level,
+                    'group_id' => $match->group_id,
                     'round_name' => $match->round_name,
                     'status' => $match->status,
                     'winner_id' => $match->winner_id,
@@ -1416,7 +1415,8 @@ class ThreePlayerTournamentService
                     $winners->push($winner);
                     \Log::info("Added winner", [
                         'winner_id' => $winner->id,
-                        'winner_name' => $winner->name
+                        'winner_name' => $winner->name,
+                        'from_match' => $match->id
                     ]);
                 }
             } else {
@@ -1427,7 +1427,7 @@ class ThreePlayerTournamentService
             }
         }
 
-        \Log::info("Final winners collected", [
+        \Log::info("Final winners collected (simplified)", [
             'winner_count' => $winners->count(),
             'winner_names' => $winners->pluck('name')->toArray()
         ]);
