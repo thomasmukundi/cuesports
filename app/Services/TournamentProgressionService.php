@@ -263,22 +263,8 @@ class TournamentProgressionService
         } elseif ($roundName === 'SF_winners' || $roundName === 'SF_losers' || $roundName === 'losers_SF_winners' || $roundName === 'losers_SF_losers') {
             Log::info("Comprehensive semifinal complete - checking if all semifinals done");
             return $this->checkComprehensiveSemifinalsComplete($tournament, $level, $levelName);
-        } elseif ($roundName === '4player_round1') {
-            $winnersNeeded = $tournament->winners ?? 3;
-            Log::info("4-player round 1 complete - checking tournament type", [
-                'winners_needed' => $winnersNeeded,
-                'match_count' => $matches->count()
-            ]);
-
-            if ($winnersNeeded >= 5 && $winnersNeeded <= 6 && $matches->count() === 4) {
-                Log::info("Generating comprehensive semifinals (SF_winners, SF_losers, losers_SF_losers)");
-                return $this->generateComprehensiveSemifinals($tournament, $level, $levelName, $matches);
-            } else {
-                Log::info("Generating standard winners final and losers semifinal");
-                $this->fourPlayerService->generate4PlayerSemifinals($tournament, $level, $levelName, $matches);
-                return ['status' => 'success', 'message' => '4-player semifinals generated'];
-            }
         } else {
+            // Always delegate to FourPlayerTournamentService for proper progression handling
             Log::info("Using 4-player progression service for winner-count-based logic");
             return $this->fourPlayerService->check4PlayerTournamentProgression($tournament, $level, $levelName, $roundName);
         }
@@ -434,7 +420,11 @@ class TournamentProgressionService
     private function generateComprehensiveSemifinals(Tournament $tournament, string $level, ?string $levelName, Collection $matches): array
     {
         Log::info("Generating comprehensive semifinals for 5-6 winners");
-        // Implementation for comprehensive semifinals generation
+        
+        // Delegate to FourPlayerTournamentService for proper semifinal creation
+        $fourPlayerService = new \App\Services\FourPlayerTournamentService();
+        $fourPlayerService->generate4PlayerSemifinals($tournament, $level, $levelName, $matches);
+        
         return ['status' => 'success', 'message' => 'Comprehensive semifinals generated'];
     }
 }
