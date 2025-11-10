@@ -1038,6 +1038,34 @@ class ThreePlayerTournamentService
                 break;
                 
             default:
+                // For any other round, check if we have exactly 3 winners to create semifinal
+                $winners = $this->getWinnersFromCompletedRound($tournament, $level, $groupId, $completedRound);
+                
+                \Log::info("Default case - checking winner count for progression", [
+                    'completed_round' => $completedRound,
+                    'winner_count' => $winners->count(),
+                    'tournament_id' => $tournament->id
+                ]);
+                
+                if ($winners->count() === 3) {
+                    // Check if 3_SF already exists
+                    $existing3SF = PoolMatch::where('tournament_id', $tournament->id)
+                        ->where('level', $level)
+                        ->where('group_id', $groupId)
+                        ->where('round_name', '3_SF')
+                        ->exists();
+                        
+                    if (!$existing3SF) {
+                        \Log::info("Creating 3-player semifinal from {$completedRound} with 3 winners");
+                        $this->create3PlayerSemifinalFromCompletedRound($tournament, $level, $levelName, $groupId, $completedRound);
+                        return [
+                            'status' => 'success',
+                            'message' => '3-player semifinal created from completed round',
+                            'progression_complete' => true
+                        ];
+                    }
+                }
+                
                 \Log::info("No specific progression logic for round: {$completedRound}");
                 return [
                     'status' => 'success',

@@ -976,4 +976,114 @@ class FourPlayerTournamentService
         \Log::info("4-player positions created successfully");
     }
 
+    /**
+     * Check 4-player tournament progression and generate next matches
+     */
+    public function check4PlayerTournamentProgression(Tournament $tournament, string $level, ?string $levelName, string $completedRound): array
+    {
+        \Log::info("=== CHECK 4-PLAYER TOURNAMENT PROGRESSION START ===", [
+            'completed_round' => $completedRound,
+            'level' => $level,
+            'tournament_id' => $tournament->id
+        ]);
+        
+        $groupId = TournamentUtilityService::getGroupIdFromLevelName($level, $levelName);
+        
+        // For special tournaments, use a default groupId of 1 if null
+        if ($groupId === null && ($level === 'special' || $tournament->special)) {
+            $groupId = 1;
+        }
+        
+        // Get winners from the completed round
+        $winners = $this->getWinnersFromCompletedRound($tournament, $level, $groupId, $completedRound);
+        
+        \Log::info("4-player progression - winner count check", [
+            'completed_round' => $completedRound,
+            'winner_count' => $winners->count(),
+            'tournament_id' => $tournament->id
+        ]);
+        
+        // If exactly 4 winners, create 4-player tournament
+        if ($winners->count() === 4) {
+            // Check if 4player_round1 already exists
+            $existing4PlayerRound1 = PoolMatch::where('tournament_id', $tournament->id)
+                ->where('level', $level)
+                ->where('group_id', $groupId)
+                ->where('round_name', '4player_round1')
+                ->exists();
+                
+            if (!$existing4PlayerRound1) {
+                \Log::info("Creating 4-player tournament from {$completedRound} with 4 winners");
+                $this->generate4PlayerRound1($tournament, $level, $levelName, $winners->toArray());
+                return [
+                    'status' => 'success',
+                    'message' => '4-player tournament created from completed round',
+                    'progression_complete' => true
+                ];
+            }
+        }
+        
+        // Handle specific 4-player rounds
+        switch ($completedRound) {
+            case '4player_round1':
+                \Log::info("4-player round 1 completed - generating semifinals");
+                $matches = PoolMatch::where('tournament_id', $tournament->id)
+                    ->where('level', $level)
+                    ->where('group_id', $groupId)
+                    ->where('round_name', '4player_round1')
+                    ->where('status', 'completed')
+                    ->get();
+                    
+                $this->generate4PlayerSemifinals($tournament, $level, $levelName, $matches);
+                return [
+                    'status' => 'success',
+                    'message' => '4-player semifinals created',
+                    'progression_complete' => true
+                ];
+                
+            case 'winners_final':
+            case 'losers_semifinal':
+                \Log::info("4-player semifinals completed - creating positions");
+                $this->create4PlayerPositions($tournament, $level, $levelName);
+                return [
+                    'status' => 'success',
+                    'message' => '4-player positions determined',
+                    'progression_complete' => true
+                ];
+                
+            default:
+                \Log::info("No specific 4-player progression for round: {$completedRound}");
+                return [
+                    'status' => 'success',
+                    'message' => "Round {$completedRound} completed, no 4-player progression needed",
+                    'progression_complete' => false
+                ];
+        }
+    }
+    
+    /**
+     * Get winners from any completed round
+     */
+    private function getWinnersFromCompletedRound(Tournament $tournament, string $level, $groupId, string $completedRound)
+    {
+        $completedMatches = PoolMatch::where('tournament_id', $tournament->id)
+            ->where('level', $level)
+            ->where('group_id', $groupId)
+            ->where('round_name', $completedRound)
+            ->where('status', 'completed')
+            ->get();
+
+        $winners = collect();
+        foreach ($completedMatches as $match) {
+            if ($match->winner_id) {
+                $winner = User::find($match->winner_id);
+                if ($winner) {
+                    $winners->push($winner);
+                }
+            }
+        }
+
+        return $winners;
+    }
+
 }
