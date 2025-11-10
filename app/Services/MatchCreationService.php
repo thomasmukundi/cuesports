@@ -283,7 +283,7 @@ class MatchCreationService
     /**
      * Create a single match with proper structure
      */
-    public static function createMatch(Tournament $tournament, $player1, $player2, string $roundName, string $level, int $groupId, string $levelName, ?int $byePlayerId = null, ?string $matchName = null): PoolMatch
+    public static function createMatch(Tournament $tournament, $player1, $player2, string $roundName, string $level, ?int $groupId, string $levelName, ?int $byePlayerId = null, ?string $matchName = null): PoolMatch
     {
         $matchName = $matchName ?? "{$roundName}_match";
         

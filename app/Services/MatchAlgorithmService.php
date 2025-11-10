@@ -686,7 +686,7 @@ class MatchAlgorithmService
     /**
      * Create a single match using MatchCreationService (single source of truth)
      */
-    private function createMatch(Tournament $tournament, $player1, $player2, string $roundName, string $level, int $groupId, string $levelName, ?int $byePlayerId = null, ?string $matchName = null): \App\Models\PoolMatch
+    private function createMatch(Tournament $tournament, $player1, $player2, string $roundName, string $level, ?int $groupId, string $levelName, ?int $byePlayerId = null, ?string $matchName = null): \App\Models\PoolMatch
     {
         return \App\Services\MatchCreationService::createMatch(
             $tournament,
