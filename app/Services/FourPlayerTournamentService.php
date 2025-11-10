@@ -1066,12 +1066,31 @@ class FourPlayerTournamentService
      */
     private function getWinnersFromCompletedRound(Tournament $tournament, string $level, $groupId, string $completedRound)
     {
+        \Log::info("=== GETTING 4-PLAYER WINNERS FROM COMPLETED ROUND ===", [
+            'tournament_id' => $tournament->id,
+            'level' => $level,
+            'group_id' => $groupId,
+            'completed_round' => $completedRound
+        ]);
+
         $completedMatches = PoolMatch::where('tournament_id', $tournament->id)
             ->where('level', $level)
             ->where('group_id', $groupId)
             ->where('round_name', $completedRound)
             ->where('status', 'completed')
             ->get();
+
+        \Log::info("Found 4-player completed matches", [
+            'match_count' => $completedMatches->count(),
+            'matches' => $completedMatches->map(function($match) {
+                return [
+                    'id' => $match->id,
+                    'round_name' => $match->round_name,
+                    'status' => $match->status,
+                    'winner_id' => $match->winner_id
+                ];
+            })->toArray()
+        ]);
 
         $winners = collect();
         foreach ($completedMatches as $match) {
@@ -1082,6 +1101,11 @@ class FourPlayerTournamentService
                 }
             }
         }
+
+        \Log::info("Final 4-player winners collected", [
+            'winner_count' => $winners->count(),
+            'winner_names' => $winners->pluck('name')->toArray()
+        ]);
 
         return $winners;
     }

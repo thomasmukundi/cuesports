@@ -1380,6 +1380,13 @@ class ThreePlayerTournamentService
      */
     private function getWinnersFromCompletedRound(Tournament $tournament, string $level, $groupId, string $completedRound)
     {
+        \Log::info("=== GETTING WINNERS FROM COMPLETED ROUND ===", [
+            'tournament_id' => $tournament->id,
+            'level' => $level,
+            'group_id' => $groupId,
+            'completed_round' => $completedRound
+        ]);
+
         $completedMatches = PoolMatch::where('tournament_id', $tournament->id)
             ->where('level', $level)
             ->where('group_id', $groupId)
@@ -1387,15 +1394,43 @@ class ThreePlayerTournamentService
             ->where('status', 'completed')
             ->get();
 
+        \Log::info("Found completed matches", [
+            'match_count' => $completedMatches->count(),
+            'matches' => $completedMatches->map(function($match) {
+                return [
+                    'id' => $match->id,
+                    'round_name' => $match->round_name,
+                    'status' => $match->status,
+                    'winner_id' => $match->winner_id,
+                    'player_1_id' => $match->player_1_id,
+                    'player_2_id' => $match->player_2_id
+                ];
+            })->toArray()
+        ]);
+
         $winners = collect();
         foreach ($completedMatches as $match) {
             if ($match->winner_id) {
                 $winner = User::find($match->winner_id);
                 if ($winner) {
                     $winners->push($winner);
+                    \Log::info("Added winner", [
+                        'winner_id' => $winner->id,
+                        'winner_name' => $winner->name
+                    ]);
                 }
+            } else {
+                \Log::warning("Match has no winner_id", [
+                    'match_id' => $match->id,
+                    'round_name' => $match->round_name
+                ]);
             }
         }
+
+        \Log::info("Final winners collected", [
+            'winner_count' => $winners->count(),
+            'winner_names' => $winners->pluck('name')->toArray()
+        ]);
 
         return $winners;
     }

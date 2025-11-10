@@ -279,12 +279,8 @@ class TournamentProgressionService
                 return ['status' => 'success', 'message' => '4-player semifinals generated'];
             }
         } else {
-            Log::info("Generating 4-player semifinals", [
-                'round_name' => $roundName,
-                'winner_count' => $matches->count()
-            ]);
-            $this->fourPlayerService->generate4PlayerSemifinals($tournament, $level, $levelName, $matches);
-            return ['status' => 'success', 'message' => '4-player semifinals generated'];
+            Log::info("Using 4-player progression service for winner-count-based logic");
+            return $this->fourPlayerService->check4PlayerTournamentProgression($tournament, $level, $levelName, $roundName);
         }
     }
 
