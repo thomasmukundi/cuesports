@@ -907,19 +907,35 @@ class ThreePlayerTournamentService
             'winners_needed' => $winnersNeeded
         ]);
         
-        // Get losers from the completed matches
+        // Get losers from the completed matches - SIMPLIFIED: no level/group restrictions
         $completedMatches = PoolMatch::where('tournament_id', $tournament->id)
-            ->where('level', $level)
-            ->where('group_id', $groupId)
             ->where('status', 'completed')
-            ->whereNotIn('round_name', ['losers_3_SF', 'losers_3_final', 'losers_3_tie_breaker', 'losers_3_fair_chance'])
+            ->whereNotIn('round_name', ['losers_3_SF', 'losers_3_final', 'losers_3_tie_breaker', 'losers_3_fair_chance', '3_SF', '3_final'])
             ->get();
+        
+        \Log::info("Found matches for losers extraction", [
+            'match_count' => $completedMatches->count(),
+            'matches' => $completedMatches->map(function($match) {
+                return [
+                    'id' => $match->id,
+                    'round_name' => $match->round_name,
+                    'winner_id' => $match->winner_id,
+                    'player_1_id' => $match->player_1_id,
+                    'player_2_id' => $match->player_2_id
+                ];
+            })->toArray()
+        ]);
         
         $losers = collect();
         foreach ($completedMatches as $match) {
             if ($match->winner_id) {
                 $loserId = ($match->player_1_id === $match->winner_id) ? $match->player_2_id : $match->player_1_id;
                 $losers->push($loserId);
+                \Log::info("Added loser", [
+                    'loser_id' => $loserId,
+                    'from_match' => $match->id,
+                    'winner_was' => $match->winner_id
+                ]);
             }
         }
         
