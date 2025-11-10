@@ -828,6 +828,11 @@ class MatchAlgorithmService
         foreach ($groupedPlayers as $groupId => $groupPlayers) {
             $levelName = TournamentUtilityService::getLevelName($level, $groupId);
             
+            // Handle special tournaments where levelName might be null
+            if ($levelName === null) {
+                $levelName = 'Special Tournament';
+            }
+            
             // Create matches with community/county avoidance
             $this->createCommunityAwareMatches($groupPlayers, $tournament, $level, $groupId, 'round_1', $position, $levelName);
         }
@@ -1333,60 +1338,60 @@ class MatchAlgorithmService
             return $bestLoser;
         }
         
-        // If tied on points, check win rate in tournament
-        \Log::info("Multiple losers tied on points - checking win rates", [
+        // If tied on current round points, check all-time performance
+        \Log::info("Multiple losers tied on current round points - checking all-time performance", [
             'tied_count' => $topLosers->count(),
-            'points' => $highestPoints
+            'current_round_points' => $highestPoints
         ]);
         
         $bestLoser = null;
+        $bestAllTimePoints = -1;
         $bestWinRate = -1;
-        $bestTotalPoints = -1;
         
         foreach ($topLosers as $loserData) {
             $user = $loserData['user'];
             
-            // Calculate win rate and total points for this user in the tournament
-            $userMatches = PoolMatch::where('tournament_id', $tournament->id)
-                ->where('level', $level)
-                ->where('status', 'completed')
+            // Calculate ALL-TIME performance across ALL tournaments and levels
+            $allTimeMatches = PoolMatch::where('status', 'completed')
                 ->where(function($query) use ($user) {
                     $query->where('player_1_id', $user->id)
                           ->orWhere('player_2_id', $user->id);
                 })
                 ->get();
                 
-            $wins = $userMatches->where('winner_id', $user->id)->count();
-            $totalMatches = $userMatches->count();
-            $winRate = $totalMatches > 0 ? $wins / $totalMatches : 0;
+            $allTimeWins = $allTimeMatches->where('winner_id', $user->id)->count();
+            $allTimeMatchCount = $allTimeMatches->count();
+            $allTimeWinRate = $allTimeMatchCount > 0 ? $allTimeWins / $allTimeMatchCount : 0;
             
-            $totalPoints = 0;
-            foreach ($userMatches as $match) {
-                $totalPoints += ($match->player_1_id === $user->id) ? $match->player_1_points : $match->player_2_points;
+            $allTimeTotalPoints = 0;
+            foreach ($allTimeMatches as $match) {
+                $allTimeTotalPoints += ($match->player_1_id === $user->id) ? $match->player_1_points : $match->player_2_points;
             }
             
-            \Log::info("Evaluating tied loser", [
+            \Log::info("Evaluating tied loser (all-time performance)", [
                 'user_id' => $user->id,
                 'user_name' => $user->name,
-                'win_rate' => $winRate,
-                'total_points' => $totalPoints,
-                'total_matches' => $totalMatches
+                'current_round_points' => $loserData['points_in_match'],
+                'all_time_total_points' => $allTimeTotalPoints,
+                'all_time_win_rate' => $allTimeWinRate,
+                'all_time_matches' => $allTimeMatchCount,
+                'all_time_wins' => $allTimeWins
             ]);
             
-            // Select best based on win rate, then total points
-            if ($winRate > $bestWinRate || 
-                ($winRate === $bestWinRate && $totalPoints > $bestTotalPoints)) {
+            // Selection criteria: 1) All-time total points, 2) All-time win rate
+            if ($allTimeTotalPoints > $bestAllTimePoints || 
+                ($allTimeTotalPoints === $bestAllTimePoints && $allTimeWinRate > $bestWinRate)) {
                 $bestLoser = $user;
-                $bestWinRate = $winRate;
-                $bestTotalPoints = $totalPoints;
+                $bestAllTimePoints = $allTimeTotalPoints;
+                $bestWinRate = $allTimeWinRate;
             }
         }
         
-        \Log::info("Best loser selected after tiebreaker", [
+        \Log::info("Best loser selected after all-time tiebreaker", [
             'best_loser_id' => $bestLoser->id,
             'best_loser_name' => $bestLoser->name,
-            'win_rate' => $bestWinRate,
-            'total_points' => $bestTotalPoints
+            'all_time_win_rate' => $bestWinRate,
+            'all_time_total_points' => $bestAllTimePoints
         ]);
         
         return $bestLoser;
@@ -1781,6 +1786,12 @@ class MatchAlgorithmService
         
         // Create matches for each position group with community avoidance
         $levelName = TournamentUtilityService::getLevelName($level, $groupId);
+        
+        // Handle special tournaments where levelName might be null
+        if ($levelName === null) {
+            $levelName = 'Special Tournament';
+        }
+        
         $this->createCommunityAwareMatches($position1Players, $tournament, $level, $groupId, $roundName, 'pos1', $levelName);
         $this->createCommunityAwareMatches($position2Players, $tournament, $level, $groupId, $roundName, 'pos2', $levelName);
         $this->createCommunityAwareMatches($position3Players, $tournament, $level, $groupId, $roundName, 'pos3', $levelName);
@@ -1793,6 +1804,12 @@ class MatchAlgorithmService
         
         if ($unpaired->isNotEmpty()) {
             $levelName = TournamentUtilityService::getLevelName($level, $groupId);
+            
+            // Handle special tournaments where levelName might be null
+            if ($levelName === null) {
+                $levelName = 'Special Tournament';
+            }
+            
             $this->createCommunityAwareMatches($unpaired, $tournament, $level, $groupId, $roundName, 'cross', $levelName);
         }
     }
@@ -1815,11 +1832,23 @@ class MatchAlgorithmService
             \Log::info("Using pairPlayers for community level");
             // For community level, just pair randomly
             $levelName = $levelName ?? TournamentUtilityService::getLevelName($level, $groupId);
+            
+            // Handle special tournaments where levelName might be null
+            if ($levelName === null) {
+                $levelName = 'Special Tournament';
+            }
+            
             $this->pairPlayers($players, $tournament, $level, $groupId, $roundName, '', $levelName);
         } else {
             \Log::info("Using createCommunityAwareMatches for level: {$level}");
             // For higher levels, avoid same community pairings
             $levelName = TournamentUtilityService::getLevelName($level, $groupId);
+            
+            // Handle special tournaments where levelName might be null
+            if ($levelName === null) {
+                $levelName = 'Special Tournament';
+            }
+            
             $this->createCommunityAwareMatches($players, $tournament, $level, $groupId, $roundName, '', $levelName);
         }
         
