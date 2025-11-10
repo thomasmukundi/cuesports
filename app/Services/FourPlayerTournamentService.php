@@ -1147,8 +1147,15 @@ class FourPlayerTournamentService
             }
         }
         
-        // Send notifications
-        $this->sendPositionNotifications($tournament, $level, $levelName, $positions);
+        // Send notifications - convert positions array to expected format
+        $notificationData = [];
+        foreach ($positions as $position => $playerId) {
+            $notificationData[] = [
+                'player_id' => $playerId,
+                'position' => $position
+            ];
+        }
+        $this->sendPositionNotifications($tournament, $level, $levelName, $notificationData);
         
         \Log::info("4-player positions created successfully", [
             'positions_created' => count($positions)
