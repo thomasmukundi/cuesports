@@ -1172,10 +1172,45 @@ class MatchAlgorithmService
             
             $matchNumber++;
             
-            // Remove both players from the array for remaining pairings
-            $remainingPlayers = [];
+            // Create second match with double player and another opponent
+            $secondOpponentIndex = -1;
             for ($i = 0; $i < $playerCount; $i++) {
                 if ($i != $doublePlayerIndex && $i != $firstOpponentIndex) {
+                    $secondOpponentIndex = $i;
+                    break;
+                }
+            }
+            
+            if ($secondOpponentIndex != -1) {
+                $secondOpponent = $playerArray[$secondOpponentIndex];
+                
+                $match2 = PoolMatch::create([
+                    'match_name' => "{$roundName}_M{$matchNumber}",
+                    'player_1_id' => $doublePlayer->id,
+                    'player_2_id' => $secondOpponent->id,
+                    'level' => $level,
+                    'level_name' => $levelName,
+                    'round_name' => $roundName,
+                    'tournament_id' => $tournament->id,
+                    'group_id' => $groupId,
+                    'status' => 'pending',
+                    'proposed_dates' => \App\Services\ProposedDatesService::generateProposedDatesJson($tournament->id),
+                ]);
+                
+                \Log::info("Created match #{$matchNumber} (double player's second match)", [
+                    'match_id' => $match2->id,
+                    'match_name' => $match2->match_name,
+                    'player_1_id' => $match2->player_1_id,
+                    'player_2_id' => $match2->player_2_id
+                ]);
+                
+                $matchNumber++;
+            }
+            
+            // Remove double player and both opponents from remaining players
+            $remainingPlayers = [];
+            for ($i = 0; $i < $playerCount; $i++) {
+                if ($i != $doublePlayerIndex && $i != $firstOpponentIndex && $i != $secondOpponentIndex) {
                     $remainingPlayers[] = $playerArray[$i];
                 }
             }
